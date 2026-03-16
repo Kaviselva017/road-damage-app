@@ -1,0 +1,35 @@
+# ── RoadWatch Backend Configuration ──────────────────────
+# Copy this to: D:\python\road-damage-app\backend\.env
+
+# Database (SQLite for development - already works)
+DATABASE_URL=sqlite:///./road_damage.db
+
+# Security
+SECRET_KEY=roadwatch-secure-key-2026-change-in-prod
+ALGORITHM=HS256
+ACCESS_TOKEN_EXPIRE_MINUTES=10080
+
+# File Storage
+UPLOAD_DIR=uploads
+
+# AI Model
+YOLO_MODEL_PATH=ai_model/road_damage_yolov8.pt
+
+# ── EMAIL NOTIFICATIONS (Gmail) ───────────────────────────
+# Step 1: Go to https://myaccount.google.com/security
+# Step 2: Enable 2-Step Verification
+# Step 3: Go to https://myaccount.google.com/apppasswords
+# Step 4: Select "Mail" + "Other" → type "RoadWatch" → Generate
+# Step 5: Copy the 16-character password (e.g. abcd efgh ijkl mnop)
+# Step 6: Paste below WITHOUT spaces
+
+SMTP_SERVER=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=yourgmail@gmail.com
+SMTP_PASS=abcdefghijklmnop
+EMAIL_FROM=yourgmail@gmail.com
+
+# ── SMS (Optional - skip if Twilio not working) ───────────
+# TWILIO_ACCOUNT_SID=ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+# TWILIO_AUTH_TOKEN=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+# TWILIO_FROM_NUMBER=+1XXXXXXXXXX

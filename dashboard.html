@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Officer Dashboard — Road Damage System</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+<style>
+:root {
+  --bg: #0a0c10; --surface: #10131a; --card: #141820; --border: #1e2535;
+  --accent: #f5a623; --accent2: #3ecfb2; --danger: #e05c5c; --blue: #3b82f6;
+  --text: #e8eaf0; --muted: #5a6480;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--bg); color: var(--text); font-family: 'DM Sans', sans-serif; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+
+/* TOP BAR */
+.topbar {
+  background: var(--surface); border-bottom: 1px solid var(--border);
+  padding: 0 1.5rem; height: 56px; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0;
+}
+.logo { font-family: 'Syne', sans-serif; font-size: 1.1rem; font-weight: 800; }
+.logo span { color: var(--accent); }
+.topbar-right { display: flex; align-items: center; gap: 1rem; }
+.officer-name { font-size: 0.85rem; color: var(--muted); }
+.officer-name strong { color: var(--accent2); }
+.live-badge { background: rgba(62,207,178,0.1); border: 1px solid rgba(62,207,178,0.3); color: var(--accent2);
+  font-size: 0.7rem; font-weight: 700; padding: 0.2rem 0.6rem; border-radius: 20px; letter-spacing: 0.05em; }
+.live-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--accent2);
+  margin-right: 4px; animation: blink 1s infinite; }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.2} }
+.btn-sm { background: transparent; border: 1px solid var(--border); color: var(--muted);
+  padding: 0.35rem 0.8rem; border-radius: 6px; font-family: inherit; font-size: 0.8rem; cursor: pointer; transition: all 0.2s; }
+.btn-sm:hover { border-color: var(--accent); color: var(--accent); }
+.btn-sm.active { background: var(--accent); border-color: var(--accent); color: #000; font-weight: 700; }
+
+/* LAYOUT */
+.main-layout { display: flex; flex: 1; overflow: hidden; }
+
+/* SIDEBAR */
+.sidebar { width: 380px; flex-shrink: 0; display: flex; flex-direction: column; border-right: 1px solid var(--border); overflow: hidden; }
+.sidebar-header { padding: 1rem; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+.stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.5rem; margin-bottom: 0.8rem; }
+.stat-mini { background: var(--card); border-radius: 8px; padding: 0.5rem 0.6rem; text-align: center; border: 1px solid var(--border); }
+.stat-mini .num { font-family: 'Syne', sans-serif; font-size: 1.3rem; font-weight: 800; }
+.stat-mini .lbl { font-size: 0.62rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+.filters { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+.filter-chip { background: var(--card); border: 1px solid var(--border); color: var(--muted);
+  padding: 0.3rem 0.7rem; border-radius: 20px; font-size: 0.75rem; cursor: pointer; transition: all 0.15s; }
+.filter-chip:hover { border-color: var(--accent); color: var(--accent); }
+.filter-chip.active { background: var(--accent); border-color: var(--accent); color: #000; font-weight: 700; }
+.filter-chip.sev-high.active { background: var(--danger); border-color: var(--danger); }
+.filter-chip.sev-medium.active { background: var(--accent); border-color: var(--accent); }
+.filter-chip.sev-low.active { background: var(--accent2); border-color: var(--accent2); color: #000; }
+
+/* NEW COMPLAINT TOAST */
+.toast { position: fixed; top: 70px; right: 1rem; background: var(--card); border: 1px solid var(--accent2);
+  border-radius: 10px; padding: 0.8rem 1rem; font-size: 0.85rem; color: var(--accent2);
+  z-index: 999; transform: translateX(120%); transition: transform 0.3s; max-width: 280px; }
+.toast.show { transform: translateX(0); }
+
+/* COMPLAINTS LIST */
+.complaints-scroll { flex: 1; overflow-y: auto; padding: 0.5rem; }
+.complaints-scroll::-webkit-scrollbar { width: 4px; }
+.complaints-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+.c-card { background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+  padding: 0.8rem 1rem; margin-bottom: 0.5rem; cursor: pointer; transition: all 0.15s;
+  position: relative; overflow: hidden; }
+.c-card::before { content:''; position:absolute; left:0; top:0; bottom:0; width:3px; }
+.c-card.high::before { background: var(--danger); }
+.c-card.medium::before { background: var(--accent); }
+.c-card.low::before { background: var(--accent2); }
+.c-card:hover { border-color: var(--accent); transform: translateX(2px); }
+.c-card.selected { border-color: var(--accent); background: #1a1f2e; }
+.c-card.new-flash { animation: newFlash 2s ease; }
+@keyframes newFlash { 0%,100%{background:var(--card)} 50%{background:rgba(62,207,178,0.08)} }
+.c-row1 { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.3rem; }
+.c-id { font-size: 0.82rem; font-weight: 700; color: var(--accent); }
+.c-status { font-size: 0.65rem; font-weight: 700; text-transform: uppercase; padding: 0.15rem 0.5rem; border-radius: 20px; }
+.st-pending { background: rgba(90,100,128,0.15); color: var(--muted); }
+.st-assigned { background: rgba(245,166,35,0.15); color: var(--accent); }
+.st-in_progress { background: rgba(59,130,246,0.15); color: var(--blue); }
+.st-completed { background: rgba(34,197,94,0.15); color: #4ade80; }
+.c-row2 { font-size: 0.78rem; color: var(--muted); }
+.c-row2 strong { color: var(--text); }
+
+/* MAP AREA */
+.map-area { flex: 1; position: relative; }
+#map { width: 100%; height: 100%; }
+.map-controls { position: absolute; top: 1rem; left: 1rem; z-index: 10; display: flex; flex-direction: column; gap: 0.4rem; }
+.map-btn { background: var(--card); border: 1px solid var(--border); color: var(--text);
+  padding: 0.5rem 0.8rem; border-radius: 8px; font-family: inherit; font-size: 0.78rem; cursor: pointer; transition: all 0.2s; }
+.map-btn:hover { border-color: var(--accent); color: var(--accent); }
+.map-legend { position: absolute; bottom: 1rem; left: 1rem; background: var(--card); border: 1px solid var(--border);
+  border-radius: 10px; padding: 0.6rem 0.8rem; z-index: 10; font-size: 0.75rem; }
+.map-legend-title { color: var(--muted); font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 0.4rem; font-size: 0.68rem; }
+.legend-item { display: flex; align-items: center; gap: 0.4rem; margin-bottom: 0.25rem; }
+.legend-dot { width: 10px; height: 10px; border-radius: 50%; }
+
+/* DETAIL PANEL */
+.detail-panel { position: absolute; top: 0; right: 0; bottom: 0; width: 360px;
+  background: var(--surface); border-left: 1px solid var(--border); overflow-y: auto;
+  transform: translateX(100%); transition: transform 0.3s; z-index: 20; }
+.detail-panel.open { transform: translateX(0); }
+.detail-panel::-webkit-scrollbar { width: 4px; }
+.detail-panel::-webkit-scrollbar-thumb { background: var(--border); }
+.dp-header { padding: 1rem; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; background: var(--surface); z-index: 1; }
+.dp-close { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 1.2rem; }
+.dp-body { padding: 1rem; }
+.dp-img { width: 100%; border-radius: 10px; border: 1px solid var(--border); margin-bottom: 1rem; }
+.info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; margin-bottom: 1rem; }
+.info-cell { background: var(--card); border-radius: 8px; padding: 0.6rem 0.8rem; border: 1px solid var(--border); }
+.info-label { font-size: 0.68rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+.info-value { font-size: 0.88rem; margin-top: 3px; font-weight: 500; }
+.sev-badge { display: inline-block; padding: 0.2rem 0.6rem; border-radius: 20px; font-size: 0.75rem; font-weight: 700; }
+.sev-high { background: rgba(224,92,92,0.15); color: var(--danger); }
+.sev-medium { background: rgba(245,166,35,0.15); color: var(--accent); }
+.sev-low { background: rgba(62,207,178,0.15); color: var(--accent2); }
+
+/* Before/After */
+.ba-wrap { position: relative; border-radius: 10px; overflow: hidden; margin-bottom: 1rem; border: 1px solid var(--border); user-select: none; }
+.ba-before { width: 100%; height: 180px; object-fit: cover; display: block; }
+.ba-after-overlay { position: absolute; top: 0; left: 0; height: 100%; overflow: hidden; transition: width 0.05s; }
+.ba-after-overlay img { height: 100%; object-fit: cover; }
+.ba-slider { position: absolute; top: 0; bottom: 0; width: 3px; background: white; cursor: ew-resize; transform: translateX(-50%); }
+.ba-slider::after { content:''; position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+  width:28px; height:28px; background:white; border-radius:50%; display:flex; align-items:center; justify-content:center; }
+.ba-handle { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+  width:30px; height:30px; background:white; border-radius:50%; display:flex; align-items:center; justify-content:center;
+  font-size:0.7rem; color:#000; font-weight:700; pointer-events:none; }
+.ba-labels { display: flex; justify-content: space-between; margin-bottom: 0.5rem; }
+.ba-labels span { font-size: 0.72rem; color: var(--muted); font-weight: 600; text-transform: uppercase; }
+.no-after { background: var(--card); border-radius: 10px; padding: 1.5rem; text-align: center; color: var(--muted); font-size: 0.85rem; margin-bottom: 1rem; border: 1px dashed var(--border); }
+
+/* Status update */
+.status-form { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 1rem; }
+.status-form label { font-size: 0.72rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; display: block; margin-bottom: 0.4rem; }
+.status-form select, .status-form textarea {
+  width: 100%; background: var(--bg); color: var(--text); border: 1px solid var(--border);
+  border-radius: 8px; padding: 0.6rem 0.8rem; font-family: inherit; font-size: 0.88rem; margin-bottom: 0.8rem;
+}
+.status-form select:focus, .status-form textarea:focus { outline: none; border-color: var(--accent); }
+.btn-update { width: 100%; background: var(--accent); color: #000; border: none; border-radius: 8px;
+  padding: 0.7rem; font-family: inherit; font-weight: 700; font-size: 0.9rem; cursor: pointer; transition: opacity 0.2s; }
+.btn-update:hover { opacity: 0.88; }
+.btn-update:disabled { opacity: 0.5; cursor: not-allowed; }
+.save-success { color: var(--accent2); font-size: 0.82rem; text-align: center; margin-top: 0.5rem; display: none; }
+
+/* After photo upload */
+.upload-after-btn { width: 100%; background: transparent; border: 1px dashed var(--border); color: var(--muted);
+  border-radius: 8px; padding: 0.7rem; font-family: inherit; font-size: 0.85rem; cursor: pointer; transition: all 0.2s; margin-bottom: 0.8rem; }
+.upload-after-btn:hover { border-color: var(--accent2); color: var(--accent2); }
+
+/* Login overlay */
+.login-overlay { position: fixed; inset: 0; background: var(--bg); display: flex; align-items: center; justify-content: center; z-index: 999; }
+.login-box { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 2rem; width: 340px; }
+.login-box h2 { font-family: 'Syne', sans-serif; font-size: 1.4rem; margin-bottom: 0.3rem; }
+.login-box p { color: var(--muted); font-size: 0.85rem; margin-bottom: 1.5rem; }
+.login-field { margin-bottom: 0.8rem; }
+.login-field label { display: block; font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 0.3rem; }
+.login-field input { width: 100%; background: var(--bg); color: var(--text); border: 1px solid var(--border);
+  border-radius: 8px; padding: 0.65rem 0.9rem; font-family: inherit; font-size: 0.9rem; }
+.login-field input:focus { outline: none; border-color: var(--accent); }
+.login-err { color: var(--danger); font-size: 0.82rem; margin-bottom: 0.8rem; display: none; }
+.btn-login { width: 100%; background: var(--accent); color: #000; border: none; border-radius: 8px;
+  padding: 0.75rem; font-family: inherit; font-weight: 700; font-size: 0.95rem; cursor: pointer; }
+
+/* Spinner */
+.spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid rgba(0,0,0,0.3);
+  border-top-color: #000; border-radius: 50%; animation: spin 0.7s linear infinite; vertical-align: middle; margin-right: 4px; }
+@keyframes spin { to { transform: rotate(360deg) } }
+
+/* No complaints */
+.no-complaints { text-align: center; padding: 3rem 1rem; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<!-- LOGIN OVERLAY -->
+<div class="login-overlay" id="login-overlay">
+  <div class="login-box">
+    <div style="font-size:2rem;margin-bottom:0.5rem">🛣️</div>
+    <h2>Officer Portal</h2>
+    <p>Road Damage Management System</p>
+    <div class="login-err" id="login-err"></div>
+    <div class="login-field"><label>Email</label><input type="email" id="lo-email" placeholder="officer@road.com"/></div>
+    <div class="login-field"><label>Password</label><input type="password" id="lo-pass" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()"/></div>
+    <button class="btn-login" id="login-btn" onclick="doLogin()">Sign In</button>
+  </div>
+</div>
+
+<!-- TOP BAR -->
+<div class="topbar">
+  <div class="logo">Road<span>Watch</span> Officer</div>
+  <div class="topbar-right">
+    <div class="live-badge"><span class="live-dot"></span>LIVE</div>
+    <div class="officer-name">Officer <strong id="officer-display">—</strong></div>
+    <button class="btn-sm active" id="view-split" onclick="setView('split')">Split View</button>
+    <button class="btn-sm" id="view-map" onclick="setView('map')">Map Only</button>
+    <button class="btn-sm" id="view-list" onclick="setView('list')">List Only</button>
+    <button class="btn-sm" onclick="logout()">Sign Out</button>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<!-- MAIN -->
+<div class="main-layout" id="main-layout">
+
+  <!-- SIDEBAR -->
+  <div class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <div class="stats-row" id="stats-row">
+        <div class="stat-mini"><div class="num" id="st-total">0</div><div class="lbl">Total</div></div>
+        <div class="stat-mini"><div class="num" style="color:var(--accent)" id="st-pending">0</div><div class="lbl">Pending</div></div>
+        <div class="stat-mini"><div class="num" style="color:var(--blue)" id="st-progress">0</div><div class="lbl">Active</div></div>
+        <div class="stat-mini"><div class="num" style="color:#4ade80" id="st-done">0</div><div class="lbl">Done</div></div>
+      </div>
+      <div class="filters" id="filter-bar">
+        <div class="filter-chip active" data-filter="all" onclick="setFilter('all',this)">All</div>
+        <div class="filter-chip sev-high" data-filter="high" onclick="setFilter('high',this)">🔴 High</div>
+        <div class="filter-chip sev-medium" data-filter="medium" onclick="setFilter('medium',this)">🟡 Medium</div>
+        <div class="filter-chip sev-low" data-filter="low" onclick="setFilter('low',this)">🟢 Low</div>
+        <div class="filter-chip" data-filter="pending" onclick="setFilter('pending',this)">Pending</div>
+        <div class="filter-chip" data-filter="in_progress" onclick="setFilter('in_progress',this)">Active</div>
+        <div class="filter-chip" data-filter="completed" onclick="setFilter('completed',this)">Done</div>
+      </div>
+    </div>
+    <div class="complaints-scroll" id="complaints-scroll">
+      <div class="no-complaints">Loading complaints...</div>
+    </div>
+  </div>
+
+  <!-- MAP AREA -->
+  <div class="map-area" id="map-area">
+    <div id="map"></div>
+
+    <div class="map-controls">
+      <button class="map-btn" onclick="fitAllMarkers()">📍 Fit All</button>
+      <button class="map-btn" onclick="goToMyLocation()">🎯 My Location</button>
+    </div>
+
+    <div class="map-legend">
+      <div class="map-legend-title">Severity</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#e05c5c"></div>High</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#f5a623"></div>Medium</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#3ecfb2"></div>Low</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#4ade80"></div>Completed</div>
+    </div>
+
+    <!-- DETAIL PANEL -->
+    <div class="detail-panel" id="detail-panel">
+      <div class="dp-header">
+        <div id="dp-title" style="font-family:'Syne',sans-serif;font-size:1rem;font-weight:800;color:var(--accent)">—</div>
+        <button class="dp-close" onclick="closeDetail()">✕</button>
+      </div>
+      <div class="dp-body" id="dp-body"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Hidden input for after photo -->
+<input type="file" id="after-file-input" accept="image/*" style="display:none" onchange="handleAfterPhoto(event)"/>
+
+<script>
+const API = 'http://localhost:8000/api';
+const GMAPS_KEY = 'YOUR_GOOGLE_MAPS_API_KEY'; // Replace with your key
+let token = localStorage.getItem('officer_token');
+let officerName = localStorage.getItem('officer_name');
+let allComplaints = [];
+let currentFilter = 'all';
+let map, markers = [], infoWindows = [];
+let selectedComplaintId = null;
+let currentView = 'split';
+let afterPhotoComplaintId = null;
+let afterPhotoBase64 = null;
+const afterPhotos = {}; // local store: complaintId -> base64
+
+// ── Auth ──────────────────────────────────────────────
+function init() {
+  if (token) {
+    document.getElementById('login-overlay').style.display = 'none';
+    document.getElementById('officer-display').textContent = officerName || 'Officer';
+    loadComplaints();
+    startPolling();
+  }
+}
+
+async function doLogin() {
+  const email = document.getElementById('lo-email').value;
+  const pass = document.getElementById('lo-pass').value;
+  const btn = document.getElementById('login-btn');
+  btn.innerHTML = '<span class="spinner"></span>Signing in...';
+  btn.disabled = true;
+  try {
+    const res = await fetch(`${API}/auth/officer/login`, {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({email, password: pass})
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Login failed');
+    token = data.access_token;
+    officerName = email.split('@')[0];
+    localStorage.setItem('officer_token', token);
+    localStorage.setItem('officer_name', officerName);
+    document.getElementById('login-overlay').style.display = 'none';
+    document.getElementById('officer-display').textContent = officerName;
+    loadComplaints();
+    startPolling();
+  } catch(e) {
+    document.getElementById('login-err').textContent = e.message;
+    document.getElementById('login-err').style.display = 'block';
+  }
+  btn.innerHTML = 'Sign In'; btn.disabled = false;
+}
+
+function logout() {
+  token = null; localStorage.removeItem('officer_token'); localStorage.removeItem('officer_name');
+  document.getElementById('login-overlay').style.display = 'flex';
+}
+
+// ── Load Complaints ───────────────────────────────────
+async function loadComplaints(silent = false) {
+  try {
+    const res = await fetch(`${API}/complaints/`, { headers: { Authorization: `Bearer ${token}` } });
+    if (!res.ok) return;
+    const data = await res.json();
+
+    // Detect new complaints for toast
+    if (allComplaints.length > 0 && data.length > allComplaints.length) {
+      const newest = data[0];
+      showToast(`🆕 New complaint: ${newest.complaint_id} — ${newest.severity.toUpperCase()} severity`);
+    }
+
+    allComplaints = data;
+    updateStats();
+    renderList();
+    renderMapMarkers();
+  } catch(e) { console.error(e); }
+}
+
+function updateStats() {
+  document.getElementById('st-total').textContent = allComplaints.length;
+  document.getElementById('st-pending').textContent = allComplaints.filter(c => c.status === 'pending' || c.status === 'assigned').length;
+  document.getElementById('st-progress').textContent = allComplaints.filter(c => c.status === 'in_progress').length;
+  document.getElementById('st-done').textContent = allComplaints.filter(c => c.status === 'completed').length;
+}
+
+function getFiltered() {
+  if (currentFilter === 'all') return allComplaints;
+  if (['high','medium','low'].includes(currentFilter)) return allComplaints.filter(c => c.severity === currentFilter);
+  return allComplaints.filter(c => c.status === currentFilter || (currentFilter === 'pending' && c.status === 'assigned'));
+}
+
+function renderList() {
+  const filtered = getFiltered();
+  const el = document.getElementById('complaints-scroll');
+  if (!filtered.length) {
+    el.innerHTML = '<div class="no-complaints">No complaints found</div>'; return;
+  }
+  el.innerHTML = filtered.map(c => `
+    <div class="c-card ${c.severity} ${selectedComplaintId === c.complaint_id ? 'selected' : ''}"
+         id="card-${c.complaint_id}" onclick="selectComplaint('${c.complaint_id}')">
+      <div class="c-row1">
+        <div class="c-id">${c.complaint_id}</div>
+        <div class="c-status st-${c.status}">${c.status.replace('_',' ')}</div>
+      </div>
+      <div class="c-row2">
+        <strong>${c.damage_type.replace('_',' ')}</strong> · ${c.severity.toUpperCase()} · ${new Date(c.created_at).toLocaleDateString()}
+      </div>
+      ${c.address ? `<div class="c-row2" style="margin-top:3px;font-size:0.72rem">${c.address.substring(0,55)}...</div>` : ''}
+    </div>
+  `).join('');
+}
+
+function setFilter(filter, el) {
+  currentFilter = filter;
+  document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+  renderList();
+  renderMapMarkers();
+}
+
+// ── Google Maps ───────────────────────────────────────
+function initMap() {
+  map = new google.maps.Map(document.getElementById('map'), {
+    center: { lat: 11.0168, lng: 76.9558 },
+    zoom: 13,
+    styles: [
+      { elementType: 'geometry', stylers: [{ color: '#0a0c10' }] },
+      { elementType: 'labels.text.stroke', stylers: [{ color: '#0a0c10' }] },
+      { elementType: 'labels.text.fill', stylers: [{ color: '#5a6480' }] },
+      { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#1e2535' }] },
+      { featureType: 'road', elementType: 'geometry.stroke', stylers: [{ color: '#141820' }] },
+      { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#2d3748' }] },
+      { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#060810' }] },
+      { featureType: 'poi', stylers: [{ visibility: 'off' }] },
+    ],
+    disableDefaultUI: true,
+    zoomControl: true,
+  });
+  if (allComplaints.length) renderMapMarkers();
+}
+
+function getSeverityColor(c) {
+  if (c.status === 'completed') return '#4ade80';
+  if (c.severity === 'high') return '#e05c5c';
+  if (c.severity === 'medium') return '#f5a623';
+  return '#3ecfb2';
+}
+
+function renderMapMarkers() {
+  if (!map) return;
+  markers.forEach(m => m.setMap(null));
+  markers = []; infoWindows = [];
+
+  const filtered = getFiltered();
+  filtered.forEach(c => {
+    const color = getSeverityColor(c);
+    const marker = new google.maps.Marker({
+      position: { lat: c.latitude, lng: c.longitude },
+      map,
+      icon: {
+        path: google.maps.SymbolPath.CIRCLE,
+        scale: c.severity === 'high' ? 12 : c.severity === 'medium' ? 10 : 8,
+        fillColor: color, fillOpacity: 0.9,
+        strokeColor: '#fff', strokeWeight: 2,
+      },
+      title: c.complaint_id,
+      animation: c.status === 'pending' || c.status === 'assigned' ? google.maps.Animation.BOUNCE : null,
+    });
+
+    const iw = new google.maps.InfoWindow({
+      content: `<div style="background:#141820;color:#e8eaf0;padding:10px;border-radius:8px;font-family:sans-serif;min-width:180px">
+        <div style="color:#f5a623;font-weight:700;margin-bottom:4px">${c.complaint_id}</div>
+        <div style="font-size:12px;margin-bottom:2px">${c.damage_type.replace('_',' ')} · <span style="color:${color}">${c.severity.toUpperCase()}</span></div>
+        <div style="font-size:11px;color:#5a6480">${new Date(c.created_at).toLocaleDateString()}</div>
+        <button onclick="selectComplaint('${c.complaint_id}')" style="margin-top:8px;background:#f5a623;color:#000;border:none;border-radius:4px;padding:4px 10px;cursor:pointer;font-size:11px;font-weight:700">View Details</button>
+      </div>`,
+    });
+
+    marker.addListener('click', () => {
+      infoWindows.forEach(w => w.close());
+      iw.open(map, marker);
+      selectComplaint(c.complaint_id);
+    });
+
+    markers.push(marker);
+    infoWindows.push(iw);
+  });
+}
+
+function fitAllMarkers() {
+  if (!map || !markers.length) return;
+  const bounds = new google.maps.LatLngBounds();
+  markers.forEach(m => bounds.extend(m.getPosition()));
+  map.fitBounds(bounds);
+}
+
+function goToMyLocation() {
+  if (!navigator.geolocation) return;
+  navigator.geolocation.getCurrentPosition(pos => {
+    map.setCenter({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+    map.setZoom(15);
+  });
+}
+
+// ── Detail Panel ──────────────────────────────────────
+async function selectComplaint(id) {
+  selectedComplaintId = id;
+  renderList();
+
+  // Pan map to marker
+  const c = allComplaints.find(x => x.complaint_id === id);
+  if (c && map) { map.panTo({ lat: c.latitude, lng: c.longitude }); map.setZoom(16); }
+
+  const panel = document.getElementById('detail-panel');
+  panel.classList.add('open');
+  document.getElementById('dp-title').textContent = id;
+  document.getElementById('dp-body').innerHTML = '<div style="color:var(--muted);text-align:center;padding:2rem">Loading...</div>';
+
+  try {
+    const res = await fetch(`${API}/complaints/${id}`, { headers: { Authorization: `Bearer ${token}` } });
+    const comp = await res.json();
+    renderDetailPanel(comp);
+  } catch(e) { document.getElementById('dp-body').innerHTML = `<div style="color:var(--danger)">${e.message}</div>`; }
+}
+
+function renderDetailPanel(c) {
+  const BASE = 'http://localhost:8000';
+  const hasAfter = afterPhotos[c.complaint_id];
+
+  document.getElementById('dp-body').innerHTML = `
+    <!-- Before/After -->
+    <div class="ba-labels">
+      <span>Before (Reported)</span>
+      ${hasAfter ? '<span>After (Repaired)</span>' : '<span style="color:var(--accent2)">After photo pending</span>'}
+    </div>
+
+    ${hasAfter ? `
+    <div class="ba-wrap" id="ba-wrap">
+      <img class="ba-before" src="${BASE}${c.image_url}" alt="before"/>
+      <div class="ba-after-overlay" id="ba-after" style="width:50%">
+        <img src="${hasAfter}" style="width:200%;height:100%;object-fit:cover" alt="after"/>
+      </div>
+      <div class="ba-slider" id="ba-slider">
+        <div class="ba-handle">⟺</div>
+      </div>
+    </div>` : `
+    <img class="dp-img" src="${BASE}${c.image_url}" alt="Road damage"/>
+    <div class="no-after">📸 No repair photo yet — upload after repair is complete</div>`}
+
+    <!-- Upload after photo -->
+    ${c.status === 'completed' || c.status === 'in_progress' ? `
+    <button class="upload-after-btn" onclick="triggerAfterPhoto('${c.complaint_id}')">
+      📸 ${hasAfter ? 'Update' : 'Upload'} After-Repair Photo
+    </button>` : ''}
+
+    <!-- Info Grid -->
+    <div class="info-grid">
+      <div class="info-cell"><div class="info-label">Damage Type</div><div class="info-value">${c.damage_type.replace('_',' ')}</div></div>
+      <div class="info-cell"><div class="info-label">Severity</div><div class="info-value"><span class="sev-badge sev-${c.severity}">${c.severity.toUpperCase()}</span></div></div>
+      <div class="info-cell"><div class="info-label">AI Confidence</div><div class="info-value">${(c.ai_confidence*100).toFixed(1)}%</div></div>
+      <div class="info-cell"><div class="info-label">Reported</div><div class="info-value">${new Date(c.created_at).toLocaleDateString()}</div></div>
+    </div>
+
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:0.8rem;margin-bottom:1rem;font-size:0.83rem;color:var(--muted)">
+      ${c.description}
+    </div>
+
+    <!-- Mini map -->
+    <div style="border-radius:10px;overflow:hidden;margin-bottom:1rem;height:140px">
+      <iframe width="100%" height="140" frameborder="0"
+        src="https://maps.google.com/maps?q=${c.latitude},${c.longitude}&z=17&output=embed"></iframe>
+    </div>
+
+    <!-- Status Update -->
+    <div class="status-form">
+      <label>Update Status</label>
+      <select id="dp-status">
+        <option value="pending" ${c.status==='pending'?'selected':''}>Pending</option>
+        <option value="assigned" ${c.status==='assigned'?'selected':''}>Assigned</option>
+        <option value="in_progress" ${c.status==='in_progress'?'selected':''}>In Progress</option>
+        <option value="completed" ${c.status==='completed'?'selected':''}>Completed</option>
+        <option value="rejected" ${c.status==='rejected'?'selected':''}>Rejected</option>
+      </select>
+      <label>Officer Notes</label>
+      <textarea id="dp-notes" rows="3" placeholder="Add inspection notes...">${c.officer_notes || ''}</textarea>
+      <button class="btn-update" id="dp-save-btn" onclick="saveStatus('${c.complaint_id}')">Save Update</button>
+      <div class="save-success" id="save-success">✓ Status updated successfully!</div>
+    </div>
+  `;
+
+  // Init before/after slider
+  if (hasAfter) initBASlider();
+}
+
+function initBASlider() {
+  const wrap = document.getElementById('ba-wrap');
+  const after = document.getElementById('ba-after');
+  const slider = document.getElementById('ba-slider');
+  if (!wrap || !after || !slider) return;
+
+  let dragging = false;
+  const updatePos = (x) => {
+    const rect = wrap.getBoundingClientRect();
+    const pct = Math.max(5, Math.min(95, ((x - rect.left) / rect.width) * 100));
+    after.style.width = pct + '%';
+    slider.style.left = pct + '%';
+  };
+
+  slider.addEventListener('mousedown', () => dragging = true);
+  window.addEventListener('mouseup', () => dragging = false);
+  window.addEventListener('mousemove', e => { if (dragging) updatePos(e.clientX); });
+  slider.addEventListener('touchstart', () => dragging = true);
+  window.addEventListener('touchend', () => dragging = false);
+  window.addEventListener('touchmove', e => { if (dragging) updatePos(e.touches[0].clientX); });
+}
+
+function triggerAfterPhoto(complaintId) {
+  afterPhotoComplaintId = complaintId;
+  document.getElementById('after-file-input').click();
+}
+
+function handleAfterPhoto(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    afterPhotos[afterPhotoComplaintId] = ev.target.result;
+    // Re-render detail panel
+    const c = allComplaints.find(x => x.complaint_id === afterPhotoComplaintId);
+    if (c) renderDetailPanel(c);
+    showToast('✅ After-repair photo added successfully!');
+  };
+  reader.readAsDataURL(file);
+}
+
+async function saveStatus(complaintId) {
+  const status = document.getElementById('dp-status').value;
+  const notes = document.getElementById('dp-notes').value;
+  const btn = document.getElementById('dp-save-btn');
+  btn.innerHTML = '<span class="spinner"></span>Saving...'; btn.disabled = true;
+
+  try {
+    const res = await fetch(`${API}/complaints/${complaintId}/status`, {
+      method: 'PATCH',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status, officer_notes: notes })
+    });
+    if (!res.ok) throw new Error('Update failed');
+    document.getElementById('save-success').style.display = 'block';
+    setTimeout(() => { document.getElementById('save-success').style.display = 'none'; }, 2000);
+    await loadComplaints(true);
+    renderMapMarkers();
+  } catch(e) { alert(e.message); }
+  btn.innerHTML = 'Save Update'; btn.disabled = false;
+}
+
+function closeDetail() {
+  document.getElementById('detail-panel').classList.remove('open');
+  selectedComplaintId = null;
+  renderList();
+}
+
+// ── View Modes ────────────────────────────────────────
+function setView(view) {
+  currentView = view;
+  const sidebar = document.getElementById('sidebar');
+  const mapArea = document.getElementById('map-area');
+  document.querySelectorAll('.btn-sm').forEach(b => b.classList.remove('active'));
+  document.getElementById(`view-${view}`).classList.add('active');
+
+  if (view === 'split') { sidebar.style.display = 'flex'; mapArea.style.display = 'block'; }
+  if (view === 'map') { sidebar.style.display = 'none'; mapArea.style.display = 'block'; }
+  if (view === 'list') { sidebar.style.display = 'flex'; sidebar.style.width = '100%'; mapArea.style.display = 'none'; }
+
+  if (map) google.maps.event.trigger(map, 'resize');
+}
+
+// ── Toast ─────────────────────────────────────────────
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 4000);
+}
+
+// ── Real-time Polling ─────────────────────────────────
+function startPolling() {
+  setInterval(() => loadComplaints(true), 10000); // every 10 seconds
+}
+
+// ── Load Google Maps ──────────────────────────────────
+function loadGoogleMaps() {
+  const script = document.createElement('script');
+  script.src = `https://maps.googleapis.com/maps/api/js?key=${GMAPS_KEY}&callback=initMap`;
+  script.async = true; script.defer = true;
+  document.head.appendChild(script);
+}
+
+init();
+loadGoogleMaps();
+</script>
+</body>
+</html>

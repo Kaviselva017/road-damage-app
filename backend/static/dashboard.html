@@ -1,0 +1,871 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Officer Dashboard — RoadWatch</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<style>
+:root{--bg:#0a0c10;--surface:#10131a;--card:#141820;--border:#1e2535;--accent:#f5a623;--accent2:#3ecfb2;--danger:#e05c5c;--blue:#3b82f6;--purple:#a855f7;--text:#e8eaf0;--muted:#5a6480;}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;height:100vh;display:flex;flex-direction:column;overflow:hidden;}
+.topbar{background:var(--surface);border-bottom:1px solid var(--border);padding:0 1.5rem;height:52px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
+.logo{font-family:'Syne',sans-serif;font-size:1.1rem;font-weight:800;}
+.logo span{color:var(--accent);}
+.live-badge{background:rgba(62,207,178,.1);border:1px solid rgba(62,207,178,.3);color:var(--accent2);font-size:.7rem;font-weight:700;padding:.2rem .6rem;border-radius:20px;}
+.live-dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--accent2);margin-right:4px;animation:blink 1s infinite;}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.2}}
+.btn-sm{background:transparent;border:1px solid var(--border);color:var(--muted);padding:.3rem .7rem;border-radius:6px;font-family:inherit;font-size:.78rem;cursor:pointer;transition:all .2s;}
+.btn-sm:hover{border-color:var(--accent);color:var(--accent);}
+.btn-sm.active{background:var(--accent);border-color:var(--accent);color:#000;font-weight:700;}
+.main-layout{display:flex;flex:1;overflow:hidden;position:relative;}
+/* SIDEBAR */
+.sidebar{width:340px;flex-shrink:0;display:flex;flex-direction:column;border-right:1px solid var(--border);overflow:hidden;}
+.sidebar-header{padding:.7rem;border-bottom:1px solid var(--border);flex-shrink:0;}
+.stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:.35rem;margin-bottom:.6rem;}
+.stat-mini{background:var(--card);border-radius:8px;padding:.45rem;text-align:center;border:1px solid var(--border);}
+.stat-mini .num{font-family:'Syne',sans-serif;font-size:1.15rem;font-weight:800;}
+.stat-mini .lbl{font-size:.58rem;color:var(--muted);text-transform:uppercase;}
+.filters{display:flex;gap:.25rem;flex-wrap:wrap;}
+.filter-chip{background:var(--card);border:1px solid var(--border);color:var(--muted);padding:.2rem .55rem;border-radius:20px;font-size:.7rem;cursor:pointer;transition:all .15s;}
+.filter-chip:hover{border-color:var(--accent);color:var(--accent);}
+.filter-chip.active{background:var(--accent);border-color:var(--accent);color:#000;font-weight:700;}
+.filter-chip.sev-high.active{background:var(--danger);border-color:var(--danger);color:#fff;}
+.filter-chip.sev-low.active{background:var(--accent2);border-color:var(--accent2);color:#000;}
+.sidebar-tabs{display:flex;border-bottom:1px solid var(--border);flex-shrink:0;}
+.tab-btn{flex:1;padding:.55rem;font-family:inherit;font-size:.75rem;background:none;border:none;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;transition:all .15s;}
+.tab-btn.active{color:var(--accent);border-bottom-color:var(--accent);}
+.tab-content{flex:1;overflow-y:auto;}
+.tab-content::-webkit-scrollbar{width:3px;}
+.tab-content::-webkit-scrollbar-thumb{background:var(--border);}
+.complaints-list,.citizens-list,.priority-list{padding:.4rem;}
+.c-card{background:var(--card);border:1px solid var(--border);border-radius:9px;padding:.65rem .8rem;margin-bottom:.35rem;cursor:pointer;transition:all .15s;position:relative;overflow:hidden;}
+.c-card::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;}
+.c-card.high::before{background:var(--danger);}
+.c-card.medium::before{background:var(--accent);}
+.c-card.low::before{background:var(--accent2);}
+.c-card:hover{border-color:var(--accent);transform:translateX(2px);}
+.c-card.selected{border-color:var(--accent);background:#1a1f2e;}
+.c-row1{display:flex;justify-content:space-between;align-items:center;margin-bottom:.2rem;}
+.c-id{font-size:.78rem;font-weight:700;color:var(--accent);}
+.c-status{font-size:.6rem;font-weight:700;text-transform:uppercase;padding:.12rem .45rem;border-radius:20px;}
+.st-pending{background:rgba(90,100,128,.15);color:var(--muted);}
+.st-assigned{background:rgba(245,166,35,.15);color:var(--accent);}
+.st-in_progress{background:rgba(59,130,246,.15);color:var(--blue);}
+.st-completed{background:rgba(34,197,94,.15);color:#4ade80;}
+.st-rejected{background:rgba(224,92,92,.15);color:var(--danger);}
+.c-row2{font-size:.72rem;color:var(--muted);}
+.c-badges{display:flex;gap:.3rem;margin-top:3px;flex-wrap:wrap;}
+.c-badge{font-size:.58rem;font-weight:700;padding:.1rem .4rem;border-radius:4px;}
+.badge-ps-high{background:rgba(224,92,92,.12);color:var(--danger);}
+.badge-ps-med{background:rgba(245,166,35,.12);color:var(--accent);}
+.badge-ps-low{background:rgba(62,207,178,.12);color:var(--accent2);}
+.badge-area{background:rgba(59,130,246,.1);color:var(--blue);}
+.badge-dup{background:rgba(168,85,247,.1);color:var(--purple);}
+/* PRIORITY LIST */
+.pri-card{background:var(--card);border:1px solid var(--border);border-radius:9px;padding:.7rem .9rem;margin-bottom:.35rem;cursor:pointer;transition:border-color .15s;}
+.pri-card:hover{border-color:var(--accent);}
+.pri-rank{font-family:'Syne',sans-serif;font-size:.85rem;color:var(--muted);margin-right:.4rem;}
+.pri-score{font-family:'Syne',sans-serif;font-size:1rem;font-weight:800;}
+.budget-card{background:var(--card);border:1px solid rgba(245,166,35,.2);border-radius:9px;padding:.7rem .9rem;margin-bottom:.35rem;}
+.budget-amt{font-family:'Syne',sans-serif;font-size:1rem;font-weight:800;color:#4ade80;}
+/* MAP AREA */
+.map-area{flex:1;position:relative;}
+#map{width:100%;height:100%;}
+.map-controls{position:absolute;top:.8rem;left:.8rem;z-index:10;display:flex;flex-direction:column;gap:.35rem;}
+.map-btn{background:var(--card);border:1px solid var(--border);color:var(--text);padding:.45rem .75rem;border-radius:8px;font-family:inherit;font-size:.75rem;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.4);}
+.map-btn:hover{border-color:var(--accent);color:var(--accent);}
+.map-legend{position:absolute;bottom:.8rem;left:.8rem;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:.6rem .8rem;z-index:10;font-size:.73rem;box-shadow:0 2px 8px rgba(0,0,0,.4);}
+.map-legend-title{color:var(--muted);font-weight:700;text-transform:uppercase;margin-bottom:.4rem;font-size:.65rem;}
+.legend-item{display:flex;align-items:center;gap:.4rem;margin-bottom:.2rem;}
+.legend-dot{width:10px;height:10px;border-radius:50%;}
+/* DETAIL PANEL */
+.detail-panel{width:0;flex-shrink:0;background:var(--surface);border-left:1px solid var(--border);overflow-y:auto;overflow-x:hidden;transition:width .3s;z-index:5;}
+.detail-panel.open{width:390px;}
+.detail-panel::-webkit-scrollbar{width:3px;}
+.detail-panel::-webkit-scrollbar-thumb{background:var(--border);}
+.dp-header{padding:.8rem 1rem;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;background:var(--surface);z-index:1;}
+.dp-close{background:none;border:none;color:var(--muted);cursor:pointer;font-size:1.2rem;}
+.dp-body{padding:1rem;}
+.dp-img{width:100%;border-radius:10px;border:1px solid var(--border);margin-bottom:.8rem;}
+.info-grid{display:grid;grid-template-columns:1fr 1fr;gap:.45rem;margin-bottom:.8rem;}
+.info-cell{background:var(--card);border-radius:8px;padding:.5rem .65rem;border:1px solid var(--border);}
+.info-label{font-size:.62rem;color:var(--muted);text-transform:uppercase;}
+.info-value{font-size:.83rem;margin-top:3px;font-weight:500;}
+.sev-badge{display:inline-block;padding:.2rem .6rem;border-radius:20px;font-size:.7rem;font-weight:700;}
+.sev-high{background:rgba(224,92,92,.15);color:var(--danger);}
+.sev-medium{background:rgba(245,166,35,.15);color:var(--accent);}
+.sev-low{background:rgba(62,207,178,.15);color:var(--accent2);}
+/* priority breakdown */
+.ps-breakdown{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:.8rem;margin-bottom:.8rem;}
+.psb-title{font-size:.65rem;color:var(--muted);text-transform:uppercase;font-weight:700;margin-bottom:.6rem;}
+.psb-row{display:flex;align-items:center;gap:.5rem;margin-bottom:.4rem;}
+.psb-label{font-size:.7rem;color:var(--muted);width:100px;flex-shrink:0;}
+.psb-bar-bg{flex:1;height:6px;background:var(--border);border-radius:3px;overflow:hidden;}
+.psb-bar{height:100%;border-radius:3px;background:var(--accent);transition:width .5s;}
+.psb-val{font-size:.68rem;font-weight:700;color:var(--text);width:28px;text-align:right;}
+/* area zone box */
+.area-zone-box{border-radius:9px;padding:.6rem .8rem;margin-bottom:.8rem;display:flex;align-items:center;gap:.6rem;}
+.az-hospital{background:rgba(224,92,92,.08);border:1px solid rgba(224,92,92,.2);}
+.az-school{background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.2);}
+.az-highway{background:rgba(245,166,35,.08);border:1px solid rgba(245,166,35,.2);}
+.az-market{background:rgba(62,207,178,.08);border:1px solid rgba(62,207,178,.2);}
+.az-residential{background:rgba(90,100,128,.06);border:1px solid var(--border);}
+/* fund form */
+.fund-form{background:var(--card);border:1px solid rgba(74,222,128,.2);border-radius:10px;padding:.8rem;margin-bottom:.8rem;}
+.fund-form label{font-size:.65rem;color:#4ade80;text-transform:uppercase;font-weight:700;display:block;margin-bottom:.3rem;}
+.fund-form input{width:100%;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:.5rem .7rem;font-family:inherit;font-size:.85rem;margin-bottom:.5rem;}
+.fund-form input:focus{outline:none;border-color:#4ade80;}
+.btn-fund{background:#4ade80;color:#000;border:none;border-radius:8px;padding:.55rem 1rem;font-family:inherit;font-weight:700;font-size:.82rem;cursor:pointer;}
+/* status form */
+.status-form{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:.8rem;margin-bottom:.8rem;}
+.status-form label{font-size:.65rem;color:var(--muted);text-transform:uppercase;display:block;margin-bottom:.3rem;}
+.status-form select,.status-form textarea{width:100%;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:.5rem .7rem;font-family:inherit;font-size:.85rem;margin-bottom:.6rem;}
+.status-form select:focus,.status-form textarea:focus{outline:none;border-color:var(--accent);}
+.btn-update{width:100%;background:var(--accent);color:#000;border:none;border-radius:8px;padding:.6rem;font-family:inherit;font-weight:700;font-size:.85rem;cursor:pointer;}
+.save-success{color:var(--accent2);font-size:.78rem;text-align:center;margin-top:.4rem;display:none;}
+/* messages */
+.msg-section{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:.8rem;margin-bottom:.8rem;}
+.msg-title{font-size:.65rem;color:var(--muted);text-transform:uppercase;font-weight:700;margin-bottom:.6rem;}
+.msg-list{max-height:180px;overflow-y:auto;margin-bottom:.5rem;display:flex;flex-direction:column;gap:.35rem;}
+.msg-bubble{padding:.5rem .65rem;border-radius:8px;font-size:.8rem;max-width:85%;}
+.msg-bubble.officer{background:rgba(245,166,35,.1);border:1px solid rgba(245,166,35,.2);align-self:flex-end;}
+.msg-bubble.citizen{background:rgba(62,207,178,.08);border:1px solid rgba(62,207,178,.2);align-self:flex-start;}
+.msg-meta{font-size:.62rem;color:var(--muted);margin-bottom:2px;}
+.msg-input-row{display:flex;gap:.35rem;}
+.msg-input{flex:1;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:.48rem .65rem;font-family:inherit;font-size:.82rem;}
+.msg-input:focus{outline:none;border-color:var(--accent);}
+.msg-send-btn{background:var(--accent);color:#000;border:none;border-radius:8px;padding:.48rem .75rem;font-family:inherit;font-weight:700;cursor:pointer;font-size:.8rem;}
+/* citizen box */
+.citizen-info-box{background:var(--card);border:1px solid rgba(62,207,178,.2);border-radius:10px;padding:.8rem;margin-bottom:.8rem;}
+.cib-title{font-size:.65rem;color:var(--accent2);text-transform:uppercase;font-weight:700;margin-bottom:.5rem;}
+.cib-row{display:flex;justify-content:space-between;font-size:.8rem;margin-bottom:.25rem;}
+.cib-row .label{color:var(--muted);}
+/* before/after */
+.ba-wrap{position:relative;border-radius:10px;overflow:hidden;margin-bottom:.8rem;border:1px solid var(--border);user-select:none;}
+.ba-before{width:100%;height:155px;object-fit:cover;display:block;}
+.ba-after-overlay{position:absolute;top:0;left:0;height:100%;overflow:hidden;}
+.ba-after-overlay img{height:100%;object-fit:cover;}
+.ba-slider{position:absolute;top:0;bottom:0;width:3px;background:white;cursor:ew-resize;}
+.ba-handle{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:26px;height:26px;background:white;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.6rem;color:#000;pointer-events:none;}
+.ba-labels{display:flex;justify-content:space-between;margin-bottom:.4rem;}
+.ba-labels span{font-size:.68rem;color:var(--muted);font-weight:600;text-transform:uppercase;}
+.no-after{background:var(--card);border-radius:8px;padding:.8rem;text-align:center;color:var(--muted);font-size:.78rem;margin-bottom:.8rem;border:1px dashed var(--border);}
+.upload-after-btn{width:100%;background:transparent;border:1px dashed var(--border);color:var(--muted);border-radius:8px;padding:.55rem;font-family:inherit;font-size:.78rem;cursor:pointer;margin-bottom:.8rem;}
+.upload-after-btn:hover{border-color:var(--accent2);color:var(--accent2);}
+/* map popup override */
+.leaflet-popup-content-wrapper{background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:10px;}
+.leaflet-popup-tip{background:var(--card);}
+.leaflet-popup-content{margin:.7rem .8rem;}
+/* citizen cards */
+.citizen-card{background:var(--card);border:1px solid var(--border);border-radius:9px;padding:.75rem .9rem;margin-bottom:.35rem;}
+.citizen-header{display:flex;align-items:center;gap:.6rem;margin-bottom:.4rem;}
+.citizen-avatar{width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--accent2));display:flex;align-items:center;justify-content:center;font-weight:800;font-size:.85rem;color:#000;flex-shrink:0;}
+.citizen-stats{display:flex;gap:.4rem;flex-wrap:wrap;}
+.citizen-stat{background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:.2rem .45rem;font-size:.68rem;}
+.citizen-stat span{color:var(--accent);font-weight:700;}
+/* toast */
+.toast{position:fixed;top:60px;right:1rem;background:var(--card);border:1px solid var(--accent2);border-radius:10px;padding:.65rem 1rem;font-size:.82rem;color:var(--accent2);z-index:9999;transform:translateX(130%);transition:transform .3s;max-width:280px;}
+.toast.show{transform:translateX(0);}
+/* login */
+.login-overlay{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;z-index:9999;}
+.login-box{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:2rem;width:340px;}
+.login-box h2{font-family:'Syne',sans-serif;font-size:1.4rem;margin-bottom:.3rem;}
+.login-field{margin-bottom:.7rem;}
+.login-field label{display:block;font-size:.7rem;color:var(--muted);text-transform:uppercase;margin-bottom:.25rem;}
+.login-field input{width:100%;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:.6rem .85rem;font-family:inherit;font-size:.9rem;}
+.login-field input:focus{outline:none;border-color:var(--accent);}
+.login-err{color:var(--danger);font-size:.8rem;margin-bottom:.7rem;display:none;}
+.btn-login{width:100%;background:var(--accent);color:#000;border:none;border-radius:8px;padding:.72rem;font-family:inherit;font-weight:700;font-size:.95rem;cursor:pointer;}
+.spinner{display:inline-block;width:14px;height:14px;border:2px solid rgba(0,0,0,.3);border-top-color:#000;border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle;margin-right:4px;}
+@keyframes spin{to{transform:rotate(360deg)}}
+.no-items{text-align:center;padding:2rem 1rem;color:var(--muted);font-size:.82rem;}
+
+/* ── Zone Queue ── */
+.zone-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:.7rem .8rem;margin-bottom:.5rem;}
+.zone-card-header{display:flex;align-items:center;gap:.5rem;margin-bottom:.5rem;}
+.zone-badge{font-size:.7rem;font-weight:800;padding:.15rem .5rem;border-radius:20px;background:rgba(245,166,35,.15);color:var(--accent);}
+.zone-officer-name{font-size:.85rem;font-weight:700;flex:1;}
+.zone-workload-bar{height:5px;background:var(--border);border-radius:3px;margin-bottom:.4rem;overflow:hidden;}
+.zone-workload-fill{height:100%;border-radius:3px;transition:width .5s;}
+.zone-mini-queue{display:flex;flex-direction:column;gap:.2rem;}
+.zmq-item{display:flex;align-items:center;gap:.4rem;font-size:.68rem;padding:.2rem .3rem;border-radius:5px;background:rgba(255,255,255,.02);}
+.zmq-sev{width:6px;height:6px;border-radius:50%;flex-shrink:0;}
+.zmq-id{color:var(--accent);font-weight:700;font-family:monospace;}
+.zmq-addr{color:var(--muted);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.zmq-score{color:var(--accent2);font-weight:700;}
+.reassign-btn{background:none;border:1px solid var(--border);color:var(--muted);font-size:.6rem;padding:.15rem .4rem;border-radius:4px;cursor:pointer;margin-left:auto;}
+.reassign-btn:hover{border-color:var(--accent);color:var(--accent);}
+/* Realtime badge */
+.rt-badge{display:inline-flex;align-items:center;gap:3px;font-size:.65rem;font-weight:700;padding:.15rem .5rem;border-radius:20px;background:rgba(62,207,178,.1);color:var(--accent2);border:1px solid rgba(62,207,178,.2);}
+.rt-dot{width:5px;height:5px;border-radius:50%;background:var(--accent2);animation:blink 1s infinite;}
+</style>
+</head>
+<body>
+<div class="login-overlay" id="login-overlay">
+  <div class="login-box">
+    <div style="font-size:2rem;margin-bottom:.5rem">🛣️</div>
+    <h2>Officer Portal</h2>
+    <p style="color:var(--muted);font-size:.85rem;margin-bottom:1.2rem">Road Damage Management System</p>
+    <div class="login-err" id="login-err"></div>
+    <div class="login-field"><label>Email</label><input type="email" id="lo-email" placeholder="maran@road.com"/></div>
+    <div class="login-field"><label>Password</label><input type="password" id="lo-pass" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()"/></div>
+    <button class="btn-login" id="login-btn" onclick="doLogin()">Sign In</button>
+  </div>
+</div>
+<div class="topbar">
+  <div class="logo">Road<span>Watch</span> Officer</div>
+  <div style="display:flex;align-items:center;gap:.7rem">
+    <div class="live-badge"><span class="live-dot"></span>LIVE</div>
+    <span style="font-size:.82rem;color:var(--muted)">Officer <strong style="color:var(--accent2)" id="officer-display">—</strong></span>
+    <button class="btn-sm active" id="view-split" onclick="setView('split')">Split</button>
+    <button class="btn-sm" id="view-map" onclick="setView('map')">Map</button>
+    <button class="btn-sm" id="view-list" onclick="setView('list')">List</button>
+    <button class="btn-sm" onclick="logout()">Sign Out</button>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+<div class="main-layout" id="main-layout">
+  <div class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <div class="stats-row">
+        <div class="stat-mini"><div class="num" id="st-total">0</div><div class="lbl">Total</div></div>
+        <div class="stat-mini"><div class="num" style="color:var(--accent)" id="st-pending">0</div><div class="lbl">Pending</div></div>
+        <div class="stat-mini"><div class="num" style="color:var(--blue)" id="st-progress">0</div><div class="lbl">Active</div></div>
+        <div class="stat-mini"><div class="num" style="color:#4ade80" id="st-done">0</div><div class="lbl">Done</div></div>
+      </div>
+      <div class="filters">
+        <div class="filter-chip active" onclick="setFilter('all',this)">All</div>
+        <div class="filter-chip sev-high" onclick="setFilter('high',this)">🔴 High</div>
+        <div class="filter-chip" onclick="setFilter('medium',this)">🟡 Med</div>
+        <div class="filter-chip sev-low" onclick="setFilter('low',this)">🟢 Low</div>
+        <div class="filter-chip" onclick="setFilter('pending',this)">Pending</div>
+        <div class="filter-chip" onclick="setFilter('in_progress',this)">Active</div>
+        <div class="filter-chip" onclick="setFilter('completed',this)">Done</div>
+      </div>
+    </div>
+    <div class="sidebar-tabs">
+      <button class="tab-btn active" id="tab-complaints" onclick="switchTab('complaints')">🗂 Complaints</button>
+      <button class="tab-btn" id="tab-priority" onclick="switchTab('priority')">⚡ Priority</button>
+      <button class="tab-btn" id="tab-queue" onclick="switchTab('queue')">🏘 Queue</button>
+      <button class="tab-btn" id="tab-citizens" onclick="switchTab('citizens')">👥 Citizens</button>
+    </div>
+    <div class="tab-content" id="content-complaints"><div class="complaints-list" id="complaints-list"><div class="no-items">Loading...</div></div></div>
+    <div class="tab-content" id="content-priority" style="display:none"><div class="priority-list" id="priority-list"><div class="no-items">Loading priority queue...</div></div></div>
+    <div class="tab-content" id="content-queue" style="display:none"><div id="zone-queue-list" style="padding:.4rem"><div class="no-items">Loading zone queue...</div></div></div>
+    <div class="tab-content" id="content-citizens" style="display:none"><div class="citizens-list" id="citizens-list"><div class="no-items">Loading citizens...</div></div></div>
+  </div>
+  <div class="map-area" id="map-area">
+    <div id="map"></div>
+    <div class="map-controls">
+      <button class="map-btn" onclick="fitAllMarkers()">📍 Fit All</button>
+      <button class="map-btn" onclick="goToMyLocation()">🎯 My Location</button>
+      <button class="map-btn" onclick="loadPriorityData()">⚡ Priority</button>
+    </div>
+    <div class="map-legend">
+      <div class="map-legend-title">MAP LEGEND</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#ef4444"></div>High Severity</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#f5a623"></div>Medium</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#10b981"></div>Low</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#4ade80"></div>Completed</div>
+    </div>
+  </div>
+  <!-- Detail panel is OUTSIDE map-area so it pushes map, not overlaps -->
+  <div class="detail-panel" id="detail-panel">
+    <div class="dp-header">
+      <div id="dp-title" style="font-family:'Syne',sans-serif;font-size:1rem;font-weight:800;color:var(--accent)">—</div>
+      <button class="dp-close" onclick="closeDetail()">✕</button>
+    </div>
+    <div class="dp-body" id="dp-body"></div>
+  </div>
+</div>
+<input type="file" id="after-file-input" accept="image/*" style="display:none" onchange="handleAfterPhoto(event)"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const API=(()=>{const p=location.port;if(p==='8443')return`https://${location.hostname}:8443/api`;if(p==='8000')return`http://${location.hostname}:8000/api`;return`${location.protocol}//${location.host}/api`;})();
+let token=localStorage.getItem('officer_token');
+let officerName=localStorage.getItem('officer_name');
+let allComplaints=[],citizenData={},priorityData=[],budgetData=[];
+let currentFilter='all',currentTab='complaints';
+let leafletMap,markers=[],selectedComplaintId=null,afterPhotoComplaintId=null;
+
+// Robust date parser - handles SQLite "2026-03-14 02:30:00" and ISO formats
+function parseDate(raw){
+  if(!raw||raw==='None'||raw==='null')return null;
+  const d=new Date(String(raw).trim().replace(' ','T'));
+  return(d&&!isNaN(d.getTime()))?d:null;
+}
+function fmtDate(raw){const d=parseDate(raw);return d?d.toLocaleDateString():'--';}
+function fmtTime(raw){const d=parseDate(raw);return d?d.toLocaleTimeString():'--';}
+const afterPhotos={};
+
+const AREA_LABELS={'hospital':'[H] Hospital Zone','school':'[S] School Zone','highway':'[R] Highway','market':'[M] Market','industrial':'[I] Industrial','residential':'[R] Residential','general':'[G] General'};
+
+function init(){
+  if(token){
+    document.getElementById('login-overlay').style.display='none';
+    document.getElementById('officer-display').textContent=officerName||'Officer';
+    loadComplaints();loadPriorityData();startPolling();
+  }
+  initLeafletMap();
+}
+
+async function doLogin(){
+  const email=document.getElementById('lo-email').value;
+  const pass=document.getElementById('lo-pass').value;
+  const btn=document.getElementById('login-btn');
+  btn.innerHTML='<span class="spinner"></span>Signing in...';btn.disabled=true;
+  try{
+    const res=await fetch(`${API}/auth/officer/login`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email,password:pass})});
+    const data=await res.json();
+    if(!res.ok)throw new Error(data.detail||'Login failed');
+    token=data.access_token;
+    officerName=data.name||email.split('@')[0];
+    localStorage.setItem('officer_token',token);
+    localStorage.setItem('officer_name',officerName);
+    document.getElementById('login-overlay').style.display='none';
+    document.getElementById('officer-display').textContent=officerName;
+    loadComplaints();loadPriorityData();startPolling();
+  }catch(e){
+    document.getElementById('login-err').textContent=e.message;
+    document.getElementById('login-err').style.display='block';
+  }
+  btn.innerHTML='Sign In';btn.disabled=false;
+}
+
+function logout(){token=null;localStorage.removeItem('officer_token');localStorage.removeItem('officer_name');document.getElementById('login-overlay').style.display='flex';}
+
+let lastMapHash='';
+let zoneQueueData=[];
+async function loadComplaints(silent=false){
+  try{
+    const res=await fetch(`${API}/complaints/`,{headers:{Authorization:`Bearer ${token}`}});
+    if(!res.ok)return;
+    const data=await res.json();
+    const listHash=JSON.stringify(data.map(c=>c.complaint_id+c.status+c.priority_score));
+    const mapHash=JSON.stringify(data.map(c=>c.complaint_id+c.latitude+c.longitude+c.severity+c.status));
+    const changed=listHash!==JSON.stringify(allComplaints.map(c=>c.complaint_id+c.status+c.priority_score));
+    if(!silent&&allComplaints.length>0&&data.length>allComplaints.length){showToast('New: '+data[0].complaint_id);}
+    allComplaints=data;
+    updateStats();
+    if(changed||!silent)renderList();
+    if(mapHash!==lastMapHash){lastMapHash=mapHash;renderMapMarkers();}
+    buildCitizenData();
+  }catch(e){console.error(e);}
+}
+
+async function loadPriorityData(){
+  try{
+    const [p,b]=await Promise.all([
+      fetch(`${API}/complaints/priority/ranking`,{headers:{Authorization:`Bearer ${token}`}}),
+      fetch(`${API}/complaints/budget/recommendations`,{headers:{Authorization:`Bearer ${token}`}})
+    ]);
+    if(p.ok)priorityData=await p.json();
+    if(b.ok)budgetData=await b.json();
+    renderPriorityList();
+  }catch(e){console.error(e);}
+}
+
+function buildCitizenData(){
+  citizenData={};
+  allComplaints.forEach(c=>{
+    const uid=c.user_id||c.citizen_name||'unknown';
+    if(!citizenData[uid])citizenData[uid]={name:c.citizen_name||'Unknown',phone:c.citizen_phone||'—',complaints:[]};
+    citizenData[uid].complaints.push(c);
+  });
+  if(currentTab==='citizens')renderCitizens();
+}
+
+function updateStats(){
+  document.getElementById('st-total').textContent=allComplaints.length;
+  document.getElementById('st-pending').textContent=allComplaints.filter(c=>['pending','assigned'].includes(c.status)).length;
+  document.getElementById('st-progress').textContent=allComplaints.filter(c=>c.status==='in_progress').length;
+  document.getElementById('st-done').textContent=allComplaints.filter(c=>c.status==='completed').length;
+}
+
+function getFiltered(){
+  let list;
+  if(currentFilter==='all') list=[...allComplaints];
+  else if(['high','medium','low'].includes(currentFilter)) list=allComplaints.filter(c=>c.severity===currentFilter);
+  else list=allComplaints.filter(c=>c.status===currentFilter||(currentFilter==='pending'&&c.status==='assigned'));
+  // Sort by priority score descending (highest first)
+  return list.sort((a,b)=>(b.priority_score||0)-(a.priority_score||0));
+}
+
+const AREA_TEXT={'hospital':'Hospital Zone','school':'School Zone','highway':'Highway','market':'Market Area','industrial':'Industrial','residential':'Residential','general':'General'};
+function renderList(){
+  const filtered=getFiltered();
+  const el=document.getElementById('complaints-list');
+  if(!filtered.length){el.innerHTML='<div class="no-items">No complaints found</div>';return;}
+  const scroller=el.closest('.tab-content')||el.parentElement;
+  const scrollTop=scroller?scroller.scrollTop:0;
+  const html=filtered.map(c=>{
+    const ps=c.priority_score||0;
+    const psCls=ps>=60?'badge-ps-high':ps>=35?'badge-ps-med':'badge-ps-low';
+    const area=c.area_type||'residential';
+    const areaText=AREA_TEXT[area]||area;
+    const dateStr=fmtDate(c.created_at);
+    return `<div class="c-card ${c.severity||'medium'} ${selectedComplaintId===c.complaint_id?'selected':''}" onclick="selectComplaint('${c.complaint_id}')">
+      <div class="c-row1">
+        <div class="c-id">${c.complaint_id}</div>
+        <div class="c-status st-${c.status||'pending'}">${(c.status||'pending').replace('_',' ')}</div>
+      </div>
+      <div class="c-row2"><strong>${(c.damage_type||'').replace('_',' ')}</strong> - ${(c.severity||'').toUpperCase()} - ${dateStr}</div>
+      ${c.citizen_name?`<div style="font-size:.7rem;color:var(--accent2);margin-top:2px">${c.citizen_name}</div>`:''}
+      <div class="c-badges">
+        <span class="c-badge ${psCls}">P${ps}</span>
+        <span class="c-badge badge-area">${areaText}</span>
+        ${(c.report_count||1)>1?`<span class="c-badge badge-dup">x${c.report_count} reports</span>`:''}
+      </div>
+    </div>`;
+  }).join('');
+  if(el.innerHTML!==html) el.innerHTML=html;
+  if(scroller&&scrollTop) requestAnimationFrame(()=>{scroller.scrollTop=scrollTop;});
+}
+
+function renderPriorityList(){
+  const el=document.getElementById('priority-list');
+  if(!priorityData.length&&!budgetData.length){el.innerHTML='<div class="no-items">No priority data yet</div>';return;}
+  let html='<div style="padding:.5rem .4rem"><div style="font-size:.65rem;color:var(--muted);text-transform:uppercase;font-weight:700;margin-bottom:.5rem;letter-spacing:.05em">⚡ Top Priority Queue</div>';
+  html+=priorityData.slice(0,10).map((c,i)=>{
+    const ps=c.priority_score||0;
+    const col=ps>=60?'var(--danger)':ps>=35?'var(--accent)':'var(--accent2)';
+    // Show if score was boosted by time-of-day
+    const now=new Date();const h=now.getHours();
+    const isPeak=(h>=8&&h<=10)||(h>=17&&h<=20);
+    const peakBadge=isPeak?'<span style="font-size:.58rem;background:rgba(239,68,68,.15);color:#fca5a5;padding:.1rem .3rem;border-radius:4px;margin-left:3px">PEAK</span>':'';
+    return `<div class="pri-card" onclick="selectComplaint('${c.complaint_id}')">
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <div style="display:flex;align-items:center;gap:.5rem">
+          <span class="pri-rank">#${i+1}</span>
+          <div><div style="font-size:.78rem;font-weight:700;color:var(--accent)">${c.complaint_id}</div>
+          <div style="font-size:.7rem;color:var(--muted)">${AREA_TEXT[c.area_type]||c.area_type||'—'} · ${(c.severity||'').toUpperCase()}</div></div>
+        </div>
+        <span class="pri-score" style="color:${col}">P${ps}</span>
+      </div>
+    </div>`;
+  }).join('');
+  html+='<div style="font-size:.65rem;color:var(--muted);text-transform:uppercase;font-weight:700;margin:.8rem 0 .5rem;letter-spacing:.05em">💰 AI Budget Recommendations</div>';
+  html+=budgetData.slice(0,8).map(b=>`<div class="budget-card">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:.3rem">
+      <div style="font-size:.78rem;font-weight:700;color:var(--accent)">${b.complaint_id}</div>
+      <span class="budget-amt">₹${(b.estimated_budget||0).toLocaleString()}</span>
+    </div>
+    <div style="font-size:.7rem;color:var(--muted)">${b.reason||'—'}</div>
+    <button onclick="openFundAlloc('${b.complaint_id}',${b.estimated_budget})" style="margin-top:.4rem;background:none;border:1px solid rgba(74,222,128,.2);color:#4ade80;padding:.2rem .55rem;border-radius:5px;font-family:inherit;font-size:.65rem;cursor:pointer">Allocate →</button>
+  </div>`).join('');
+  html+='</div>';
+  el.innerHTML=html;
+}
+
+function renderCitizens(){
+  const el=document.getElementById('citizens-list');
+  const list=Object.values(citizenData);
+  if(!list.length){el.innerHTML='<div class="no-items">No citizen data yet</div>';return;}
+  el.innerHTML='<div style="padding:.4rem">'+list.map(c=>{
+    const initials=c.name.split(' ').map(w=>w[0]).join('').substring(0,2).toUpperCase();
+    const high=c.complaints.filter(x=>x.severity==='high').length;
+    const done=c.complaints.filter(x=>x.status==='completed').length;
+    return `<div class="citizen-card">
+      <div class="citizen-header">
+        <div class="citizen-avatar">${initials}</div>
+        <div><div style="font-weight:600;font-size:.85rem">${c.name}</div><div style="font-size:.7rem;color:var(--muted)">${c.phone}</div></div>
+      </div>
+      <div class="citizen-stats">
+        <div class="citizen-stat">📋 <span>${c.complaints.length}</span></div>
+        <div class="citizen-stat">🔴 <span>${high}</span> High</div>
+        <div class="citizen-stat">✅ <span>${done}</span> Fixed</div>
+      </div>
+    </div>`;
+  }).join('')+'</div>';
+}
+
+function setFilter(filter,el){
+  currentFilter=filter;
+  document.querySelectorAll('.filter-chip').forEach(c=>c.classList.remove('active'));
+  el.classList.add('active');
+  renderList();renderMapMarkers();
+}
+
+function switchTab(tab){
+  currentTab=tab;
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById(`tab-${tab}`).classList.add('active');
+  document.querySelectorAll('.tab-content').forEach(c=>c.style.display='none');
+  document.getElementById(`content-${tab}`).style.display='flex';
+  document.getElementById(`content-${tab}`).style.flexDirection='column';
+  if(tab==='citizens')renderCitizens();
+  if(tab==='queue')loadZoneQueue();
+}
+
+function initLeafletMap(){
+  leafletMap=L.map('map',{zoomControl:true,attributionControl:false}).setView([11.0168,76.9558],13);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+    maxZoom:19,
+    attribution:'© OpenStreetMap',
+    crossOrigin:true
+  }).addTo(leafletMap);
+  // Event delegation for popup buttons — avoids scope issues with inline onclick
+  document.getElementById('map').addEventListener('click',function(e){
+    const btn=e.target.closest('.popup-view-btn');
+    if(btn){
+      const id=btn.getAttribute('data-id');
+      if(id) selectComplaint(id);
+    }
+  });
+}
+
+function getSeverityColor(c){
+  if(c.status==='completed')return '#4ade80';
+  if(c.severity==='high')return '#e05c5c';
+  if(c.severity==='medium')return '#f5a623';
+  return '#3ecfb2';
+}
+
+function renderMapMarkers(){
+  if(!leafletMap)return;
+  markers.forEach(m=>m.remove());markers=[];
+  getFiltered().forEach(c=>{
+    if(!c.latitude||!c.longitude)return;
+    const col=getSeverityColor(c);
+    const ps=c.priority_score||0;
+    const radius=c.severity==='high'?14:c.severity==='medium'?11:8;
+    const m=L.circleMarker([c.latitude,c.longitude],{radius,fillColor:col,color:'#fff',weight:2,fillOpacity:.88})
+      .bindPopup(`<div style="min-width:160px"><div style="color:#f5a623;font-weight:700;margin-bottom:6px">${c.complaint_id}</div>
+        <div style="font-size:12px;margin-bottom:3px">${(c.damage_type||'').replace('_',' ')} - <span style="color:${col}">${(c.severity||'').toUpperCase()}</span></div>
+        ${AREA_TEXT[c.area_type]?`<div style="font-size:11px;color:#3ecfb2;margin-bottom:3px">${AREA_TEXT[c.area_type]}</div>`:''}
+        <div style="font-size:11px;margin-bottom:6px">Priority: P${ps}</div>
+        ${c.citizen_name?`<div style="font-size:11px;color:#3ecfb2;margin-bottom:6px">${c.citizen_name}</div>`:''}
+        <button class="popup-view-btn" data-id="${c.complaint_id}" style="background:#f5a623;color:#000;border:none;border-radius:4px;padding:5px 12px;cursor:pointer;font-size:12px;font-weight:700;width:100%">View Details</button></div>`)
+      .addTo(leafletMap);
+    m.on('click',()=>{leafletMap.closePopup();setTimeout(()=>selectComplaint(c.complaint_id),50);});
+    markers.push(m);
+  });
+}
+
+function fitAllMarkers(){
+  if(!leafletMap||!markers.length)return;
+  const group=L.featureGroup(markers);
+  leafletMap.fitBounds(group.getBounds().pad(.1));
+}
+
+function goToMyLocation(){
+  navigator.geolocation?.getCurrentPosition(pos=>{leafletMap.setView([pos.coords.latitude,pos.coords.longitude],15);});
+}
+
+async function selectComplaint(id){
+  selectedComplaintId=id;renderList();
+  const c=allComplaints.find(x=>x.complaint_id===id);
+  if(c&&leafletMap){
+    leafletMap.closePopup();
+    leafletMap.setView([c.latitude,c.longitude],16);
+  }
+  document.getElementById('detail-panel').classList.add('open');
+  setTimeout(()=>{if(leafletMap)leafletMap.invalidateSize();},350);
+  document.getElementById('dp-title').textContent=id;
+  document.getElementById('dp-body').innerHTML='<div style="color:var(--muted);text-align:center;padding:2rem">Loading...</div>';
+  try{
+    const[cRes,msgRes]=await Promise.all([
+      fetch(`${API}/complaints/${id}`,{headers:{Authorization:`Bearer ${token}`}}),
+      fetch(`${API}/messages/${id}`,{headers:{Authorization:`Bearer ${token}`}})
+    ]);
+    const comp=await cRes.json();
+    const msgs=msgRes.ok?await msgRes.json():[];
+    renderDetailPanel(comp,msgs);
+  }catch(e){document.getElementById('dp-body').innerHTML=`<div style="color:var(--danger)">${e.message}</div>`;}
+}
+
+function openFundAlloc(cid,suggested){
+  selectComplaint(cid);
+  setTimeout(()=>{
+    const fi=document.getElementById(`fund-input-${cid}`);
+    if(fi){fi.value=suggested;fi.scrollIntoView({behavior:'smooth'});}
+  },500);
+}
+
+function renderDetailPanel(c,msgs=[]){
+  const BASE='http://localhost:8000';
+  const hasAfter=afterPhotos[c.complaint_id];
+  const ps=c.priority_score||0;
+  const psCls=ps>=60?'var(--danger)':ps>=35?'var(--accent)':'var(--accent2)';
+  const area=c.area_type||'residential';
+  
+  // Priority breakdown
+  const sev=c.severity||'medium';
+  const dmg=c.damage_type||'surface_damage';
+  const psBreakdown={
+    'AI Severity':     {val: Math.round(c.accident_risk_score     || sev==='high'?33:sev==='medium'?20:9), max:35},
+    'Area Criticality':{val: Math.round(c.area_criticality_score  || (area==='hospital'?24:area==='school'?21:area==='highway'?19:area==='market'?15:7)), max:25},
+    'Traffic Risk':    {val: Math.round(c.traffic_density_score   || (area==='hospital'?14:area==='highway'?13:area==='market'?12:6)), max:15},
+    'Damage Impact':   {val: Math.round(c.damage_size_score       || (dmg==='pothole'?14:dmg==='multiple'?14:dmg==='crack'?9:5)), max:15},
+    'Report Density':  {val: Math.round(Math.max(0,(c.report_count||1)-1)*4), max:10},
+  };
+  
+  document.getElementById('dp-body').innerHTML=`
+    ${c.citizen_name?`<div class="citizen-info-box">
+      <div class="cib-title">👤 Citizen Info</div>
+      <div class="cib-row"><span class="label">Name</span><span>${c.citizen_name}</span></div>
+      <div class="cib-row"><span class="label">Phone</span><span>${c.citizen_phone||'—'}</span></div>
+      <div class="cib-row"><span class="label">Report Count</span><span style="color:var(--accent)">${c.report_count||1} reports</span></div>
+    </div>`:''}
+    <div class="area-zone-box az-${area}">
+      <div><div style="font-size:.82rem;font-weight:700">${AREA_TEXT[area]||area}</div><div style="font-size:.7rem;color:var(--muted)">Priority Zone Classification</div></div>
+      <span style="margin-left:auto;font-family:'Syne',sans-serif;font-size:1rem;font-weight:800;color:${psCls}">P${ps}</span>
+    </div>
+    <div class="ba-labels"><span>Before Repair</span><span>${hasAfter?'After (drag)':'After pending'}</span></div>
+    ${hasAfter?`<div class="ba-wrap" id="ba-wrap">
+      <img class="ba-before" src="${BASE}${c.image_url}"/>
+      <div class="ba-after-overlay" id="ba-after" style="width:50%"><img src="${hasAfter}" style="width:200%;height:100%;object-fit:cover"/></div>
+      <div class="ba-slider" id="ba-slider"><div class="ba-handle">⟺</div></div>
+    </div>`:`<img class="dp-img" src="${BASE}${c.image_url}"/><div class="no-after">Upload after-repair photo to enable comparison</div>`}
+    ${['in_progress','completed'].includes(c.status)?`<button class="upload-after-btn" onclick="triggerAfterPhoto('${c.complaint_id}')">📸 ${hasAfter?'Update':'Upload'} After-Repair Photo</button>`:''}
+    <div id="dp-mini-map" style="height:140px;border-radius:10px;overflow:hidden;margin-bottom:.8rem;border:1px solid var(--border);background:var(--card)"></div>
+    <div class="info-grid">
+      <div class="info-cell"><div class="info-label">Type</div><div class="info-value">${(c.damage_type||'').replace('_',' ')}</div></div>
+      <div class="info-cell"><div class="info-label">Severity</div><div class="info-value"><span class="sev-badge sev-${sev}">${sev.toUpperCase()}</span></div></div>
+      <div class="info-cell"><div class="info-label">AI Confidence</div><div class="info-value">${((c.ai_confidence||0)*100).toFixed(1)}%</div></div>
+      <div class="info-cell"><div class="info-label">Reported</div><div class="info-value">${fmtDate(c.created_at)}</div></div>
+      ${c.allocated_fund>0?`<div class="info-cell"><div class="info-label">Budget</div><div class="info-value" style="color:#4ade80">₹${(c.allocated_fund||0).toLocaleString()}</div></div>`:''}
+      ${c.resolved_at?`<div class="info-cell"><div class="info-label">Resolved</div><div class="info-value">${fmtDate(c.resolved_at)}</div></div>`:''}
+    </div>
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:.7rem;margin-bottom:.8rem;font-size:.78rem;color:var(--muted)">${c.description||'—'}</div>
+    <div class="ps-breakdown">
+      <div class="psb-title">⚡ Priority Score Breakdown — Total: ${ps}</div>
+      ${Object.entries(psBreakdown).map(([k,v])=>`<div class="psb-row">
+        <span class="psb-label">${k}</span>
+        <div class="psb-bar-bg"><div class="psb-bar" style="width:${(v.val/v.max*100)}%;background:${psCls}"></div></div>
+        <span class="psb-val">${v.val}</span>
+      </div>`).join('')}
+    </div>
+    <div class="fund-form">
+      <label>💰 Allocate Budget</label>
+      ${c.allocated_fund>0?`<div style="font-size:.78rem;color:#4ade80;margin-bottom:.5rem">Currently allocated: ₹${(c.allocated_fund||0).toLocaleString()} — ${c.fund_note||''}</div>`:''}
+      <input type="number" id="fund-input-${c.complaint_id}" placeholder="Amount in ₹" value="${c.allocated_fund||''}"/>
+      <input type="text" id="fund-note-${c.complaint_id}" placeholder="Budget note (e.g. Phase 1 repair)" value="${c.fund_note||''}"/>
+      <button class="btn-fund" onclick="allocateFund('${c.complaint_id}')">Allocate Fund</button>
+    </div>
+    <div class="status-form">
+      <label>Update Status</label>
+      <select id="dp-status">
+        ${['pending','assigned','in_progress','completed','rejected'].map(s=>`<option value="${s}" ${c.status===s?'selected':''}>${s.replace('_',' ')}</option>`).join('')}
+      </select>
+      <label>Officer Notes</label>
+      <textarea id="dp-notes" rows="2" placeholder="Inspection notes...">${c.officer_notes||''}</textarea>
+      <button class="btn-update" onclick="saveStatus('${c.complaint_id}')">Save Update</button>
+      <div class="save-success" id="save-success">✓ Updated!</div>
+    </div>
+    <div class="msg-section">
+      <div class="msg-title">💬 Message Citizen</div>
+      <div class="msg-list" id="msg-list-${c.complaint_id}">
+        ${msgs.length?msgs.map(m=>`<div class="msg-bubble ${m.sender_role}">
+          <div class="msg-meta">${m.sender_name} · ${fmtTime(m.created_at)}</div>
+          ${m.message}</div>`).join(''):'<div style="color:var(--muted);font-size:.78rem;text-align:center;padding:.8rem">No messages yet</div>'}
+      </div>
+      <div class="msg-input-row">
+        <input class="msg-input" id="msg-input-${c.complaint_id}" placeholder="Send update to citizen..." onkeydown="if(event.key==='Enter')sendMessage('${c.complaint_id}')"/>
+        <button class="msg-send-btn" onclick="sendMessage('${c.complaint_id}')">Send</button>
+      </div>
+    </div>`;
+  if(hasAfter)initBASlider();
+  setTimeout(()=>{
+    const l=document.querySelector('.msg-list');if(l)l.scrollTop=l.scrollHeight;
+    // Init detail mini-map with Leaflet
+    const dmEl=document.getElementById('dp-mini-map');
+    if(dmEl&&c.latitude&&c.longitude){
+      dmEl.innerHTML='';
+      try{
+        if(window._dpMap){try{window._dpMap.remove();}catch(e){}}
+        window._dpMap=L.map(dmEl,{zoomControl:false,attributionControl:false,dragging:true,scrollWheelZoom:false}).setView([c.latitude,c.longitude],17);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(window._dpMap);
+        const col=c.severity==='high'?'#ef4444':c.severity==='medium'?'#f5a623':'#10b981';
+        const icon=L.divIcon({className:'',html:'<div style="width:20px;height:20px;background:'+col+';border:3px solid #fff;border-radius:50%;box-shadow:0 2px 8px rgba(0,0,0,.5)"></div>',iconSize:[20,20],iconAnchor:[10,10]});
+        L.marker([c.latitude,c.longitude],{icon}).addTo(window._dpMap);
+        setTimeout(()=>window._dpMap.invalidateSize(),150);
+      }catch(e){console.error('detail map',e);}
+    }
+  },200);
+}
+
+async function allocateFund(cid){
+  const amt=parseFloat(document.getElementById(`fund-input-${cid}`)?.value)||0;
+  const note=document.getElementById(`fund-note-${cid}`)?.value||'';
+  if(!amt){showToast('Enter a budget amount first');return;}
+  try{
+    const res=await fetch(`${API}/complaints/${cid}/fund`,{method:'PATCH',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify({amount:amt,note})});
+    if(!res.ok)throw new Error('Failed');
+    showToast(`✅ ₹${amt.toLocaleString()} allocated to ${cid}`);
+    await loadComplaints(true);
+  }catch(e){showToast('❌ Failed to allocate fund');}
+}
+
+async function sendMessage(complaintId){
+  const input=document.getElementById(`msg-input-${complaintId}`);
+  const msg=input.value.trim();if(!msg)return;
+  input.value='';
+  try{
+    await fetch(`${API}/messages/${complaintId}/send-officer`,{method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify({message:msg})});
+    const msgRes=await fetch(`${API}/messages/${complaintId}`,{headers:{Authorization:`Bearer ${token}`}});
+    const msgs=await msgRes.json();
+    const list=document.getElementById(`msg-list-${complaintId}`);
+    if(list){list.innerHTML=msgs.map(m=>`<div class="msg-bubble ${m.sender_role}"><div class="msg-meta">${m.sender_name} · ${fmtTime(m.created_at)}</div>${m.message}</div>`).join('');list.scrollTop=list.scrollHeight;}
+    showToast('✅ Message sent to citizen!');
+  }catch(e){showToast('❌ Failed to send');}
+}
+
+async function saveStatus(complaintId){
+  const status=document.getElementById('dp-status').value;
+  const notes=document.getElementById('dp-notes').value;
+  const btn=document.querySelector('.btn-update');
+  btn.innerHTML='<span class="spinner"></span>Saving...';btn.disabled=true;
+  try{
+    const res=await fetch(`${API}/complaints/${complaintId}/status`,{method:'PATCH',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify({status,officer_notes:notes})});
+    if(!res.ok)throw new Error('Failed');
+    document.getElementById('save-success').style.display='block';
+    setTimeout(()=>{document.getElementById('save-success').style.display='none';},2000);
+    await loadComplaints(true);showToast('✅ Status updated');
+  }catch(e){alert(e.message);}
+  btn.innerHTML='Save Update';btn.disabled=false;
+}
+
+function initBASlider(){
+  const wrap=document.getElementById('ba-wrap'),after=document.getElementById('ba-after'),slider=document.getElementById('ba-slider');
+  if(!wrap||!after||!slider)return;
+  let dragging=false;
+  const upd=x=>{const r=wrap.getBoundingClientRect(),p=Math.max(5,Math.min(95,((x-r.left)/r.width)*100));after.style.width=p+'%';slider.style.left=p+'%';};
+  slider.addEventListener('mousedown',()=>dragging=true);
+  window.addEventListener('mouseup',()=>dragging=false);
+  window.addEventListener('mousemove',e=>{if(dragging)upd(e.clientX);});
+  slider.addEventListener('touchstart',()=>dragging=true,{passive:true});
+  window.addEventListener('touchend',()=>dragging=false);
+  window.addEventListener('touchmove',e=>{if(dragging)upd(e.touches[0].clientX);},{passive:true});
+}
+
+function triggerAfterPhoto(id){afterPhotoComplaintId=id;document.getElementById('after-file-input').click();}
+function handleAfterPhoto(e){
+  const file=e.target.files[0];if(!file)return;
+  const reader=new FileReader();
+  reader.onload=ev=>{
+    afterPhotos[afterPhotoComplaintId]=ev.target.result;
+    const c=allComplaints.find(x=>x.complaint_id===afterPhotoComplaintId);
+    if(c)fetch(`${API}/messages/${afterPhotoComplaintId}`,{headers:{Authorization:`Bearer ${token}`}}).then(r=>r.json()).then(msgs=>renderDetailPanel(c,msgs));
+    showToast('✅ After-repair photo added!');
+  };
+  reader.readAsDataURL(file);
+}
+
+function closeDetail(){
+  document.getElementById('detail-panel').classList.remove('open');
+  selectedComplaintId=null;
+  renderList();
+  if(window._dpMap){try{window._dpMap.remove();}catch(e){} window._dpMap=null;}
+  setTimeout(()=>{if(leafletMap)leafletMap.invalidateSize();},350);
+}
+
+function setView(view){
+  const sb=document.getElementById('sidebar'),ma=document.getElementById('map-area');
+  document.querySelectorAll('.btn-sm').forEach(b=>b.classList.remove('active'));
+  document.getElementById(`view-${view}`).classList.add('active');
+  if(view==='split'){sb.style.display='flex';sb.style.width='340px';ma.style.display='block';}
+  if(view==='map'){sb.style.display='none';ma.style.display='block';}
+  if(view==='list'){sb.style.display='flex';sb.style.width='100%';ma.style.display='none';}
+  if(leafletMap)setTimeout(()=>leafletMap.invalidateSize(),100);
+}
+
+function showToast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),4000);}
+async function loadZoneQueue(){
+  const el=document.getElementById('zone-queue-list');
+  if(!el)return;
+  try{
+    const res=await fetch(`${API}/admin/queue`,{headers:{Authorization:`Bearer ${token}`}});
+    if(!res.ok){el.innerHTML='<div class="no-items">Queue unavailable</div>';return;}
+    zoneQueueData=await res.json();
+    renderZoneQueue();
+  }catch(e){el.innerHTML='<div class="no-items">Could not load queue</div>';}
+}
+
+function renderZoneQueue(){
+  const el=document.getElementById('zone-queue-list');
+  if(!el)return;
+  if(!zoneQueueData.length){el.innerHTML='<div class="no-items">No active officers</div>';return;}
+  
+  const html=zoneQueueData.map(o=>{
+    const wPct=o.workload_pct||0;
+    const wColor=wPct>=80?'var(--danger)':wPct>=50?'var(--accent)':'var(--accent2)';
+    const sevColors={high:'var(--danger)',medium:'var(--accent)',low:'var(--accent2)'};
+    return `<div class="zone-card">
+      <div class="zone-card-header">
+        <div class="zone-badge">${o.zone||'—'}</div>
+        <div class="zone-officer-name">${o.officer_name}</div>
+        <div class="rt-badge"><span class="rt-dot"></span>${o.total_active} active</div>
+      </div>
+      <div style="display:flex;gap:.3rem;margin-bottom:.4rem;font-size:.65rem">
+        <span style="color:var(--danger)">H:${o.high_priority}</span>
+        <span style="color:var(--accent)">M:${o.medium_priority}</span>
+        <span style="color:var(--accent2)">L:${o.low_priority}</span>
+        <span style="margin-left:auto;color:${wColor}">${wPct}% load</span>
+      </div>
+      <div class="zone-workload-bar"><div class="zone-workload-fill" style="width:${wPct}%;background:${wColor}"></div></div>
+      <div class="zone-mini-queue">
+        ${o.queue.length?o.queue.map(q=>`
+          <div class="zmq-item" onclick="selectComplaint('${q.complaint_id}')" style="cursor:pointer">
+            <div class="zmq-sev" style="background:${sevColors[q.severity]||'var(--muted)'}"></div>
+            <span class="zmq-id">${q.complaint_id.slice(-6)}</span>
+            <span class="zmq-addr">${q.address||'—'}</span>
+            <span class="zmq-score">P${Math.round(q.priority_score)}</span>
+            <button class="reassign-btn" onclick="event.stopPropagation();openReassignModal('${q.complaint_id}')">↔</button>
+          </div>`).join(''):'<div style="font-size:.68rem;color:var(--muted);padding:.3rem">Queue empty</div>'}
+      </div>
+    </div>`;
+  }).join('');
+  el.innerHTML=html;
+}
+
+// Reassign modal
+let reassignTarget=null;
+function openReassignModal(complaintId){
+  reassignTarget=complaintId;
+  // Build officer list
+  const officers=zoneQueueData.map(o=>`<option value="${o.officer_id}">${o.officer_name} (${o.zone}) — ${o.total_active} active</option>`).join('');
+  const modal=document.createElement('div');
+  modal.id='reassign-modal';
+  modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;z-index:9999;';
+  modal.innerHTML=`<div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:1.2rem;width:320px">
+    <div style="font-weight:700;margin-bottom:.8rem;color:var(--accent)">Reassign ${complaintId}</div>
+    <select id="reassign-select" style="width:100%;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:.5rem;font-family:inherit;margin-bottom:.8rem">
+      ${officers}
+    </select>
+    <div style="display:flex;gap:.5rem">
+      <button onclick="document.getElementById('reassign-modal').remove()" style="flex:1;background:var(--card);border:1px solid var(--border);color:var(--muted);padding:.6rem;border-radius:8px;font-family:inherit;cursor:pointer">Cancel</button>
+      <button onclick="doReassign()" style="flex:1;background:var(--accent);border:none;color:#000;padding:.6rem;border-radius:8px;font-family:inherit;font-weight:700;cursor:pointer">Reassign →</button>
+    </div>
+  </div>`;
+  document.body.appendChild(modal);
+}
+
+async function doReassign(){
+  const officerId=document.getElementById('reassign-select')?.value;
+  if(!officerId||!reassignTarget)return;
+  try{
+    const res=await fetch(`${API}/admin/complaints/${reassignTarget}/reassign`,{
+      method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},
+      body:JSON.stringify({officer_id:parseInt(officerId)})
+    });
+    if(!res.ok)throw new Error('Failed');
+    document.getElementById('reassign-modal')?.remove();
+    showToast('✅ Complaint reassigned!');
+    await loadComplaints(true);
+    await loadZoneQueue();
+  }catch(e){showToast('❌ Reassign failed');}
+}
+
+function startPolling(){
+  setInterval(()=>loadComplaints(true),10000);
+  setInterval(()=>loadPriorityData(),30000);
+  setInterval(()=>{if(currentTab==='queue')loadZoneQueue();},15000);
+}
+
+init();
+</script>
+</body>
+</html>

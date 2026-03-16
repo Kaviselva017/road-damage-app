@@ -1,0 +1,44 @@
+version: '3.9'
+
+services:
+  db:
+    image: postgres:15
+    restart: always
+    environment:
+      POSTGRES_USER: road_user
+      POSTGRES_PASSWORD: road_pass
+      POSTGRES_DB: road_damage_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  backend:
+    build: ./backend
+    restart: always
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql://road_user:road_pass@db:5432/road_damage_db
+      SECRET_KEY: ${SECRET_KEY:-change-me-in-production}
+      UPLOAD_DIR: /app/uploads
+      YOLO_MODEL_PATH: /app/ai_model/road_damage_yolov8.pt
+      SENDGRID_API_KEY: ${SENDGRID_API_KEY:-}
+      FROM_EMAIL: ${FROM_EMAIL:-noreply@example.com}
+    volumes:
+      - uploads_data:/app/uploads
+      - ./ai_model:/app/ai_model
+    depends_on:
+      - db
+
+  dashboard:
+    build: ./dashboard
+    restart: always
+    ports:
+      - "3000:80"
+    environment:
+      VITE_API_URL: http://localhost:8000/api
+
+volumes:
+  postgres_data:
+  uploads_data:

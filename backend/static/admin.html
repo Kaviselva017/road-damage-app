@@ -1,0 +1,1224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Admin Panel — RoadWatch</title>
+<link href="https://fonts.googleapis.com/css2?family=Clash+Display:wght@600;700&family=Cabinet+Grotesk:wght@400;500;700&display=swap" rel="stylesheet"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<style>
+:root {
+  --bg: #060810; --s1: #0d1117; --s2: #111827; --s3: #1a2234;
+  --border: #1e2d45; --accent: #00d4ff; --accent2: #7c3aed;
+  --green: #10b981; --yellow: #f59e0b; --red: #ef4444; --orange: #f97316;
+  --text: #e2e8f0; --muted: #64748b; --white: #fff;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--bg); color: var(--text); font-family: 'Cabinet Grotesk', sans-serif; min-height: 100vh; display: flex; }
+
+/* SIDEBAR */
+.sidebar { width: 220px; background: var(--s1); border-right: 1px solid var(--border); display: flex; flex-direction: column; flex-shrink: 0; position: fixed; top: 0; bottom: 0; left: 0; z-index: 100; }
+.sidebar-logo { padding: 1.5rem 1.2rem 1rem; border-bottom: 1px solid var(--border); }
+.sidebar-logo h1 { font-family: 'Clash Display', sans-serif; font-size: 1.2rem; color: var(--accent); }
+.sidebar-logo p { font-size: 0.72rem; color: var(--muted); margin-top: 2px; }
+.sidebar-nav { flex: 1; padding: 1rem 0; }
+.nav-item { display: flex; align-items: center; gap: 0.7rem; padding: 0.65rem 1.2rem; font-size: 0.85rem; color: var(--muted); cursor: pointer; transition: all 0.2s; border-left: 3px solid transparent; }
+.nav-item:hover { color: var(--text); background: var(--s2); }
+.nav-item.active { color: var(--accent); background: rgba(0,212,255,0.05); border-left-color: var(--accent); }
+.nav-icon { font-size: 1rem; width: 20px; text-align: center; }
+.sidebar-footer { padding: 1rem 1.2rem; border-top: 1px solid var(--border); }
+.admin-badge { background: linear-gradient(135deg, var(--accent2), var(--accent)); color: white; font-size: 0.72rem; font-weight: 700; padding: 0.3rem 0.7rem; border-radius: 20px; display: inline-block; margin-bottom: 0.5rem; }
+.logout-btn { width: 100%; background: none; border: 1px solid var(--border); color: var(--muted); padding: 0.5rem; border-radius: 8px; font-family: inherit; font-size: 0.82rem; cursor: pointer; transition: all 0.2s; }
+.logout-btn:hover { border-color: var(--red); color: var(--red); }
+
+/* MAIN */
+.main { margin-left: 220px; flex: 1; display: flex; flex-direction: column; }
+.topbar { background: var(--s1); border-bottom: 1px solid var(--border); padding: 0.8rem 2rem; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 50; }
+.page-title { font-family: 'Clash Display', sans-serif; font-size: 1.3rem; }
+.topbar-right { display: flex; align-items: center; gap: 1rem; font-size: 0.82rem; color: var(--muted); }
+.live-pill { background: rgba(16,185,129,0.1); border: 1px solid rgba(16,185,129,0.3); color: var(--green); padding: 0.25rem 0.7rem; border-radius: 20px; font-size: 0.72rem; font-weight: 700; }
+.live-dot { display: inline-block; width: 6px; height: 6px; background: var(--green); border-radius: 50%; margin-right: 4px; animation: blink 1s infinite; }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+.content { padding: 1.5rem 2rem; flex: 1; overflow-y: auto; }
+
+/* SECTIONS */
+.section { display: none; }
+.section.active { display: block; }
+
+/* STATS GRID */
+.stats-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
+.stat-card { background: var(--s2); border: 1px solid var(--border); border-radius: 12px; padding: 1.2rem; position: relative; overflow: hidden; transition: transform 0.2s; }
+.stat-card:hover { transform: translateY(-2px); }
+.stat-card::after { content:''; position:absolute; top:0; right:0; width:3px; height:100%; border-radius:0 12px 12px 0; }
+.stat-card.blue::after { background:var(--accent); }
+.stat-card.purple::after { background:var(--accent2); }
+.stat-card.green::after { background:var(--green); }
+.stat-card.yellow::after { background:var(--yellow); }
+.stat-card.red::after { background:var(--red); }
+.stat-num { font-family:'Clash Display',sans-serif; font-size:2rem; font-weight:700; }
+.stat-num.blue { color:var(--accent); }
+.stat-num.purple { color:var(--accent2); }
+.stat-num.green { color:var(--green); }
+.stat-num.yellow { color:var(--yellow); }
+.stat-num.red { color:var(--red); }
+.stat-label { font-size:0.75rem; color:var(--muted); margin-top:4px; text-transform:uppercase; letter-spacing:0.06em; }
+.stat-sub { font-size:0.72rem; color:var(--muted); margin-top:6px; }
+
+/* ROW LAYOUT */
+.row { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem; }
+.row.triple { grid-template-columns: 1fr 1fr 1fr; }
+.card { background: var(--s2); border: 1px solid var(--border); border-radius: 12px; padding: 1.2rem; }
+.card-title { font-family:'Clash Display',sans-serif; font-size:0.95rem; color:var(--text); margin-bottom:1rem; display:flex; align-items:center; gap:0.5rem; }
+.card-title .ct-icon { font-size:1rem; }
+
+/* CHARTS */
+.chart-wrap { position:relative; height:200px; }
+
+/* SEVERITY BARS */
+.sev-bar-wrap { display:flex; flex-direction:column; gap:0.6rem; }
+.sev-bar-item { display:flex; align-items:center; gap:0.7rem; }
+.sev-bar-label { font-size:0.78rem; color:var(--muted); width:60px; flex-shrink:0; }
+.sev-bar-track { flex:1; height:8px; background:var(--s3); border-radius:4px; overflow:hidden; }
+.sev-bar-fill { height:100%; border-radius:4px; transition:width 0.8s ease; }
+.sev-bar-count { font-size:0.78rem; font-weight:700; width:30px; text-align:right; flex-shrink:0; }
+
+/* TABLES */
+.table-wrap { overflow-x:auto; }
+table { width:100%; border-collapse:collapse; font-size:0.82rem; }
+th { text-align:left; padding:0.6rem 0.8rem; color:var(--muted); font-weight:600; text-transform:uppercase; font-size:0.68rem; letter-spacing:0.06em; border-bottom:1px solid var(--border); }
+td { padding:0.7rem 0.8rem; border-bottom:1px solid rgba(30,45,69,0.5); vertical-align:middle; }
+tr:hover td { background:rgba(255,255,255,0.02); }
+.badge { display:inline-block; padding:0.2rem 0.6rem; border-radius:20px; font-size:0.68rem; font-weight:700; text-transform:uppercase; }
+.badge-high { background:rgba(239,68,68,0.12); color:var(--red); }
+.badge-medium { background:rgba(245,158,11,0.12); color:var(--yellow); }
+.badge-low { background:rgba(16,185,129,0.12); color:var(--green); }
+.badge-pending { background:rgba(100,116,139,0.12); color:var(--muted); }
+.badge-assigned { background:rgba(245,158,11,0.12); color:var(--yellow); }
+.badge-in_progress { background:rgba(59,130,246,0.12); color:#60a5fa; }
+.badge-completed { background:rgba(16,185,129,0.12); color:var(--green); }
+.badge-active { background:rgba(16,185,129,0.12); color:var(--green); }
+.badge-inactive { background:rgba(239,68,68,0.12); color:var(--red); }
+
+/* ACTION BUTTONS */
+.act-btn { background:none; border:1px solid var(--border); color:var(--muted); padding:0.25rem 0.6rem; border-radius:6px; font-family:inherit; font-size:0.72rem; cursor:pointer; transition:all 0.15s; margin-right:4px; }
+.act-btn:hover { border-color:var(--accent); color:var(--accent); }
+.act-btn.danger:hover { border-color:var(--red); color:var(--red); }
+.act-btn.success:hover { border-color:var(--green); color:var(--green); }
+
+/* FILTERS */
+.filter-row { display:flex; gap:0.5rem; margin-bottom:1rem; align-items:center; flex-wrap:wrap; }
+.filter-select { background:var(--s3); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:0.4rem 0.7rem; font-family:inherit; font-size:0.8rem; cursor:pointer; }
+.filter-select:focus { outline:none; border-color:var(--accent); }
+.search-input { background:var(--s3); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:0.4rem 0.8rem; font-family:inherit; font-size:0.8rem; flex:1; max-width:220px; }
+.search-input:focus { outline:none; border-color:var(--accent); }
+.search-input::placeholder { color:var(--muted); }
+.count-badge { font-size:0.72rem; color:var(--muted); margin-left:auto; }
+
+/* OFFICER PERF */
+.perf-bar { height:6px; background:var(--s3); border-radius:3px; overflow:hidden; margin-top:4px; }
+.perf-fill { height:100%; border-radius:3px; background:linear-gradient(90deg,var(--accent2),var(--accent)); }
+
+/* HEATMAP */
+.zone-cards { display:grid; grid-template-columns:repeat(3,1fr); gap:0.8rem; }
+.zone-card { background:var(--s3); border:1px solid var(--border); border-radius:10px; padding:1rem; text-align:center; }
+.zone-num { font-family:'Clash Display',sans-serif; font-size:1.8rem; color:var(--accent); }
+.zone-label { font-size:0.75rem; color:var(--muted); margin-top:4px; }
+
+/* LOGIN */
+.login-overlay { position:fixed; inset:0; background:var(--bg); display:flex; align-items:center; justify-content:center; z-index:999; }
+.login-box { background:var(--s2); border:1px solid var(--border); border-radius:20px; padding:2.5rem; width:360px; }
+.login-box h2 { font-family:'Clash Display',sans-serif; font-size:1.6rem; margin-bottom:0.3rem; }
+.login-box p { color:var(--muted); font-size:0.85rem; margin-bottom:2rem; }
+.lf { margin-bottom:1rem; }
+.lf label { display:block; font-size:0.72rem; color:var(--muted); text-transform:uppercase; letter-spacing:0.06em; margin-bottom:0.35rem; }
+.lf input { width:100%; background:var(--s3); color:var(--text); border:1px solid var(--border); border-radius:10px; padding:0.7rem 1rem; font-family:inherit; font-size:0.9rem; }
+.lf input:focus { outline:none; border-color:var(--accent); }
+.login-err { color:var(--red); font-size:0.82rem; margin-bottom:0.8rem; display:none; }
+.btn-login { width:100%; background:linear-gradient(135deg,var(--accent2),var(--accent)); color:#fff; border:none; border-radius:10px; padding:0.8rem; font-family:inherit; font-weight:700; font-size:0.95rem; cursor:pointer; margin-top:0.5rem; }
+
+/* TOAST */
+.toast { position:fixed; bottom:1.5rem; right:1.5rem; background:var(--s2); border:1px solid var(--green); color:var(--green); padding:0.8rem 1.2rem; border-radius:10px; font-size:0.85rem; transform:translateY(100px); opacity:0; transition:all 0.3s; z-index:999; }
+.toast.show { transform:translateY(0); opacity:1; }
+
+.spinner { display:inline-block; width:16px; height:16px; border:2px solid rgba(255,255,255,0.2); border-top-color:#fff; border-radius:50%; animation:spin 0.7s linear infinite; vertical-align:middle; margin-right:6px; }
+@keyframes spin { to{transform:rotate(360deg)} }
+.empty-row td { text-align:center; padding:2rem; color:var(--muted); }
+.zone-option { background:var(--s3); border:2px solid var(--border); border-radius:8px; padding:0.6rem; text-align:center; font-size:0.82rem; cursor:pointer; transition:all 0.15s; }
+.zone-option:hover { border-color:var(--accent); color:var(--accent); }
+.zone-option.selected { border-color:var(--accent); background:rgba(0,212,255,0.1); color:var(--accent); font-weight:700; }
+
+/* Modal */
+.modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.7); display:none; align-items:center; justify-content:center; z-index:500; }
+.modal-overlay.open { display:flex; }
+.modal { background:var(--s2); border:1px solid var(--border); border-radius:16px; padding:1.5rem; width:400px; }
+.modal h3 { font-family:'Clash Display',sans-serif; font-size:1.1rem; margin-bottom:1rem; }
+.modal select { width:100%; background:var(--s3); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:0.6rem 0.8rem; font-family:inherit; margin-bottom:1rem; }
+.modal-btns { display:flex; gap:0.5rem; justify-content:flex-end; }
+.btn-modal { padding:0.5rem 1rem; border-radius:8px; font-family:inherit; font-size:0.85rem; cursor:pointer; border:1px solid var(--border); }
+.btn-modal.primary { background:var(--accent); color:#000; border-color:var(--accent); font-weight:700; }
+.btn-modal.secondary { background:none; color:var(--muted); }
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div class="login-overlay" id="login-overlay">
+  <div class="login-box">
+    <div style="font-size:2.5rem;margin-bottom:0.8rem">🛡️</div>
+    <h2>Admin Panel</h2>
+    <p>RoadWatch System Administration</p>
+    <div class="login-err" id="login-err"></div>
+    <div class="lf"><label>Email</label><input type="email" id="lo-email" placeholder="admin@road.com" value="maran@road.com"/></div>
+    <div class="lf"><label>Password</label><input type="password" id="lo-pass" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()"/></div>
+    <button class="btn-login" id="login-btn" onclick="doLogin()">Access Admin Panel</button>
+  </div>
+</div>
+
+<!-- REASSIGN MODAL -->
+<div class="modal-overlay" id="reassign-modal">
+  <div class="modal">
+    <h3>Reassign Complaint</h3>
+    <p style="font-size:0.82rem;color:var(--muted);margin-bottom:1rem">Select officer to reassign <strong id="reassign-complaint-id"></strong></p>
+    <select id="reassign-officer-select"></select>
+    <div class="modal-btns">
+      <button class="btn-modal secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn-modal primary" onclick="confirmReassign()">Reassign</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- SIDEBAR -->
+<div class="sidebar">
+  <div class="sidebar-logo">
+    <h1>RoadWatch</h1>
+    <p>Admin Control Panel</p>
+  </div>
+  <nav class="sidebar-nav">
+    <div class="nav-item active" onclick="showSection('overview')"><span class="nav-icon">📊</span> Overview</div>
+    <div class="nav-item" onclick="showSection('complaints')"><span class="nav-icon">🗂</span> All Complaints</div>
+    <div class="nav-item" onclick="showSection('officers')"><span class="nav-icon">👮</span> Officers</div>
+    <div class="nav-item" onclick="showSection('citizens')"><span class="nav-icon">👥</span> Citizens</div>
+    <div class="nav-item" onclick="showSection('analytics')"><span class="nav-icon">📈</span> Analytics</div>
+  </nav>
+  <div class="sidebar-footer">
+    <div class="admin-badge">👑 ADMIN</div>
+    <div style="font-size:0.78rem;color:var(--muted);margin-bottom:0.6rem" id="admin-name">—</div>
+    <button class="logout-btn" onclick="logout()">Sign Out</button>
+  </div>
+</div>
+
+<!-- MAIN -->
+<div class="main">
+  <div class="topbar">
+    <div class="page-title" id="section-title">Overview</div>
+    <div class="topbar-right">
+      <div class="live-pill"><span class="live-dot"></span>LIVE</div>
+      <span id="last-updated">—</span>
+      <button onclick="refreshAll()" style="background:none;border:1px solid var(--border);color:var(--muted);padding:0.3rem 0.7rem;border-radius:6px;font-family:inherit;font-size:0.78rem;cursor:pointer">↻ Refresh</button>
+    </div>
+  </div>
+
+  <div class="content">
+
+    <!-- OVERVIEW -->
+    <div class="section active" id="section-overview">
+      <div class="stats-grid" id="stats-grid">
+        <div class="stat-card blue"><div class="stat-num blue" id="s-total">—</div><div class="stat-label">Total Complaints</div><div class="stat-sub" id="s-recent">— this week</div></div>
+        <div class="stat-card yellow"><div class="stat-num yellow" id="s-pending">—</div><div class="stat-label">Pending / Assigned</div></div>
+        <div class="stat-card purple"><div class="stat-num" style="color:var(--accent2)" id="s-progress">—</div><div class="stat-label">In Progress</div></div>
+        <div class="stat-card green"><div class="stat-num green" id="s-done">—</div><div class="stat-label">Completed</div><div class="stat-sub" id="s-rate">—% resolved</div></div>
+        <div class="stat-card red"><div class="stat-num red" id="s-high">—</div><div class="stat-label">High Severity</div></div>
+      </div>
+
+      <div class="row">
+        <!-- Daily Chart -->
+        <div class="card">
+          <div class="card-title"><span class="ct-icon">📅</span> Complaints (Last 7 Days)</div>
+          <div class="chart-wrap"><canvas id="daily-chart"></canvas></div>
+        </div>
+        <!-- Severity Breakdown -->
+        <div class="card">
+          <div class="card-title"><span class="ct-icon">⚡</span> Severity Breakdown</div>
+          <div class="chart-wrap" style="height:160px"><canvas id="sev-chart"></canvas></div>
+          <div class="sev-bar-wrap" id="sev-bars" style="margin-top:1rem"></div>
+        </div>
+      </div>
+
+      <div class="row triple">
+        <div class="card">
+          <div class="card-title">Total Officers</div>
+          <div style="font-family:'Clash Display',sans-serif;font-size:2.5rem;color:var(--accent)" id="s-officers">—</div>
+          <div style="font-size:0.78rem;color:var(--muted);margin-top:4px">Field officers active</div>
+        </div>
+        <div class="card">
+          <div class="card-title">Total Citizens</div>
+          <div style="font-family:'Clash Display',sans-serif;font-size:2.5rem;color:var(--accent2)" id="s-citizens">—</div>
+          <div style="font-size:0.78rem;color:var(--muted);margin-top:4px">Registered reporters</div>
+        </div>
+        <div class="card">
+          <div class="card-title">Resolution Rate</div>
+          <div style="font-family:'Clash Display',sans-serif;font-size:2.5rem;color:var(--green)" id="s-resolution">—</div>
+          <div style="font-size:0.78rem;color:var(--muted);margin-top:4px">% complaints fixed</div>
+        </div>
+      </div>
+
+      <!-- LIVE MAP -->
+      <div class="card" style="margin-top:0">
+        <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
+          <span>Live Complaint Map</span>
+          <div style="display:flex;gap:0.5rem;font-size:0.72rem">
+            <span style="color:var(--red)">● High</span>
+            <span style="color:var(--accent)">● Medium</span>
+            <span style="color:var(--accent2)">● Low</span>
+            <span style="color:#4ade80">● Completed</span>
+          </div>
+        </div>
+        <div id="overview-map" style="height:320px;border-radius:10px;overflow:hidden;background:var(--s3)">
+          <div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--muted);font-size:0.85rem">Loading map...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ALL COMPLAINTS -->
+    <div class="section" id="section-complaints">
+      <div class="filter-row">
+        <select class="filter-select" id="filter-status" onchange="filterComplaints()">
+          <option value="">All Statuses</option>
+          <option value="pending">Pending</option>
+          <option value="assigned">Assigned</option>
+          <option value="in_progress">In Progress</option>
+          <option value="completed">Completed</option>
+        </select>
+        <select class="filter-select" id="filter-severity" onchange="filterComplaints()">
+          <option value="">All Severities</option>
+          <option value="high">High</option>
+          <option value="medium">Medium</option>
+          <option value="low">Low</option>
+        </select>
+        <input class="search-input" id="search-complaints" placeholder="🔍 Search ID or location..." oninput="filterComplaints()"/>
+        <span class="count-badge" id="complaints-count">— complaints</span>
+      </div>
+      <div class="card">
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>ID</th><th>Type</th><th>Severity</th><th>Status</th>
+                <th>Citizen</th><th>Officer</th><th>Location</th><th>Date</th><th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="complaints-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- OFFICERS -->
+    <div class="section" id="section-officers">
+      <div class="filter-row">
+        <input class="search-input" id="search-officers" placeholder="🔍 Search officer..." oninput="filterOfficers()"/>
+        <select class="filter-select" id="filter-zone" onchange="filterOfficers()">
+          <option value="">All Zones</option>
+          <option value="Zone A">Zone A</option>
+          <option value="Zone B">Zone B</option>
+          <option value="Zone C">Zone C</option>
+          <option value="Zone D">Zone D</option>
+        </select>
+        <button onclick="openAddOfficer()" style="background:linear-gradient(135deg,var(--accent2),var(--accent));color:#000;border:none;border-radius:8px;padding:0.4rem 1rem;font-family:inherit;font-weight:700;font-size:0.82rem;cursor:pointer;">+ Add Officer</button>
+        <span class="count-badge" id="officers-count">— officers</span>
+      </div>
+
+      <!-- Zone Overview Cards -->
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.8rem;margin-bottom:1.2rem" id="zone-cards"></div>
+
+      <div class="card" style="margin-bottom:1.5rem">
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Officer</th><th>Email</th><th>Phone</th><th>Zone</th><th>Total</th><th>Completed</th><th>Pending</th><th>Performance</th><th>Status</th><th>Actions</th></tr>
+            </thead>
+            <tbody id="officers-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title"><span class="ct-icon">📊</span> Officer Performance Comparison</div>
+        <div class="chart-wrap"><canvas id="officer-chart"></canvas></div>
+      </div>
+    </div>
+
+    <!-- ADD/EDIT OFFICER MODAL -->
+    <div class="modal-overlay" id="officer-modal">
+      <div class="modal" style="width:460px">
+        <h3 id="officer-modal-title">Add New Officer</h3>
+        <input type="hidden" id="officer-edit-id"/>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.8rem;margin-bottom:1rem">
+          <div>
+            <label style="font-size:0.72rem;color:var(--muted);text-transform:uppercase;display:block;margin-bottom:0.3rem">Full Name *</label>
+            <input id="of-name" placeholder="Officer Name" style="width:100%;background:var(--s3);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:0.55rem 0.75rem;font-family:inherit;font-size:0.85rem"/>
+          </div>
+          <div>
+            <label style="font-size:0.72rem;color:var(--muted);text-transform:uppercase;display:block;margin-bottom:0.3rem">Phone</label>
+            <input id="of-phone" placeholder="9876543210" style="width:100%;background:var(--s3);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:0.55rem 0.75rem;font-family:inherit;font-size:0.85rem"/>
+          </div>
+          <div>
+            <label style="font-size:0.72rem;color:var(--muted);text-transform:uppercase;display:block;margin-bottom:0.3rem">Email *</label>
+            <input id="of-email" type="email" placeholder="officer@road.com" style="width:100%;background:var(--s3);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:0.55rem 0.75rem;font-family:inherit;font-size:0.85rem"/>
+          </div>
+          <div>
+            <label style="font-size:0.72rem;color:var(--muted);text-transform:uppercase;display:block;margin-bottom:0.3rem">Password *</label>
+            <input id="of-password" type="password" placeholder="Min 6 chars" style="width:100%;background:var(--s3);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:0.55rem 0.75rem;font-family:inherit;font-size:0.85rem"/>
+          </div>
+        </div>
+        <div style="margin-bottom:1rem">
+          <label style="font-size:0.72rem;color:var(--muted);text-transform:uppercase;display:block;margin-bottom:0.3rem">Assign Zone *</label>
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.5rem" id="zone-selector">
+            <div class="zone-option" onclick="selectZone(this,'Zone A')" data-zone="Zone A">🅰 Zone A</div>
+            <div class="zone-option" onclick="selectZone(this,'Zone B')" data-zone="Zone B">🅱 Zone B</div>
+            <div class="zone-option" onclick="selectZone(this,'Zone C')" data-zone="Zone C">🅲 Zone C</div>
+            <div class="zone-option" onclick="selectZone(this,'Zone D')" data-zone="Zone D">🅳 Zone D</div>
+          </div>
+        </div>
+        <div id="officer-modal-err" style="color:var(--red);font-size:0.82rem;margin-bottom:0.8rem;display:none"></div>
+        <div class="modal-btns">
+          <button class="btn-modal secondary" onclick="closeOfficerModal()">Cancel</button>
+          <button class="btn-modal primary" id="officer-save-btn" onclick="saveOfficer()">Add Officer</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- CITIZENS -->
+    <div class="section" id="section-citizens">
+      <div class="filter-row">
+        <input class="search-input" id="search-citizens" placeholder="🔍 Search citizen..." oninput="filterCitizens()"/>
+        <span class="count-badge" id="citizens-count">— citizens</span>
+      </div>
+      <div class="card">
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Citizen</th><th>Email</th><th>Phone</th><th>Reports</th><th>Completed</th><th>High Sev</th><th>Points</th><th>Status</th><th>Actions</th></tr>
+            </thead>
+            <tbody id="citizens-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ANALYTICS -->
+    <div class="section" id="section-analytics">
+      <!-- Filter Bar -->
+      <div style="display:flex;gap:0.6rem;margin-bottom:1.2rem;align-items:center;flex-wrap:wrap">
+        <span style="font-size:0.78rem;color:var(--muted);font-weight:600">Filter Charts:</span>
+        <select class="filter-select" id="chart-filter-status" onchange="updateAllCharts()">
+          <option value="">All Statuses</option>
+          <option value="pending">Pending</option>
+          <option value="assigned">Assigned</option>
+          <option value="in_progress">In Progress</option>
+          <option value="completed">Completed</option>
+        </select>
+        <select class="filter-select" id="chart-filter-severity" onchange="updateAllCharts()">
+          <option value="">All Severities</option>
+          <option value="high">High</option>
+          <option value="medium">Medium</option>
+          <option value="low">Low</option>
+        </select>
+        <select class="filter-select" id="chart-filter-officer" onchange="updateAllCharts()">
+          <option value="">All Officers</option>
+        </select>
+        <select class="filter-select" id="chart-filter-zone" onchange="updateAllCharts()">
+          <option value="">All Zones</option>
+          <option value="Zone A">Zone A</option>
+          <option value="Zone B">Zone B</option>
+          <option value="Zone C">Zone C</option>
+          <option value="Zone D">Zone D</option>
+        </select>
+        <button onclick="resetChartFilters()" style="background:none;border:1px solid var(--border);color:var(--muted);padding:0.35rem 0.8rem;border-radius:6px;font-family:inherit;font-size:0.78rem;cursor:pointer">Reset</button>
+        <span id="chart-filtered-count" style="font-size:0.75rem;color:var(--accent);margin-left:auto">Showing all data</span>
+      </div>
+
+      <!-- Row 1: Status + Severity -->
+      <div class="row" style="margin-bottom:1.2rem">
+        <div class="card">
+          <div class="card-title">Status Distribution</div>
+          <div class="chart-wrap"><canvas id="status-chart"></canvas></div>
+        </div>
+        <div class="card">
+          <div class="card-title">Severity Breakdown</div>
+          <div class="chart-wrap"><canvas id="sev-donut-chart"></canvas></div>
+        </div>
+      </div>
+
+      <!-- Row 2: Daily Trend -->
+      <div class="card" style="margin-bottom:1.2rem">
+        <div class="card-title">Daily Report Trend (Last 7 Days)</div>
+        <div class="chart-wrap" style="height:220px"><canvas id="trend-chart"></canvas></div>
+      </div>
+
+      <!-- Row 3: Officer Performance -->
+      <div class="row" style="margin-bottom:1.2rem">
+        <div class="card">
+          <div class="card-title">Officer Complaints (Total / Completed / Pending)</div>
+          <div class="chart-wrap" style="height:220px"><canvas id="officer-perf-chart"></canvas></div>
+        </div>
+        <div class="card">
+          <div class="card-title">Officer Completion Rate %</div>
+          <div class="chart-wrap" style="height:220px"><canvas id="officer-rate-chart"></canvas></div>
+        </div>
+      </div>
+
+      <!-- Row 4: Zone + Citizen -->
+      <div class="row">
+        <div class="card">
+          <div class="card-title">Complaints by Zone</div>
+          <div class="chart-wrap"><canvas id="zone-chart"></canvas></div>
+        </div>
+        <div class="card">
+          <div class="card-title">Top Citizens by Reports</div>
+          <div class="chart-wrap"><canvas id="citizen-chart"></canvas></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+const API = window.location.port === '8443' ? 'https://localhost:8443/api' : 'http://localhost:8000/api';
+
+// ── DATE/TIME HELPERS (IST = UTC+5:30) ─────────────────
+function toIST(dateStr) {
+  if (!dateStr) return null;
+  const d = new Date(String(dateStr).replace(' ', 'T'));
+  if (isNaN(d)) return null;
+  return new Date(d.getTime() + (5.5 * 60 * 60 * 1000));
+}
+function fmtDate(dateStr) {
+  const d = toIST(dateStr);
+  if (!d) return '—';
+  return d.toLocaleDateString('en-IN', {day:'2-digit', month:'short', year:'numeric'});
+}
+function fmtTime(dateStr) {
+  const d = toIST(dateStr);
+  if (!d) return '—';
+  return d.toLocaleTimeString('en-IN', {hour:'2-digit', minute:'2-digit', hour12:true});
+}
+function fmtDateTime(dateStr) {
+  const d = toIST(dateStr);
+  if (!d) return '—';
+  return d.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'}) + ' ' +
+         d.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true});
+}
+let token = localStorage.getItem('admin_token');
+let adminName = localStorage.getItem('admin_name');
+let allComplaints = [], allOfficers = [], allCitizens = [], stats = {};
+let currentSection = 'overview';
+let reassignComplaintId = null;
+let charts = {};
+
+function init() {
+  if (token) {
+    document.getElementById('login-overlay').style.display = 'none';
+    document.getElementById('admin-name').textContent = adminName || 'Admin';
+    loadAll();
+    setInterval(loadAll, 10000); // Refresh every 10 seconds
+  }
+}
+
+async function doLogin() {
+  const email = document.getElementById('lo-email').value;
+  const pass = document.getElementById('lo-pass').value;
+  const btn = document.getElementById('login-btn');
+  btn.innerHTML = '<span class="spinner"></span>Signing in...'; btn.disabled = true;
+  try {
+    const res = await fetch(`${API}/auth/officer/login`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({email,password:pass}) });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Login failed');
+    token = data.access_token;
+    adminName = email.split('@')[0];
+    localStorage.setItem('admin_token', token);
+    localStorage.setItem('admin_name', adminName);
+    document.getElementById('login-overlay').style.display = 'none';
+    document.getElementById('admin-name').textContent = adminName;
+    loadAll();
+    setInterval(loadAll, 10000); // Refresh every 10 seconds
+  } catch(e) {
+    document.getElementById('login-err').textContent = e.message;
+    document.getElementById('login-err').style.display = 'block';
+  }
+  btn.innerHTML = 'Access Admin Panel'; btn.disabled = false;
+}
+
+function logout() {
+  token = null; localStorage.removeItem('admin_token'); localStorage.removeItem('admin_name');
+  document.getElementById('login-overlay').style.display = 'flex';
+}
+
+async function loadAll() {
+  await Promise.all([loadComplaints(), loadOfficers(), loadCitizens()]);
+  await Promise.all([loadStats(), loadChartData()]); // Load stats after data so counts are accurate
+  document.getElementById('last-updated').textContent = 'Updated ' + new Date().toLocaleTimeString();
+  renderOverviewMap();
+}
+
+function renderOverviewMap() {
+  const mapEl = document.getElementById('overview-map');
+  if (!mapEl || !allComplaints.length) return;
+  // Build OpenStreetMap with complaint markers using iframe + custom overlay
+  const centerLat = allComplaints.reduce((s,c)=>s+c.latitude,0)/allComplaints.length;
+  const centerLng = allComplaints.reduce((s,c)=>s+c.longitude,0)/allComplaints.length;
+  
+  // Use Leaflet via CDN for the overview map
+  if (!window.L) {
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+    document.head.appendChild(link);
+    const script = document.createElement('script');
+    script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+    script.onload = () => initLeafletMap(mapEl, centerLat, centerLng);
+    document.head.appendChild(script);
+  } else {
+    initLeafletMap(mapEl, centerLat, centerLng);
+  }
+}
+
+function initLeafletMap(mapEl, lat, lng) {
+  if (mapEl._leaflet_id) {
+    mapEl._leaflet_map.remove();
+    mapEl._leaflet_id = null;
+  }
+  const map = L.map(mapEl).setView([lat, lng], 13);
+  mapEl._leaflet_map = map;
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap'
+  }).addTo(map);
+
+  const colors = {high:'#e05c5c', medium:'#f5a623', low:'#3ecfb2', completed:'#4ade80'};
+  allComplaints.forEach(c => {
+    const color = c.status==='completed' ? colors.completed : colors[c.severity] || colors.medium;
+    const marker = L.circleMarker([c.latitude, c.longitude], {
+      radius: c.severity==='high' ? 12 : c.severity==='medium' ? 9 : 7,
+      fillColor: color, color: '#fff', weight: 2, fillOpacity: 0.9
+    }).addTo(map);
+    marker.bindPopup(`<div style="font-family:sans-serif;min-width:160px">
+      <b style="color:#f5a623">${c.complaint_id}</b><br>
+      ${(c.damage_type||'').replace('_',' ')} · <b style="color:${color}">${(c.severity||'').toUpperCase()}</b><br>
+      Status: ${(c.status||'').replace('_',' ')}<br>
+      Citizen: ${c.citizen_name||'Unknown'}<br>
+      Officer: ${c.officer_name||'Unassigned'}
+      ${c.allocated_fund > 0 ? '<br>Fund: Rs.' + c.allocated_fund : ''}
+    </div>`);
+  });
+
+  // Fit bounds to all markers
+  if (allComplaints.length > 1) {
+    const bounds = allComplaints.map(c=>[c.latitude, c.longitude]);
+    map.fitBounds(bounds, {padding:[20,20]});
+  }
+}
+
+async function refreshAll() { await loadAll(); showToast('✅ Data refreshed!'); }
+
+async function loadStats() {
+  try {
+    const res = await fetch(`${API}/admin/stats`, {headers:{Authorization:`Bearer ${token}`}});
+    if (!res.ok) { console.error('Stats API error:', res.status); return; }
+    stats = await res.json();
+    console.log('Stats received:', stats);
+
+    // Normalize all possible field names from API
+    const total = Number(stats.total || stats.total_complaints || 0);
+    const pending = Number(stats.pending || 0);
+    const inProgress = Number(stats.in_progress || stats.inProgress || 0);
+    const completed = Number(stats.completed || 0);
+    const high = Number(stats.high || stats.high_severity || 0);
+    const medium = Number(stats.medium || stats.medium_severity || 0);
+    const low = Number(stats.low || stats.low_severity || 0);
+    const officers = Number(stats.total_officers || stats.active_officers || allOfficers.length || 0);
+    const citizens = Number(stats.total_citizens || allCitizens.length || 0);
+    const rate = Number(stats.resolution_rate || stats.avg_resolution_hours || 0);
+    const recent = Number(stats.recent_7days || 0);
+
+    // Store normalized back
+    stats.total = total; stats.pending = pending; stats.in_progress = inProgress;
+    stats.completed = completed; stats.high = high; stats.medium = medium; stats.low = low;
+    stats.total_officers = officers; stats.total_citizens = citizens;
+    stats.resolution_rate = rate; stats.recent_7days = recent;
+
+    // Update DOM safely
+    const set = (id, val) => { const el = document.getElementById(id); if(el) el.textContent = val; };
+    set('s-total', total);
+    set('s-pending', pending);
+    set('s-progress', inProgress);
+    set('s-done', completed);
+    set('s-high', high);
+    set('s-officers', officers);
+    set('s-citizens', citizens);
+    set('s-resolution', rate + '%');
+    set('s-recent', recent + ' this week');
+    set('s-rate', rate + '% resolved');
+
+    renderSeverityBars();
+    renderSevChart();
+    renderStatusChart();
+  } catch(e) { console.error('Stats error:', e); }
+}
+
+function renderSeverityBars() {
+  const total = stats.total || 1;
+  document.getElementById('sev-bars').innerHTML = `
+    <div class="sev-bar-item">
+      <div class="sev-bar-label" style="color:var(--red)">High</div>
+      <div class="sev-bar-track"><div class="sev-bar-fill" style="width:${stats.high/total*100}%;background:var(--red)"></div></div>
+      <div class="sev-bar-count" style="color:var(--red)">${stats.high}</div>
+    </div>
+    <div class="sev-bar-item">
+      <div class="sev-bar-label" style="color:var(--yellow)">Medium</div>
+      <div class="sev-bar-track"><div class="sev-bar-fill" style="width:${stats.medium/total*100}%;background:var(--yellow)"></div></div>
+      <div class="sev-bar-count" style="color:var(--yellow)">${stats.medium}</div>
+    </div>
+    <div class="sev-bar-item">
+      <div class="sev-bar-label" style="color:var(--green)">Low</div>
+      <div class="sev-bar-track"><div class="sev-bar-fill" style="width:${stats.low/total*100}%;background:var(--green)"></div></div>
+      <div class="sev-bar-count" style="color:var(--green)">${stats.low}</div>
+    </div>`;
+}
+
+async function loadComplaints() {
+  try {
+    const res = await fetch(`${API}/admin/complaints`, {headers:{Authorization:`Bearer ${token}`}});
+    allComplaints = await res.json();
+    filterComplaints();
+  } catch(e) {}
+}
+
+function filterComplaints() {
+  const status = document.getElementById('filter-status').value;
+  const sev = document.getElementById('filter-severity').value;
+  const q = document.getElementById('search-complaints').value.toLowerCase();
+  let filtered = allComplaints;
+  if (status) filtered = filtered.filter(c=>c.status===status);
+  if (sev) filtered = filtered.filter(c=>c.severity===sev);
+  if (q) filtered = filtered.filter(c=>c.complaint_id.toLowerCase().includes(q)||(c.address||'').toLowerCase().includes(q)||(c.citizen_name||'').toLowerCase().includes(q));
+  document.getElementById('complaints-count').textContent = filtered.length + ' complaints';
+  const tbody = document.getElementById('complaints-tbody');
+  if (!filtered.length) { tbody.innerHTML='<tr><td colspan="9" style="text-align:center;padding:2rem;color:var(--muted)">No complaints found</td></tr>'; return; }
+  tbody.innerHTML = filtered.map(c=>`
+    <tr>
+      <td style="color:var(--accent);font-weight:700;font-size:0.78rem">${c.complaint_id}</td>
+      <td>${c.damage_type.replace('_',' ')}</td>
+      <td><span class="badge badge-${c.severity}">${c.severity}</span></td>
+      <td><span class="badge badge-${c.status}">${c.status.replace('_',' ')}</span></td>
+      <td><div style="font-size:0.8rem">${c.citizen_name}</div><div style="font-size:0.7rem;color:var(--muted)">${c.citizen_phone||''}</div></td>
+      <td style="font-size:0.8rem">${c.officer_name}</td>
+      <td style="font-size:0.75rem;color:var(--muted);max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${(c.address||'').substring(0,40)}...</td>
+      <td style="font-size:0.75rem;color:var(--muted)">${fmtDate(c.created_at)}</td>
+      <td>
+        <button class="act-btn" onclick="openReassign('${c.complaint_id}')">Reassign</button>
+        ${c.image_url?`<button class="act-btn" onclick="window.open('http://localhost:8000${c.image_url}','_blank')">Photo</button>`:''}
+      </td>
+    </tr>`).join('');
+}
+
+async function loadOfficers() {
+  renderZoneCards();
+  try {
+    const res = await fetch(`${API}/admin/officers`, {headers:{Authorization:`Bearer ${token}`}});
+    allOfficers = await res.json();
+    filterOfficers();
+    renderOfficerChart();
+  populateOfficerFilter();
+  if (currentSection==='analytics') updateAllCharts();
+  } catch(e) {}
+}
+
+function filterOfficers() {
+  const q = document.getElementById('search-officers').value.toLowerCase();
+  const zone = document.getElementById('filter-zone').value;
+  let filtered = allOfficers;
+  if (q) filtered = filtered.filter(o=>o.name.toLowerCase().includes(q)||o.email.toLowerCase().includes(q));
+  if (zone) filtered = filtered.filter(o=>o.zone===zone);
+  document.getElementById('officers-count').textContent = filtered.length + ' officers';
+  renderZoneCards();
+  const tbody = document.getElementById('officers-tbody');
+  if (!filtered.length) { tbody.innerHTML='<tr><td colspan="10" style="text-align:center;padding:2rem;color:var(--muted)">No officers found</td></tr>'; return; }
+  tbody.innerHTML = filtered.map(o=>`
+    <tr>
+      <td><div style="font-weight:600">${o.name}</div></td>
+      <td style="font-size:0.78rem;color:var(--muted)">${o.email}</td>
+      <td style="font-size:0.78rem">${o.phone||'—'}</td>
+      <td><span style="background:rgba(0,212,255,0.1);color:var(--accent);padding:0.2rem 0.6rem;border-radius:20px;font-size:0.72rem;font-weight:700">${o.zone||'—'}</span></td>
+      <td style="font-weight:700;color:var(--accent)">${o.total_complaints}</td>
+      <td style="color:var(--green)">${o.completed}</td>
+      <td style="color:var(--yellow)">${o.pending}</td>
+      <td style="min-width:100px">
+        <div style="font-size:0.72rem;color:var(--muted);margin-bottom:3px">${o.resolution_rate}%</div>
+        <div class="perf-bar"><div class="perf-fill" style="width:${o.resolution_rate}%"></div></div>
+      </td>
+      <td><span class="badge ${o.is_active?'badge-active':'badge-inactive'}">${o.is_active?'Active':'Inactive'}</span></td>
+      <td>
+        <button class="act-btn" onclick="openEditOfficer(${o.id})">✏️ Edit</button>
+        <button class="act-btn ${o.is_active?'danger':'success'}" onclick="toggleOfficer(${o.id})">${o.is_active?'Deactivate':'Activate'}</button>
+        <button class="act-btn danger" onclick="deleteOfficer(${o.id},'${o.name}')">🗑</button>
+      </td>
+    </tr>`).join('');
+}
+
+async function loadCitizens() {
+  try {
+    const res = await fetch(`${API}/admin/citizens`, {headers:{Authorization:`Bearer ${token}`}});
+    allCitizens = await res.json();
+    filterCitizens();
+  } catch(e) {}
+}
+
+function filterCitizens() {
+  const q = document.getElementById('search-citizens').value.toLowerCase();
+  const filtered = q ? allCitizens.filter(c=>c.name.toLowerCase().includes(q)||c.email.toLowerCase().includes(q)) : allCitizens;
+  document.getElementById('citizens-count').textContent = filtered.length + ' citizens';
+  const tbody = document.getElementById('citizens-tbody');
+  if (!filtered.length) { tbody.innerHTML='<tr><td colspan="9" style="text-align:center;padding:2rem;color:var(--muted)">No citizens found</td></tr>'; return; }
+  tbody.innerHTML = filtered.map(c=>`
+    <tr>
+      <td><div style="font-weight:600">${c.name}</div></td>
+      <td style="font-size:0.78rem;color:var(--muted)">${c.email}</td>
+      <td style="font-size:0.78rem">${c.phone||'—'}</td>
+      <td style="font-weight:700;color:var(--accent)">${c.total_reports ?? c.total_complaints ?? 0}</td>
+      <td style="color:var(--green)">${c.fixed ?? c.completed ?? 0}</td>
+      <td style="color:var(--red)">${c.high_severity ?? 0}</td>
+      <td><span style="color:var(--yellow);font-weight:700">${c.points||0} pts</span></td>
+      <td><span class="badge ${c.is_active!==false?'badge-active':'badge-inactive'}">${c.is_active!==false?'Active':'Blocked'}</span></td>
+      <td><button class="act-btn ${c.is_active!==false?'danger':'success'}" onclick="toggleCitizen(${c.id})">${c.is_active!==false?'Block':'Unblock'}</button></td>
+    </tr>`).join('');
+}
+
+async function loadChartData() {
+  try {
+    const res = await fetch(`${API}/admin/chart/daily`, {headers:{Authorization:`Bearer ${token}`}});
+    const data = await res.json();
+    renderDailyChart(data);
+    renderTrendChart(data);
+  } catch(e) {}
+}
+
+function renderDailyChart(data) {
+  const ctx = document.getElementById('daily-chart').getContext('2d');
+  if (charts.daily) charts.daily.destroy();
+  charts.daily = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: data.map(d=>{ const dt=new Date(d.date); return isNaN(dt)?d.date:dt.toLocaleDateString('en-GB',{day:'2-digit',month:'short'}); }),
+      datasets: [{ label:'Complaints', data: data.map(d=>d.count), backgroundColor:'rgba(0,212,255,0.3)', borderColor:'rgba(0,212,255,0.8)', borderWidth:2, borderRadius:6 }]
+    },
+    options: { responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}},
+      scales:{ x:{grid:{color:'rgba(30,45,69,0.5)'},ticks:{color:'#64748b',font:{size:10}}}, y:{grid:{color:'rgba(30,45,69,0.5)'},ticks:{color:'#64748b',font:{size:10}},beginAtZero:true} } }
+  });
+}
+
+function renderSevChart() {
+  const ctx = document.getElementById('sev-chart').getContext('2d');
+  if (charts.sev) charts.sev.destroy();
+  charts.sev = new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels:['High','Medium','Low'],
+      datasets:[{data:[stats.high,stats.medium,stats.low],backgroundColor:['rgba(239,68,68,0.7)','rgba(245,158,11,0.7)','rgba(16,185,129,0.7)'],borderWidth:0}]
+    },
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'right',labels:{color:'#64748b',font:{size:10},padding:10}}}}
+  });
+}
+
+function getFilteredComplaints() {
+  const status = (document.getElementById('chart-filter-status')?.value || '').trim();
+  const sev = (document.getElementById('chart-filter-severity')?.value || '').trim();
+  const officerName = (document.getElementById('chart-filter-officer')?.value || '').trim();
+  const zone = (document.getElementById('chart-filter-zone')?.value || '').trim();
+  let filtered = [...allComplaints];
+  if (status) filtered = filtered.filter(c => (c.status||'') === status);
+  if (sev) filtered = filtered.filter(c => (c.severity||'') === sev);
+  if (officerName) filtered = filtered.filter(c => (c.officer_name||'').toLowerCase() === officerName.toLowerCase());
+  if (zone) {
+    const zoneOfficers = allOfficers.filter(o => (o.zone||'') === zone).map(o => (o.name||'').toLowerCase());
+    filtered = filtered.filter(c => zoneOfficers.includes((c.officer_name||'').toLowerCase()));
+  }
+  const el = document.getElementById('chart-filtered-count');
+  if (el) el.textContent = filtered.length === allComplaints.length ? 
+    `Showing all ${allComplaints.length} complaints` : 
+    `Showing ${filtered.length} of ${allComplaints.length} complaints`;
+  return filtered;
+}
+
+function updateAllCharts() {
+  renderStatusChartFiltered();
+  renderSevDonutChart();
+  renderOfficerPerfChart();
+  renderOfficerRateChart();
+  renderZoneChart();
+  renderCitizenChart();
+}
+
+function resetChartFilters() {
+  ['chart-filter-status','chart-filter-severity','chart-filter-officer','chart-filter-zone'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  updateAllCharts();
+}
+
+function populateOfficerFilter() {
+  const sel = document.getElementById('chart-filter-officer');
+  if (!sel) return;
+  const current = sel.value;
+  sel.innerHTML = '<option value="">All Officers</option>' + 
+    allOfficers.map(o => `<option value="${o.name}" ${o.name===current?'selected':''}>${o.name}</option>`).join('');
+}
+
+function renderStatusChartFiltered() {
+  const filtered = getFilteredComplaints();
+  const pending = filtered.filter(c=>['pending','assigned'].includes(c.status)).length;
+  const progress = filtered.filter(c=>c.status==='in_progress').length;
+  const completed = filtered.filter(c=>c.status==='completed').length;
+  const ctx = document.getElementById('status-chart')?.getContext('2d');
+  if (!ctx) return;
+  if (charts.status) charts.status.destroy();
+  charts.status = new Chart(ctx, {
+    type:'doughnut',
+    data:{
+      labels:['Pending/Assigned','In Progress','Completed'],
+      datasets:[{data:[pending, progress, completed],
+        backgroundColor:['rgba(245,158,11,0.8)','rgba(59,130,246,0.8)','rgba(16,185,129,0.8)'],borderWidth:2,borderColor:'#111827'}]
+    },
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{position:'right',labels:{color:'#94a3b8',font:{size:11},padding:12}}}}
+  });
+}
+
+function renderSevDonutChart() {
+  const filtered = getFilteredComplaints();
+  const high = filtered.filter(c=>c.severity==='high').length;
+  const medium = filtered.filter(c=>c.severity==='medium').length;
+  const low = filtered.filter(c=>c.severity==='low').length;
+  const ctx = document.getElementById('sev-donut-chart')?.getContext('2d');
+  if (!ctx) return;
+  if (charts.sevDonut) charts.sevDonut.destroy();
+  charts.sevDonut = new Chart(ctx, {
+    type:'doughnut',
+    data:{
+      labels:['High','Medium','Low'],
+      datasets:[{data:[high,medium,low],
+        backgroundColor:['rgba(239,68,68,0.8)','rgba(245,158,11,0.8)','rgba(16,185,129,0.8)'],borderWidth:2,borderColor:'#111827'}]
+    },
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{position:'right',labels:{color:'#94a3b8',font:{size:11},padding:12}}}}
+  });
+}
+
+function renderOfficerPerfChart() {
+  const filtered = getFilteredComplaints();
+  const zoneFilter = document.getElementById('chart-filter-zone')?.value || '';
+  let officers = zoneFilter ? allOfficers.filter(o=>o.zone===zoneFilter) : allOfficers;
+  if (!officers.length) return;
+  const ctx = document.getElementById('officer-perf-chart')?.getContext('2d');
+  if (!ctx) return;
+  if (charts.officerPerf) charts.officerPerf.destroy();
+  charts.officerPerf = new Chart(ctx, {
+    type:'bar',
+    data:{
+      labels: officers.map(o=>o.name),
+      datasets:[
+        {label:'Total', data:officers.map(o=>filtered.filter(c=>c.officer_name===o.name).length), backgroundColor:'rgba(0,212,255,0.6)', borderColor:'rgba(0,212,255,1)', borderWidth:1, borderRadius:4},
+        {label:'Completed', data:officers.map(o=>filtered.filter(c=>c.officer_name===o.name&&c.status==='completed').length), backgroundColor:'rgba(16,185,129,0.6)', borderColor:'rgba(16,185,129,1)', borderWidth:1, borderRadius:4},
+        {label:'Pending', data:officers.map(o=>filtered.filter(c=>c.officer_name===o.name&&['pending','assigned'].includes(c.status)).length), backgroundColor:'rgba(245,158,11,0.6)', borderColor:'rgba(245,158,11,1)', borderWidth:1, borderRadius:4},
+      ]
+    },
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{labels:{color:'#94a3b8',font:{size:10}}}},
+      scales:{x:{grid:{color:'rgba(30,45,69,0.4)'},ticks:{color:'#64748b'}},
+              y:{grid:{color:'rgba(30,45,69,0.4)'},ticks:{color:'#64748b'},beginAtZero:true}}}
+  });
+}
+
+function renderOfficerRateChart() {
+  const filtered = getFilteredComplaints();
+  const zoneFilter = document.getElementById('chart-filter-zone')?.value || '';
+  let officers = zoneFilter ? allOfficers.filter(o=>o.zone===zoneFilter) : allOfficers;
+  const ctx = document.getElementById('officer-rate-chart')?.getContext('2d');
+  if (!ctx) return;
+  if (charts.officerRate) charts.officerRate.destroy();
+  const rates = officers.map(o => {
+    const total = filtered.filter(c=>c.officer_name===o.name).length;
+    const done = filtered.filter(c=>c.officer_name===o.name&&c.status==='completed').length;
+    return total > 0 ? Math.round(done/total*100) : 0;
+  });
+  charts.officerRate = new Chart(ctx, {
+    type:'bar',
+    data:{
+      labels: officers.map(o=>o.name),
+      datasets:[{label:'Completion %', data:rates,
+        backgroundColor: rates.map(r=>r>=70?'rgba(16,185,129,0.7)':r>=40?'rgba(245,158,11,0.7)':'rgba(239,68,68,0.7)'),
+        borderWidth:1, borderRadius:4}]
+    },
+    options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',
+      plugins:{legend:{display:false}},
+      scales:{x:{grid:{color:'rgba(30,45,69,0.4)'},ticks:{color:'#64748b'},max:100},
+              y:{grid:{color:'rgba(30,45,69,0.4)'},ticks:{color:'#64748b'}}}}
+  });
+}
+
+function renderZoneChart() {
+  const filtered = getFilteredComplaints();
+  const zones = ['Zone A','Zone B','Zone C','Zone D'];
+  const ctx = document.getElementById('zone-chart')?.getContext('2d');
+  if (!ctx) return;
+  if (charts.zone) charts.zone.destroy();
+  charts.zone = new Chart(ctx, {
+    type:'bar',
+    data:{
+      labels:zones,
+      datasets:[
+        {label:'Total', data:zones.map(z=>{const os=allOfficers.filter(o=>o.zone===z).map(o=>o.name); return filtered.filter(c=>os.includes(c.officer_name)).length;}), backgroundColor:'rgba(0,212,255,0.6)',borderRadius:4},
+        {label:'Completed', data:zones.map(z=>{const os=allOfficers.filter(o=>o.zone===z).map(o=>o.name); return filtered.filter(c=>os.includes(c.officer_name)&&c.status==='completed').length;}), backgroundColor:'rgba(16,185,129,0.6)',borderRadius:4},
+      ]
+    },
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{labels:{color:'#94a3b8',font:{size:10}}}},
+      scales:{x:{grid:{color:'rgba(30,45,69,0.4)'},ticks:{color:'#64748b'}},
+              y:{grid:{color:'rgba(30,45,69,0.4)'},ticks:{color:'#64748b'},beginAtZero:true}}}
+  });
+}
+
+function renderCitizenChart() {
+  const filtered = getFilteredComplaints();
+  const citizenCounts = {};
+  filtered.forEach(c=>{ citizenCounts[c.citizen_name]=(citizenCounts[c.citizen_name]||0)+1; });
+  const sorted = Object.entries(citizenCounts).sort((a,b)=>b[1]-a[1]).slice(0,8);
+  const ctx = document.getElementById('citizen-chart')?.getContext('2d');
+  if (!ctx) return;
+  if (charts.citizen) charts.citizen.destroy();
+  charts.citizen = new Chart(ctx, {
+    type:'bar',
+    data:{
+      labels:sorted.map(([name])=>name),
+      datasets:[{label:'Reports', data:sorted.map(([,count])=>count), backgroundColor:'rgba(124,58,237,0.7)', borderRadius:4}]
+    },
+    options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',
+      plugins:{legend:{display:false}},
+      scales:{x:{grid:{color:'rgba(30,45,69,0.4)'},ticks:{color:'#64748b'},beginAtZero:true},
+              y:{grid:{color:'rgba(30,45,69,0.4)'},ticks:{color:'#64748b'}}}}
+  });
+}
+
+function renderStatusChart() {
+  renderStatusChartFiltered();
+}
+
+function renderOfficerChart() {
+  const ctx = document.getElementById('officer-chart').getContext('2d');
+  if (charts.officer) charts.officer.destroy();
+  if (!allOfficers.length) return;
+  charts.officer = new Chart(ctx, {
+    type:'bar',
+    data:{
+      labels:allOfficers.map(o=>o.name),
+      datasets:[
+        {label:'Total',data:allOfficers.map(o=>o.total_complaints),backgroundColor:'rgba(0,212,255,0.3)',borderColor:'rgba(0,212,255,0.8)',borderWidth:2,borderRadius:4},
+        {label:'Completed',data:allOfficers.map(o=>o.completed),backgroundColor:'rgba(16,185,129,0.3)',borderColor:'rgba(16,185,129,0.8)',borderWidth:2,borderRadius:4},
+        {label:'Pending',data:allOfficers.map(o=>o.pending),backgroundColor:'rgba(245,158,11,0.3)',borderColor:'rgba(245,158,11,0.8)',borderWidth:2,borderRadius:4},
+      ]
+    },
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#64748b',font:{size:10}}}},
+      scales:{x:{grid:{color:'rgba(30,45,69,0.5)'},ticks:{color:'#64748b'}},y:{grid:{color:'rgba(30,45,69,0.5)'},ticks:{color:'#64748b'},beginAtZero:true}}}
+  });
+}
+
+function renderTrendChart(data) {
+  const ctx = document.getElementById('trend-chart').getContext('2d');
+  if (charts.trend) charts.trend.destroy();
+  charts.trend = new Chart(ctx, {
+    type:'line',
+    data:{
+      labels:data.map(d=>d.date),
+      datasets:[{label:'Complaints per day',data:data.map(d=>d.count),borderColor:'rgba(124,58,237,0.8)',backgroundColor:'rgba(124,58,237,0.1)',borderWidth:2,fill:true,tension:0.4,pointBackgroundColor:'rgba(124,58,237,0.8)'}]
+    },
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#64748b'}}},
+      scales:{x:{grid:{color:'rgba(30,45,69,0.5)'},ticks:{color:'#64748b'}},y:{grid:{color:'rgba(30,45,69,0.5)'},ticks:{color:'#64748b'},beginAtZero:true}}}
+  });
+}
+
+// ACTIONS
+function openReassign(complaintId) {
+  reassignComplaintId = complaintId;
+  document.getElementById('reassign-complaint-id').textContent = complaintId;
+  const sel = document.getElementById('reassign-officer-select');
+  sel.innerHTML = allOfficers.map(o=>`<option value="${o.id}">${o.name} (${o.zone||'—'}) — ${o.pending} pending</option>`).join('');
+  document.getElementById('reassign-modal').classList.add('open');
+}
+
+function closeModal() { document.getElementById('reassign-modal').classList.remove('open'); }
+
+async function confirmReassign() {
+  if (!reassignComplaintId) return;
+  const officerId = document.getElementById('reassign-officer-select').value;
+  try {
+    await fetch(`${API}/admin/complaints/${reassignComplaintId}/reassign`, {
+      method:'PATCH', headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},
+      body:JSON.stringify({officer_id:parseInt(officerId)})
+    });
+    closeModal(); await loadComplaints(); showToast('✅ Complaint reassigned!');
+  } catch(e) { showToast('❌ Reassign failed'); }
+}
+
+async function toggleOfficer(id) {
+  try {
+    const res = await fetch(`${API}/admin/officers/${id}/toggle`, {method:'PATCH',headers:{Authorization:`Bearer ${token}`}});
+    const data = await res.json();
+    await loadOfficers();
+    showToast(data.is_active ? '✅ Officer activated' : '⛔ Officer deactivated');
+  } catch(e) {}
+}
+
+async function toggleCitizen(id) {
+  try {
+    const res = await fetch(`${API}/admin/citizens/${id}/toggle`, {method:'PATCH',headers:{Authorization:`Bearer ${token}`}});
+    const data = await res.json();
+    await loadCitizens();
+    showToast(data.is_active ? '✅ Citizen unblocked' : '⛔ Citizen blocked');
+  } catch(e) {}
+}
+
+function showSection(section) {
+  currentSection = section;
+  document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
+  document.getElementById(`section-${section}`).classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n=>{ if(n.textContent.toLowerCase().includes(section.substring(0,4))) n.classList.add('active'); });
+  const titles = {overview:'Overview',complaints:'All Complaints',officers:'Officer Management',citizens:'Citizen Management',analytics:'Analytics'};
+  document.getElementById('section-title').textContent = titles[section]||section;
+  if (section==='analytics') { populateOfficerFilter(); updateAllCharts(); loadChartData(); }
+}
+
+function showToast(msg) {
+  const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),3000);
+}
+
+init();
+</script>
+</body>
+</html>
+<script>
+// ── OFFICER MANAGEMENT ────────────────────────────────
+let selectedZone = '';
+let editingOfficerId = null;
+
+function openAddOfficer() {
+  editingOfficerId = null;
+  selectedZone = '';
+  document.getElementById('officer-modal-title').textContent = 'Add New Officer';
+  document.getElementById('officer-save-btn').textContent = 'Add Officer';
+  document.getElementById('of-name').value = '';
+  document.getElementById('of-email').value = '';
+  document.getElementById('of-phone').value = '';
+  document.getElementById('of-password').value = '';
+  document.getElementById('of-password').placeholder = 'Min 6 chars';
+  document.querySelectorAll('.zone-option').forEach(z=>z.classList.remove('selected'));
+  document.getElementById('officer-modal-err').style.display = 'none';
+  document.getElementById('officer-modal').classList.add('open');
+}
+
+function openEditOfficer(id) {
+  const o = allOfficers.find(x=>x.id===id);
+  if (!o) return;
+  editingOfficerId = id;
+  selectedZone = o.zone || '';
+  document.getElementById('officer-modal-title').textContent = 'Edit Officer';
+  document.getElementById('officer-save-btn').textContent = 'Save Changes';
+  document.getElementById('of-name').value = o.name;
+  document.getElementById('of-email').value = o.email;
+  document.getElementById('of-phone').value = o.phone||'';
+  document.getElementById('of-password').value = '';
+  document.getElementById('of-password').placeholder = 'Leave blank to keep current';
+  document.querySelectorAll('.zone-option').forEach(z=>{
+    z.classList.toggle('selected', z.dataset.zone === selectedZone);
+  });
+  document.getElementById('officer-modal-err').style.display = 'none';
+  document.getElementById('officer-modal').classList.add('open');
+}
+
+function selectZone(el, zone) {
+  selectedZone = zone;
+  document.querySelectorAll('.zone-option').forEach(z=>z.classList.remove('selected'));
+  el.classList.add('selected');
+}
+
+function closeOfficerModal() {
+  document.getElementById('officer-modal').classList.remove('open');
+}
+
+async function saveOfficer() {
+  const name = document.getElementById('of-name').value.trim();
+  const email = document.getElementById('of-email').value.trim();
+  const phone = document.getElementById('of-phone').value.trim();
+  const password = document.getElementById('of-password').value;
+  const errEl = document.getElementById('officer-modal-err');
+  errEl.style.display = 'none';
+
+  if (!name || !email) { errEl.textContent='Name and email are required'; errEl.style.display='block'; return; }
+  if (!editingOfficerId && !password) { errEl.textContent='Password is required'; errEl.style.display='block'; return; }
+  if (!selectedZone) { errEl.textContent='Please select a zone'; errEl.style.display='block'; return; }
+
+  const btn = document.getElementById('officer-save-btn');
+  btn.innerHTML = '<span class="spinner"></span>Saving...'; btn.disabled = true;
+
+  try {
+    if (editingOfficerId) {
+      const body = {name, phone, zone: selectedZone};
+      if (password) body.password = password;
+      await fetch(`${API}/admin/officers/${editingOfficerId}`, {
+        method:'PATCH', headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},
+        body: JSON.stringify(body)
+      });
+      showToast('✅ Officer updated!');
+    } else {
+      const res = await fetch(`${API}/admin/officers`, {
+        method:'POST', headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},
+        body: JSON.stringify({name, email, password, phone, zone: selectedZone})
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Failed to add officer');
+      showToast('✅ Officer added successfully!');
+    }
+    closeOfficerModal();
+    await loadOfficers();
+  } catch(e) { errEl.textContent = e.message; errEl.style.display='block'; }
+  btn.innerHTML = editingOfficerId ? 'Save Changes' : 'Add Officer'; btn.disabled = false;
+}
+
+async function deleteOfficer(id, name) {
+  if (!confirm(`Delete officer "${name}"? Their complaints will be unassigned.`)) return;
+  try {
+    await fetch(`${API}/admin/officers/${id}`, {method:'DELETE', headers:{Authorization:`Bearer ${token}`}});
+    showToast('🗑 Officer deleted');
+    await loadOfficers();
+  } catch(e) { showToast('❌ Delete failed'); }
+}
+
+function renderZoneCards() {
+  const zones = ['Zone A','Zone B','Zone C','Zone D'];
+  const colors = ['var(--accent)','var(--accent2)','var(--yellow)','var(--green)'];
+  const el = document.getElementById('zone-cards');
+  if (!el) return;
+  el.innerHTML = zones.map((zone,i) => {
+    const officers = allOfficers.filter(o=>o.zone===zone);
+    const complaints = officers.reduce((sum,o)=>sum+o.total_complaints,0);
+    return `<div class="zone-stat-card">
+      <div class="zone-stat-num" style="color:${colors[i]}">${officers.length}</div>
+      <div style="font-weight:700;font-size:0.85rem;margin-top:4px">${zone}</div>
+      <div class="zone-stat-label">${officers.length} officer${officers.length!==1?'s':''} · ${complaints} cases</div>
+    </div>`;
+  }).join('');
+}
+</script>
