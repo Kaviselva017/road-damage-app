@@ -466,15 +466,15 @@ html, body {
         </div>
       </div>
 
-      <!-- ACCESS KEY — Officer & Admin only -->
-      <div id="key-wrap" style="display:none">
-        <div class="field-group">
-          <label class="field-label" style="letter-spacing:.08em">Access Key</label>
+      <!-- ACCESS KEY FIELD — shown for Officer & Admin -->
+      <div id="key-wrap" style="display:none;margin-top:-.3rem">
+        <div class="field-group" style="margin-bottom:.6rem">
+          <label class="field-label">Access Key</label>
           <div class="field-input-wrap">
             <span class="field-icon">🛡️</span>
-            <input class="field-input" id="key-input" type="password" placeholder="Enter access key" autocomplete="off" onkeydown="if(event.key==='Enter')handleSubmit()"/>
+            <input class="field-input" id="key-input" type="password" placeholder="e.g. OFF-2030" autocomplete="off" onkeydown="if(event.key==='Enter')handleSubmit()"/>
           </div>
-          <div id="key-hint" style="font-size:.65rem;margin-top:.35rem;padding:.3rem .75rem;border-radius:6px;font-weight:600;display:none"></div>
+          <div id="key-hint" style="display:none;font-size:.65rem;font-weight:700;margin-top:.3rem;padding:.3rem .75rem;border-radius:6px"></div>
         </div>
       </div>
 
@@ -563,30 +563,30 @@ function selectRole(role) {
     document.getElementById('email-input').value = '';
     document.getElementById('pass-input').value = '';
 
-    // Show/hide access key field
+    // Show/hide access key
     const kw = document.getElementById('key-wrap');
     const ki = document.getElementById('key-input');
     const kh = document.getElementById('key-hint');
     if (ki) ki.value = '';
     if (role === 'officer') {
       kw.style.display = 'block';
-      kw.style.animation = 'fadeDown .3s ease';
       kh.style.display = 'block';
-      kh.textContent = '🔐 Key hint: OFF-2030';
-      kh.style.background = 'rgba(255,107,53,.08)';
-      kh.style.border = '1px solid rgba(255,107,53,.25)';
+      kh.textContent = '🔐 Key: OFF-2030';
+      kh.style.background = 'rgba(255,107,53,.1)';
+      kh.style.border = '1px solid rgba(255,107,53,.3)';
       kh.style.color = '#ff6b35';
+      setTimeout(()=>{ ki.focus(); ki.scrollIntoView({behavior:'smooth',block:'center'}); }, 200);
     } else if (role === 'admin') {
       kw.style.display = 'block';
-      kw.style.animation = 'fadeDown .3s ease';
       kh.style.display = 'block';
-      kh.textContent = '🔐 Key hint: ADM-2030';
-      kh.style.background = 'rgba(168,85,247,.08)';
-      kh.style.border = '1px solid rgba(168,85,247,.25)';
+      kh.textContent = '🔐 Key: ADM-2030';
+      kh.style.background = 'rgba(168,85,247,.1)';
+      kh.style.border = '1px solid rgba(168,85,247,.3)';
       kh.style.color = '#a855f7';
+      setTimeout(()=>{ ki.focus(); ki.scrollIntoView({behavior:'smooth',block:'center'}); }, 200);
     } else {
       kw.style.display = 'none';
-      kh.style.display = 'none';
+      if (kh) kh.style.display = 'none';
     }
 
     // Update ticker
@@ -665,17 +665,12 @@ async function handleSubmit() {
 }
 
 async function doLogin(email, password, t) {
-  // Validate access key for officer/admin
   if (currentRole === 'officer' || currentRole === 'admin') {
     const ki = document.getElementById('key-input');
-    const enteredKey = ki ? ki.value.trim() : '';
-    const validKey = currentRole === 'officer' ? 'OFF-2030' : 'ADM-2030';
-    if (!enteredKey) {
-      throw new Error('Access key is required for ' + (currentRole === 'officer' ? 'Officer' : 'Admin') + ' login');
-    }
-    if (enteredKey !== validKey) {
-      throw new Error('Invalid access key. Please verify with your supervisor.');
-    }
+    const entered = ki ? ki.value.trim() : '';
+    const valid = currentRole === 'officer' ? 'OFF-2030' : 'ADM-2030';
+    if (!entered) throw new Error('Please enter your access key below the password field');
+    if (entered !== valid) throw new Error('Invalid access key — check with your supervisor');
   }
   const res = await fetch(`${API}${t.endpoint}`, {
     method:'POST', headers:{'Content-Type':'application/json'},
