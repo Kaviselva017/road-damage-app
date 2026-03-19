@@ -4,6 +4,8 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Admin Panel — RoadWatch</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Clash+Display:wght@600;700&family=Cabinet+Grotesk:wght@400;500;700&display=swap" rel="stylesheet"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
 <style>
@@ -157,7 +159,11 @@ tr:hover td { background:rgba(255,255,255,0.02); }
 .btn-modal { padding:0.5rem 1rem; border-radius:8px; font-family:inherit; font-size:0.85rem; cursor:pointer; border:1px solid var(--border); }
 .btn-modal.primary { background:var(--accent); color:#000; border-color:var(--accent); font-weight:700; }
 .btn-modal.secondary { background:none; color:var(--muted); }
-</style>
+
+    #overview-map{width:100%;height:350px;border-radius:12px;border:1px solid var(--border);margin-bottom:1rem;}
+    .leaflet-popup-content-wrapper{background:var(--card,#1a1a2e);color:var(--text,#e2e8f0);border:1px solid var(--border,#2d3748);border-radius:10px;}
+    .leaflet-popup-tip{background:var(--card,#1a1a2e);}
+    </style>
 </head>
 <body>
 
@@ -230,6 +236,13 @@ tr:hover td { background:rgba(255,255,255,0.02); }
         <div class="stat-card purple"><div class="stat-num" style="color:var(--accent2)" id="s-progress">—</div><div class="stat-label">In Progress</div></div>
         <div class="stat-card green"><div class="stat-num green" id="s-done">—</div><div class="stat-label">Completed</div><div class="stat-sub" id="s-rate">—% resolved</div></div>
         <div class="stat-card red"><div class="stat-num red" id="s-high">—</div><div class="stat-label">High Severity</div></div>
+      </div>
+
+      
+      <!-- Overview Map -->
+      <div class="card" style="margin-bottom:1rem">
+        <div class="card-title"><span class="ct-icon">🗺️</span> Live Complaints Map</div>
+        <div id="overview-map"></div>
       </div>
 
       <div class="row">
@@ -473,6 +486,36 @@ tr:hover td { background:rgba(255,255,255,0.02); }
 const API = (window.location.hostname === 'localhost' ? 'http://localhost:8000' : window.location.origin) + '/api';
 let token = localStorage.getItem('admin_token');
 let adminName = localStorage.getItem('admin_name');
+
+let overviewMap = null;
+function initOverviewMap() {
+  if (overviewMap) return;
+  const mapEl = document.getElementById('overview-map');
+  if (!mapEl) return;
+  overviewMap = L.map('overview-map').setView([20.5937, 78.9629], 5);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap', maxZoom: 18
+  }).addTo(overviewMap);
+}
+
+function renderOverviewMapMarkers() {
+  if (!overviewMap) return;
+  allComplaints.forEach(c => {
+    if (!c.latitude || !c.longitude) return;
+    const col = c.severity === 'high' ? '#e05c5c' : c.severity === 'medium' ? '#f5a623' : '#3ecfb2';
+    const marker = L.circleMarker([c.latitude, c.longitude], {
+      radius: 8, fillColor: col, color: '#fff', weight: 1.5,
+      opacity: 1, fillOpacity: 0.85
+    }).addTo(overviewMap);
+    marker.bindPopup(`<b>${c.complaint_id}</b><br>${c.damage_type || ''} · ${c.severity || ''}<br>${c.address || ''}`);
+  });
+  if (allComplaints.length > 0) {
+    const lats = allComplaints.filter(c=>c.latitude).map(c=>c.latitude);
+    const lngs = allComplaints.filter(c=>c.longitude).map(c=>c.longitude);
+    if (lats.length) overviewMap.fitBounds([[Math.min(...lats),Math.min(...lngs)],[Math.max(...lats),Math.max(...lngs)]], {padding:[30,30]});
+  }
+}
+
 let allComplaints = [], allOfficers = [], allCitizens = [], stats = {};
 let currentSection = 'overview';
 let reassignComplaintId = null;
@@ -518,6 +561,8 @@ function logout() {
 
 async function loadAll() {
   await Promise.all([loadStats(), loadComplaints(), loadOfficers(), loadCitizens(), loadChartData()]);
+  initOverviewMap();
+  setTimeout(renderOverviewMapMarkers, 500);
   document.getElementById('last-updated').textContent = 'Updated ' + new Date().toLocaleTimeString();
 }
 

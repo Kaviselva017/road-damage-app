@@ -157,7 +157,16 @@ nav{display:flex;align-items:center;justify-content:space-between;padding:1rem 1
 #file-input{display:none;}
 .empty-state{text-align:center;padding:3rem 1rem;color:var(--muted);}
 .empty-state .empty-icon{font-size:3rem;margin-bottom:.8rem;}
-</style>
+
+    .photo-source-grid{display:grid;grid-template-columns:1fr 1fr;gap:.8rem;margin-bottom:1rem;}
+    .source-card{background:var(--card);border:2px solid var(--border);border-radius:16px;padding:1.5rem 1rem;text-align:center;cursor:pointer;transition:all .2s;}
+    .source-card:hover,.source-card.selected{border-color:var(--accent);background:rgba(0,212,255,0.07);}
+    .source-card.camera.selected{border-color:#f5a623;background:rgba(245,166,35,0.07);}
+    .source-icon{font-size:2.2rem;margin-bottom:.5rem;}
+    .source-title{font-weight:700;font-size:.95rem;margin-bottom:.25rem;}
+    .source-sub{font-size:.72rem;color:var(--muted);}
+    .source-badge{font-size:.62rem;color:var(--accent2);font-weight:600;margin-top:.3rem;}
+    </style>
 </head>
 <body>
 <nav>
@@ -210,19 +219,38 @@ nav{display:flex;align-items:center;justify-content:space-between;padding:1rem 1
 <div class="page" id="page-report">
   <div class="page-title">Report <span>Road Damage</span></div>
   <div class="ai-badge">🤖 AI-Powered Detection · Auto-classifies damage type & severity</div>
-  <div class="capture-zone" id="capture-zone" onclick="triggerCapture()">
+  <!-- Step 1: Choose source -->
+  <div id="photo-source-step">
+    <div style="font-size:.8rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:.6rem;font-weight:700">Step 1 — Choose Photo Source</div>
+    <div class="photo-source-grid">
+      <div class="source-card camera" id="src-camera" onclick="selectSource('camera')">
+        <div class="source-icon">📷</div>
+        <div class="source-title">Camera</div>
+        <div class="source-sub">Take live photo</div>
+        <div class="source-badge">✓ Auto GPS geotag</div>
+      </div>
+      <div class="source-card gallery" id="src-gallery" onclick="selectSource('gallery')">
+        <div class="source-icon">🖼️</div>
+        <div class="source-title">Gallery</div>
+        <div class="source-sub">Choose from files</div>
+        <div class="source-badge">Manual location</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 2: Capture zone (shown after source selected) -->
+  <div class="capture-zone" id="capture-zone" onclick="triggerCapture()" style="display:none">
     <div class="capture-placeholder" id="capture-placeholder">
-      <div class="icon">📷</div>
-      <p>Tap to capture road damage photo</p>
-      <p style="font-size:.75rem;color:var(--muted)">Camera or Gallery</p>
+      <div class="icon" id="capture-icon">📷</div>
+      <p id="capture-hint">Tap to take photo</p>
     </div>
     <img id="preview-img" style="display:none"/>
     <div class="capture-overlay" id="capture-overlay" style="display:none">
       <button class="btn-capture" onclick="retakePhoto(event)">📷 Retake</button>
-      <button class="btn-capture secondary" onclick="triggerGallery(event)">🖼 Gallery</button>
+      <button class="btn-capture secondary" onclick="resetSource(event)">↩ Change Source</button>
     </div>
   </div>
-  <input type="file" id="file-input" accept="image/*" capture="environment" onchange="handleFile(event)"/>
+  <input type="file" id="file-input" accept="image/*" onchange="handleFile(event)"/>
   <div class="gps-card">
     <div class="gps-icon">📍</div>
     <div class="gps-info">
@@ -393,6 +421,36 @@ function initMiniMap(lat,lng){
   miniMap=L.map('mini-map',{zoomControl:false,attributionControl:false}).setView([lat,lng],16);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(miniMap);
   miniMarker=L.circleMarker([lat,lng],{radius:10,fillColor:'#f5a623',color:'#fff',weight:2,fillOpacity:.9}).addTo(miniMap);
+}
+
+
+let photoSource = null;
+function selectSource(src) {
+  photoSource = src;
+  document.getElementById('src-camera').classList.toggle('selected', src === 'camera');
+  document.getElementById('src-gallery').classList.toggle('selected', src === 'gallery');
+  document.getElementById('capture-zone').style.display = 'block';
+  if (src === 'camera') {
+    document.getElementById('capture-icon').textContent = '📷';
+    document.getElementById('capture-hint').textContent = 'Tap to take photo';
+    document.getElementById('file-input').setAttribute('capture', 'environment');
+  } else {
+    document.getElementById('capture-icon').textContent = '🖼️';
+    document.getElementById('capture-hint').textContent = 'Tap to choose from gallery';
+    document.getElementById('file-input').removeAttribute('capture');
+  }
+  document.getElementById('capture-zone').click();
+}
+function resetSource(e) {
+  if(e) e.stopPropagation();
+  photoSource = null;
+  document.getElementById('src-camera').classList.remove('selected');
+  document.getElementById('src-gallery').classList.remove('selected');
+  document.getElementById('capture-zone').style.display = 'none';
+  document.getElementById('preview-img').style.display = 'none';
+  document.getElementById('capture-placeholder').style.display = 'flex';
+  document.getElementById('capture-overlay').style.display = 'none';
+  selectedFile = null;
 }
 
 function triggerCapture(){if(selectedFile)return;document.getElementById('file-input').setAttribute('capture','environment');document.getElementById('file-input').click();}
