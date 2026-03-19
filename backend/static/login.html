@@ -382,16 +382,7 @@ html, body {
   .role-selector { gap: 0.7rem; }
   .form-glass { padding: 1.5rem; }
 }
-
-    /* Passkey field */
-    .passkey-wrap { display:none; margin-top:.8rem; animation: fadeDown .3s ease; }
-    .passkey-wrap.visible { display:block; }
-    .key-hint { font-size:.65rem; margin-top:.35rem; padding:.3rem .7rem; border-radius:6px; font-weight:600; }
-    .officer-theme .key-hint { background:rgba(255,107,53,.08); color:#ff6b35; border:1px solid rgba(255,107,53,.2); }
-    .admin-theme .key-hint { background:rgba(168,85,247,.08); color:#a855f7; border:1px solid rgba(168,85,247,.2); }
-    @keyframes fadeDown { from{opacity:0;transform:translateY(-10px)} to{opacity:1;transform:translateY(0)} }
-
-    </style>
+</style>
 </head>
 <body>
 
@@ -537,21 +528,6 @@ const themes = {
 function selectRole(role) {
   currentRole = role;
   isRegisterMode = false;
-  // Show passkey for officer/admin
-  const pkWrap = document.getElementById('passkey-wrap');
-  const pkHint = document.getElementById('key-hint');
-  if(role === 'officer') {
-    pkWrap.classList.add('visible');
-    pkHint.textContent = '🔐 Officer key: OFF-2030';
-    document.getElementById('key-input').value = '';
-  } else if(role === 'admin') {
-    pkWrap.classList.add('visible');
-    pkHint.textContent = '🔐 Admin key: ADM-2030';
-    document.getElementById('key-input').value = '';
-  } else {
-    pkWrap.classList.remove('visible');
-    document.getElementById('key-input').value = '';
-  }
 
   // Update role cards
   document.querySelectorAll('.role-card').forEach(c => c.classList.remove('active'));
@@ -574,6 +550,19 @@ function selectRole(role) {
     document.getElementById('error-banner').style.display = 'none';
     document.getElementById('email-input').value = '';
     document.getElementById('pass-input').value = '';
+    const kw = document.getElementById('key-wrap');
+    const ki = document.getElementById('key-input');
+    const kh = document.getElementById('key-hint');
+    if(ki) ki.value = '';
+    if(role === 'officer') {
+      if(kw) kw.style.display = 'block';
+      if(kh) { kh.textContent = '🔐 Key: OFF-2030'; kh.style.color='#ff6b35'; kh.style.borderColor='rgba(255,107,53,.3)'; }
+    } else if(role === 'admin') {
+      if(kw) kw.style.display = 'block';
+      if(kh) { kh.textContent = '🔐 Key: ADM-2030'; kh.style.color='#a855f7'; kh.style.borderColor='rgba(168,85,247,.3)'; }
+    } else {
+      if(kw) kw.style.display = 'none';
+    }
 
     // Update ticker
     document.getElementById('ticker-dot').style.background = t.tickerColor;
@@ -653,10 +642,11 @@ async function handleSubmit() {
 async function doLogin(email, password, t) {
   // Validate access key for officer/admin
   if(currentRole === 'officer' || currentRole === 'admin') {
-    const key = document.getElementById('key-input').value.trim();
-    const validKey = currentRole === 'officer' ? 'OFF-2030' : 'ADM-2030';
-    if(!key) { showError('Access key is required'); return; }
-    if(key !== validKey) { showError('Invalid access key. Contact your supervisor.'); return; }
+    const ki = document.getElementById('key-input');
+    const key = ki ? ki.value.trim() : '';
+    const valid = currentRole === 'officer' ? 'OFF-2030' : 'ADM-2030';
+    if(!key) { throw new Error('Access key is required for ' + currentRole + ' login'); }
+    if(key !== valid) { throw new Error('Invalid access key. Please check with your supervisor.'); }
   }
   const res = await fetch(`${API}${t.endpoint}`, {
     method:'POST', headers:{'Content-Type':'application/json'},
