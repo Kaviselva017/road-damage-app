@@ -158,37 +158,200 @@ nav{display:flex;align-items:center;justify-content:space-between;padding:1rem 1
 .empty-state{text-align:center;padding:3rem 1rem;color:var(--muted);}
 .empty-state .empty-icon{font-size:3rem;margin-bottom:.8rem;}
 
-    /* Animated background */
-    .bg-canvas{position:fixed;inset:0;z-index:0;pointer-events:none;}
-    body>*:not(.bg-canvas){position:relative;z-index:1;}
-    @keyframes floatUp{0%{transform:translateY(0) scale(1);opacity:0.7}100%{transform:translateY(-100vh) scale(0.5);opacity:0}}
-    .road-particle{position:fixed;border-radius:50%;pointer-events:none;z-index:0;animation:floatUp linear infinite;}
+    /* ── ROAD ANIMATION BACKGROUND ── */
+    #road-bg{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden;background:var(--bg);}
+    .road-lane{position:absolute;bottom:0;left:0;right:0;}
+    body>*:not(#road-bg){position:relative;z-index:1;}
+    @keyframes driveRight{from{transform:translateX(-200px)}to{transform:translateX(110vw)}}
+    @keyframes driveLeft{from{transform:translateX(110vw)}to{transform:translateX(-200px)}}
+    @keyframes floatParticle{0%{transform:translateY(0);opacity:.6}100%{transform:translateY(-100vh);opacity:0}}
 
-</style>
+    </style>
 </head>
 <body>
-<canvas class="bg-canvas" id="bg-canvas"></canvas>
+<div id="road-bg">
+  <canvas id="road-canvas" style="width:100%;height:100%"></canvas>
+</div>
 <script>
 (function(){
-  const c=document.getElementById('bg-canvas');
-  if(!c)return;
-  const ctx=c.getContext('2d');
-  let W,H,particles=[];
-  function resize(){W=c.width=innerWidth;H=c.height=innerHeight;}
-  resize();window.addEventListener('resize',resize);
-  function mkP(){return{x:Math.random()*W,y:H+10,r:Math.random()*2+1,speed:Math.random()*0.5+0.3,color:`hsla(${Math.random()*60+160},80%,60%,${Math.random()*0.4+0.1})`};}
-  for(let i=0;i<60;i++)particles.push(mkP());
-  function draw(){
-    ctx.clearRect(0,0,W,H);
-    particles.forEach(p=>{
-      p.y-=p.speed;
-      if(p.y<-10){Object.assign(p,mkP());p.y=H+10;}
-      ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);
-      ctx.fillStyle=p.color;ctx.fill();
-    });
-    requestAnimationFrame(draw);
+  const canvas = document.getElementById('road-canvas');
+  if(!canvas) return;
+  const ctx = canvas.getContext('2d');
+  let W, H;
+
+  function resize() {
+    W = canvas.width = window.innerWidth;
+    H = canvas.height = window.innerHeight;
   }
-  draw();
+  resize();
+  window.addEventListener('resize', resize);
+
+  // Road lanes
+  const LANE_Y = [0.65, 0.72, 0.79, 0.86]; // % of height
+  const COLORS = { bg: '#0a0a0f', road: '#111318', lane: 'rgba(255,200,0,0.15)', glow: 'rgba(0,245,196,0.08)' };
+
+  // Vehicle types
+  function mkVehicle(lane, dir) {
+    const colors = ['#00f5c4','#f5a623','#a855f7','#3b82f6','#ef4444','#10b981'];
+    const types = [
+      {w:40,h:16,name:'car'},
+      {w:70,h:18,name:'truck'},
+      {w:28,h:12,name:'bike'},
+      {w:55,h:17,name:'van'},
+    ];
+    const t = types[Math.floor(Math.random()*types.length)];
+    return {
+      x: dir===1 ? -100 : W+100,
+      y: H * LANE_Y[lane] - t.h/2,
+      w: t.w, h: t.h,
+      speed: (Math.random()*1.5+0.8) * dir,
+      color: colors[Math.floor(Math.random()*colors.length)],
+      type: t.name,
+      headlight: dir===1,
+      lane, dir,
+      active: true
+    };
+  }
+
+  let vehicles = [];
+  // Seed initial vehicles
+  LANE_Y.forEach((_, i) => {
+    for(let j=0;j<2;j++){
+      const v = mkVehicle(i, i%2===0?1:-1);
+      v.x = Math.random() * W;
+      vehicles.push(v);
+    }
+  });
+
+  // Particle dots
+  let particles = [];
+  for(let i=0;i<40;i++){
+    particles.push({x:Math.random()*W, y:Math.random()*H, r:Math.random()*1.5+0.3, speed:Math.random()*0.4+0.1, color:`hsla(${160+Math.random()*60},70%,60%,${Math.random()*0.3+0.05})`});
+  }
+
+  function drawVehicle(v) {
+    const r = 3;
+    ctx.save();
+    ctx.translate(v.x, v.y);
+    if(v.dir===-1) { ctx.scale(-1,1); ctx.translate(-v.w,0); }
+
+    // Body
+    ctx.beginPath();
+    ctx.roundRect(0, 2, v.w, v.h-4, r);
+    ctx.fillStyle = v.color + '22';
+    ctx.strokeStyle = v.color;
+    ctx.lineWidth = 1;
+    ctx.fill();
+    ctx.stroke();
+
+    // Roof (car/van)
+    if(v.type!=='bike'&&v.type!=='truck'){
+      ctx.beginPath();
+      ctx.roundRect(v.w*0.2, 0, v.w*0.5, v.h*0.5, 2);
+      ctx.fillStyle = v.color + '33';
+      ctx.fill();
+      ctx.strokeStyle = v.color + '88';
+      ctx.stroke();
+    }
+
+    // Windows
+    if(v.type==='car'||v.type==='van'){
+      ctx.fillStyle = 'rgba(150,220,255,0.25)';
+      ctx.fillRect(v.w*0.22, 1, v.w*0.2, v.h*0.4);
+      ctx.fillRect(v.w*0.46, 1, v.w*0.2, v.h*0.4);
+    }
+
+    // Headlights
+    const hx = v.type==='bike' ? v.w-5 : v.w-8;
+    ctx.beginPath();
+    ctx.arc(hx, v.h/2, 2.5, 0, Math.PI*2);
+    ctx.fillStyle = '#fffde7';
+    ctx.shadowColor = '#fff9c4';
+    ctx.shadowBlur = 8;
+    ctx.fill();
+    ctx.shadowBlur = 0;
+
+    // Taillights
+    ctx.beginPath();
+    ctx.arc(5, v.h/2, 2, 0, Math.PI*2);
+    ctx.fillStyle = '#ff1744';
+    ctx.shadowColor = '#ff1744';
+    ctx.shadowBlur = 6;
+    ctx.fill();
+    ctx.shadowBlur = 0;
+
+    // Wheels
+    [v.w*0.15, v.w*0.75].forEach(wx=>{
+      ctx.beginPath();
+      ctx.arc(wx, v.h, 3, 0, Math.PI*2);
+      ctx.fillStyle = '#333';
+      ctx.fill();
+      ctx.strokeStyle = '#666';
+      ctx.lineWidth = 0.5;
+      ctx.stroke();
+    });
+
+    ctx.restore();
+  }
+
+  let last = 0;
+  function animate(ts) {
+    const dt = Math.min((ts-last)/16, 3); last=ts;
+    ctx.clearRect(0,0,W,H);
+
+    // Background
+    ctx.fillStyle = COLORS.bg;
+    ctx.fillRect(0,0,W,H);
+
+    // Road surface
+    LANE_Y.forEach((ly,i)=>{
+      const y = H*ly;
+      ctx.fillStyle = 'rgba(20,22,30,0.4)';
+      ctx.fillRect(0, y-20, W, 45);
+      // Lane markings
+      ctx.setLineDash([20,15]);
+      ctx.strokeStyle = 'rgba(255,200,0,0.12)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(0, y+5); ctx.lineTo(W, y+5);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    });
+
+    // Particles
+    particles.forEach(p=>{
+      p.y -= p.speed*dt;
+      if(p.y < -5){ p.y=H+5; p.x=Math.random()*W; }
+      ctx.beginPath();
+      ctx.arc(p.x,p.y,p.r,0,Math.PI*2);
+      ctx.fillStyle=p.color;
+      ctx.fill();
+    });
+
+    // Vehicles
+    vehicles.forEach(v=>{
+      v.x += v.speed * dt;
+      // Glow trail
+      ctx.save();
+      ctx.globalAlpha = 0.15;
+      ctx.fillStyle = v.color;
+      ctx.fillRect(v.dir===1 ? v.x-20 : v.x+v.w, v.y+v.h/2-2, 20, 4);
+      ctx.restore();
+      drawVehicle(v);
+      // Reset when off screen
+      if(v.dir===1 && v.x > W+150) { Object.assign(v, mkVehicle(v.lane,1)); }
+      if(v.dir===-1 && v.x < -150) { Object.assign(v, mkVehicle(v.lane,-1)); }
+    });
+
+    // Spawn occasionally
+    if(Math.random()<0.002 && vehicles.length < 16){
+      const lane = Math.floor(Math.random()*LANE_Y.length);
+      vehicles.push(mkVehicle(lane, Math.random()<0.5?1:-1));
+    }
+
+    requestAnimationFrame(animate);
+  }
+  requestAnimationFrame(animate);
 })();
 </script>
 
@@ -254,7 +417,7 @@ nav{display:flex;align-items:center;justify-content:space-between;padding:1rem 1
       <button class="btn-capture secondary" onclick="triggerGallery(event)">🖼 Gallery</button>
     </div>
   </div>
-  <input type="file" id="file-input" accept="image/*" onchange="handleFile(event)"/>
+  <input type="file" id="file-input" accept="image/*" capture="environment" onchange="handleFile(event)"/>
   <div class="gps-card">
     <div class="gps-icon">📍</div>
     <div class="gps-info">
@@ -422,32 +585,34 @@ function showAreaBadge(area){
 function initMiniMap(lat,lng){
   if(miniMap){miniMap.remove();}
   document.getElementById('mini-map').innerHTML='';
-  miniMap=L.map('mini-map',{zoomControl:true,attributionControl:false}).setView([lat,lng],16);
+  miniMap=L.map('mini-map',{zoomControl:false,attributionControl:false}).setView([lat,lng],16);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(miniMap);
   miniMarker=L.circleMarker([lat,lng],{radius:10,fillColor:'#f5a623',color:'#fff',weight:2,fillOpacity:.9}).addTo(miniMap);
-  // Allow manual location by clicking the map
-  miniMap.on('click', function(e){
-    const {lat,lng} = e.latlng;
-    if(miniMarker) miniMarker.setLatLng([lat,lng]);
-    currentLat=lat; currentLng=lng;
-    document.getElementById('gps-text').textContent=lat.toFixed(6)+', '+lng.toFixed(6);
+  // Click to set manual location
+  miniMap.off('click');
+  miniMap.on('click',function(e){
+    const la=e.latlng.lat,ln=e.latlng.lng;
+    if(miniMarker)miniMarker.setLatLng([la,ln]);
+    currentLat=la;currentLng=ln;
+    document.getElementById('gps-text').textContent=la.toFixed(6)+', '+ln.toFixed(6);
     document.getElementById('gps-status-text').textContent='Manual ✓';
     document.getElementById('gps-dot').className='gps-dot active';
-    // Reverse geocode
-    fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`)
+    fetch('https://nominatim.openstreetmap.org/reverse?lat='+la+'&lon='+ln+'&format=json')
       .then(r=>r.json()).then(d=>{
-        const addr=d.display_name||'';
-        document.getElementById('gps-addr').textContent=addr.substring(0,60)+'...';
-        const area=getAreaType(addr);
-        showAreaBadge(area);
+        document.getElementById('gps-addr').textContent=(d.display_name||'').substring(0,60);
+        showAreaBadge(getAreaType(d.display_name||''));
       }).catch(()=>{});
   });
-  // Add tip
-  const tip=document.createElement('div');
-  tip.style.cssText='position:absolute;bottom:8px;right:8px;background:rgba(0,0,0,0.7);color:#fff;font-size:0.65rem;padding:3px 7px;border-radius:4px;z-index:999;pointer-events:none';
-  tip.textContent='👆 Tap map to set location manually';
-  document.getElementById('mini-map').appendChild(tip);
-  setTimeout(()=>tip.remove(), 4000);
+  // Add tip overlay
+  setTimeout(()=>{
+    const tip=document.createElement('div');
+    tip.style='position:absolute;bottom:8px;right:8px;z-index:999;background:rgba(0,0,0,.75);color:#fff;font-size:.62rem;padding:3px 8px;border-radius:4px;pointer-events:none';
+    tip.textContent='👆 Tap to pin location';
+    const mapEl=document.getElementById('mini-map');
+    mapEl.style.position='relative';
+    mapEl.appendChild(tip);
+    setTimeout(()=>{try{tip.remove()}catch(e){}},4000);
+  },500);
 }
 
 function triggerCapture(){if(selectedFile)return;document.getElementById('file-input').setAttribute('capture','environment');document.getElementById('file-input').click();}

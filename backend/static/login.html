@@ -383,13 +383,15 @@ html, body {
   .form-glass { padding: 1.5rem; }
 }
 
-    .passkey-field{display:none;margin-top:.8rem;}
-    .passkey-field.show{display:block;animation:fadeDown 0.3s ease;}
-    .passkey-hint{font-size:.65rem;color:var(--muted);margin-top:.3rem;padding:.3rem .6rem;border-radius:4px;border-left:2px solid;}
-    .officer-theme .passkey-hint{border-color:var(--officer-a);color:var(--officer-a);}
-    .admin-theme .passkey-hint{border-color:var(--admin-a);color:var(--admin-a);}
+    /* Passkey field */
+    .passkey-wrap { display:none; margin-top:.8rem; animation: fadeDown .3s ease; }
+    .passkey-wrap.visible { display:block; }
+    .key-hint { font-size:.65rem; margin-top:.35rem; padding:.3rem .7rem; border-radius:6px; font-weight:600; }
+    .officer-theme .key-hint { background:rgba(255,107,53,.08); color:#ff6b35; border:1px solid rgba(255,107,53,.2); }
+    .admin-theme .key-hint { background:rgba(168,85,247,.08); color:#a855f7; border:1px solid rgba(168,85,247,.2); }
+    @keyframes fadeDown { from{opacity:0;transform:translateY(-10px)} to{opacity:1;transform:translateY(0)} }
 
-</style>
+    </style>
 </head>
 <body>
 
@@ -473,16 +475,6 @@ html, body {
         </div>
       </div>
 
-      <!-- Access Key for Officer/Admin -->
-      <div class="field-group passkey-field" id="passkey-field">
-        <label class="field-label">Access Key</label>
-        <div class="field-input-wrap">
-          <span class="field-icon">🛡</span>
-          <input class="field-input" id="key-input" type="password" placeholder="Enter access key" onkeydown="if(event.key==='Enter')handleSubmit()"/>
-        </div>
-        <div class="passkey-hint" id="passkey-hint"></div>
-      </div>
-
       <button class="btn-submit" id="submit-btn" onclick="handleSubmit()">
         Enter Portal
       </button>
@@ -528,8 +520,6 @@ const themes = {
     redirectUrl: '/static/dashboard.html',
     endpoint: '/auth/officer/login',
     tickerColor: '#ff6b35',
-    passkey: 'OFF-2030',
-    passkeyHint: '🔐 Officer key: OFF-2030',
   },
   admin: {
     color: '#a855f7',
@@ -541,8 +531,6 @@ const themes = {
     redirectUrl: '/admin',
     endpoint: '/auth/officer/login',
     tickerColor: '#a855f7',
-    passkey: 'ADM-2030',
-    passkeyHint: '🔐 Admin key: ADM-2030',
   }
 };
 
@@ -550,14 +538,18 @@ function selectRole(role) {
   currentRole = role;
   isRegisterMode = false;
   // Show passkey for officer/admin
-  const t = themes[role];
-  const pkField = document.getElementById('passkey-field');
-  const pkHint = document.getElementById('passkey-hint');
-  if(t.passkey){
-    pkField.classList.add('show');
-    pkHint.textContent = t.passkeyHint;
+  const pkWrap = document.getElementById('passkey-wrap');
+  const pkHint = document.getElementById('key-hint');
+  if(role === 'officer') {
+    pkWrap.classList.add('visible');
+    pkHint.textContent = '🔐 Officer key: OFF-2030';
+    document.getElementById('key-input').value = '';
+  } else if(role === 'admin') {
+    pkWrap.classList.add('visible');
+    pkHint.textContent = '🔐 Admin key: ADM-2030';
+    document.getElementById('key-input').value = '';
   } else {
-    pkField.classList.remove('show');
+    pkWrap.classList.remove('visible');
     document.getElementById('key-input').value = '';
   }
 
@@ -659,11 +651,12 @@ async function handleSubmit() {
 }
 
 async function doLogin(email, password, t) {
-  // Validate passkey for officer/admin
-  if(t.passkey){
+  // Validate access key for officer/admin
+  if(currentRole === 'officer' || currentRole === 'admin') {
     const key = document.getElementById('key-input').value.trim();
-    if(!key){ showError('Access key is required for '+currentRole+' login'); return; }
-    if(key !== t.passkey){ showError('Invalid access key. Please check your credentials.'); return; }
+    const validKey = currentRole === 'officer' ? 'OFF-2030' : 'ADM-2030';
+    if(!key) { showError('Access key is required'); return; }
+    if(key !== validKey) { showError('Invalid access key. Contact your supervisor.'); return; }
   }
   const res = await fetch(`${API}${t.endpoint}`, {
     method:'POST', headers:{'Content-Type':'application/json'},
