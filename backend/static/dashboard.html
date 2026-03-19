@@ -19,7 +19,7 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;hei
 .btn-sm{background:transparent;border:1px solid var(--border);color:var(--muted);padding:.3rem .7rem;border-radius:6px;font-family:inherit;font-size:.78rem;cursor:pointer;transition:all .2s;}
 .btn-sm:hover{border-color:var(--accent);color:var(--accent);}
 .btn-sm.active{background:var(--accent);border-color:var(--accent);color:#000;font-weight:700;}
-.main-layout{display:flex;flex:1;overflow:hidden;position:relative;}
+.main-layout{display:flex;flex:1;overflow:hidden;}
 /* SIDEBAR */
 .sidebar{width:340px;flex-shrink:0;display:flex;flex-direction:column;border-right:1px solid var(--border);overflow:hidden;}
 .sidebar-header{padding:.7rem;border-bottom:1px solid var(--border);flex-shrink:0;}
@@ -81,8 +81,8 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;hei
 .legend-item{display:flex;align-items:center;gap:.4rem;margin-bottom:.2rem;}
 .legend-dot{width:10px;height:10px;border-radius:50%;}
 /* DETAIL PANEL */
-.detail-panel{width:0;flex-shrink:0;background:var(--surface);border-left:1px solid var(--border);overflow-y:auto;overflow-x:hidden;transition:width .3s;z-index:5;}
-.detail-panel.open{width:390px;}
+.detail-panel{position:absolute;top:0;right:0;bottom:0;width:390px;background:var(--surface);border-left:1px solid var(--border);overflow-y:auto;transform:translateX(100%);transition:transform .3s;z-index:20;}
+.detail-panel.open{transform:translateX(0);}
 .detail-panel::-webkit-scrollbar{width:3px;}
 .detail-panel::-webkit-scrollbar-thumb{background:var(--border);}
 .dp-header{padding:.8rem 1rem;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;background:var(--surface);z-index:1;}
@@ -181,25 +181,6 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;hei
 .spinner{display:inline-block;width:14px;height:14px;border:2px solid rgba(0,0,0,.3);border-top-color:#000;border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle;margin-right:4px;}
 @keyframes spin{to{transform:rotate(360deg)}}
 .no-items{text-align:center;padding:2rem 1rem;color:var(--muted);font-size:.82rem;}
-
-/* ── Zone Queue ── */
-.zone-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:.7rem .8rem;margin-bottom:.5rem;}
-.zone-card-header{display:flex;align-items:center;gap:.5rem;margin-bottom:.5rem;}
-.zone-badge{font-size:.7rem;font-weight:800;padding:.15rem .5rem;border-radius:20px;background:rgba(245,166,35,.15);color:var(--accent);}
-.zone-officer-name{font-size:.85rem;font-weight:700;flex:1;}
-.zone-workload-bar{height:5px;background:var(--border);border-radius:3px;margin-bottom:.4rem;overflow:hidden;}
-.zone-workload-fill{height:100%;border-radius:3px;transition:width .5s;}
-.zone-mini-queue{display:flex;flex-direction:column;gap:.2rem;}
-.zmq-item{display:flex;align-items:center;gap:.4rem;font-size:.68rem;padding:.2rem .3rem;border-radius:5px;background:rgba(255,255,255,.02);}
-.zmq-sev{width:6px;height:6px;border-radius:50%;flex-shrink:0;}
-.zmq-id{color:var(--accent);font-weight:700;font-family:monospace;}
-.zmq-addr{color:var(--muted);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-.zmq-score{color:var(--accent2);font-weight:700;}
-.reassign-btn{background:none;border:1px solid var(--border);color:var(--muted);font-size:.6rem;padding:.15rem .4rem;border-radius:4px;cursor:pointer;margin-left:auto;}
-.reassign-btn:hover{border-color:var(--accent);color:var(--accent);}
-/* Realtime badge */
-.rt-badge{display:inline-flex;align-items:center;gap:3px;font-size:.65rem;font-weight:700;padding:.15rem .5rem;border-radius:20px;background:rgba(62,207,178,.1);color:var(--accent2);border:1px solid rgba(62,207,178,.2);}
-.rt-dot{width:5px;height:5px;border-radius:50%;background:var(--accent2);animation:blink 1s infinite;}
 </style>
 </head>
 <body>
@@ -248,12 +229,10 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;hei
     <div class="sidebar-tabs">
       <button class="tab-btn active" id="tab-complaints" onclick="switchTab('complaints')">🗂 Complaints</button>
       <button class="tab-btn" id="tab-priority" onclick="switchTab('priority')">⚡ Priority</button>
-      <button class="tab-btn" id="tab-queue" onclick="switchTab('queue')">🏘 Queue</button>
       <button class="tab-btn" id="tab-citizens" onclick="switchTab('citizens')">👥 Citizens</button>
     </div>
     <div class="tab-content" id="content-complaints"><div class="complaints-list" id="complaints-list"><div class="no-items">Loading...</div></div></div>
     <div class="tab-content" id="content-priority" style="display:none"><div class="priority-list" id="priority-list"><div class="no-items">Loading priority queue...</div></div></div>
-    <div class="tab-content" id="content-queue" style="display:none"><div id="zone-queue-list" style="padding:.4rem"><div class="no-items">Loading zone queue...</div></div></div>
     <div class="tab-content" id="content-citizens" style="display:none"><div class="citizens-list" id="citizens-list"><div class="no-items">Loading citizens...</div></div></div>
   </div>
   <div class="map-area" id="map-area">
@@ -264,43 +243,33 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;hei
       <button class="map-btn" onclick="loadPriorityData()">⚡ Priority</button>
     </div>
     <div class="map-legend">
-      <div class="map-legend-title">MAP LEGEND</div>
-      <div class="legend-item"><div class="legend-dot" style="background:#ef4444"></div>High Severity</div>
+      <div class="map-legend-title">Map Legend</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#e05c5c"></div>High Severity</div>
       <div class="legend-item"><div class="legend-dot" style="background:#f5a623"></div>Medium</div>
-      <div class="legend-item"><div class="legend-dot" style="background:#10b981"></div>Low</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#3ecfb2"></div>Low</div>
       <div class="legend-item"><div class="legend-dot" style="background:#4ade80"></div>Completed</div>
     </div>
-  </div>
-  <!-- Detail panel is OUTSIDE map-area so it pushes map, not overlaps -->
-  <div class="detail-panel" id="detail-panel">
-    <div class="dp-header">
-      <div id="dp-title" style="font-family:'Syne',sans-serif;font-size:1rem;font-weight:800;color:var(--accent)">—</div>
-      <button class="dp-close" onclick="closeDetail()">✕</button>
+    <div class="detail-panel" id="detail-panel">
+      <div class="dp-header">
+        <div id="dp-title" style="font-family:'Syne',sans-serif;font-size:1rem;font-weight:800;color:var(--accent)">—</div>
+        <button class="dp-close" onclick="closeDetail()">✕</button>
+      </div>
+      <div class="dp-body" id="dp-body"></div>
     </div>
-    <div class="dp-body" id="dp-body"></div>
   </div>
 </div>
 <input type="file" id="after-file-input" accept="image/*" style="display:none" onchange="handleAfterPhoto(event)"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-const API=(()=>{const p=location.port;if(p==='8443')return`https://${location.hostname}:8443/api`;if(p==='8000')return`http://${location.hostname}:8000/api`;return`${location.protocol}//${location.host}/api`;})();
+const API=(window.location.hostname==='localhost'?'http://localhost:8000':window.location.origin)+'/api';
 let token=localStorage.getItem('officer_token');
 let officerName=localStorage.getItem('officer_name');
 let allComplaints=[],citizenData={},priorityData=[],budgetData=[];
 let currentFilter='all',currentTab='complaints';
 let leafletMap,markers=[],selectedComplaintId=null,afterPhotoComplaintId=null;
-
-// Robust date parser - handles SQLite "2026-03-14 02:30:00" and ISO formats
-function parseDate(raw){
-  if(!raw||raw==='None'||raw==='null')return null;
-  const d=new Date(String(raw).trim().replace(' ','T'));
-  return(d&&!isNaN(d.getTime()))?d:null;
-}
-function fmtDate(raw){const d=parseDate(raw);return d?d.toLocaleDateString():'--';}
-function fmtTime(raw){const d=parseDate(raw);return d?d.toLocaleTimeString():'--';}
 const afterPhotos={};
 
-const AREA_LABELS={'hospital':'[H] Hospital Zone','school':'[S] School Zone','highway':'[R] Highway','market':'[M] Market','industrial':'[I] Industrial','residential':'[R] Residential','general':'[G] General'};
+const AREA_LABELS={'hospital':'🏥 Hospital Zone','school':'🏫 School Zone','highway':'🛣️ Highway','market':'🏪 Market','industrial':'🏭 Industrial','residential':'🏘️ Residential','general':'📍 General'};
 
 function init(){
   if(token){
@@ -336,22 +305,14 @@ async function doLogin(){
 
 function logout(){token=null;localStorage.removeItem('officer_token');localStorage.removeItem('officer_name');document.getElementById('login-overlay').style.display='flex';}
 
-let lastMapHash='';
-let zoneQueueData=[];
 async function loadComplaints(silent=false){
   try{
     const res=await fetch(`${API}/complaints/`,{headers:{Authorization:`Bearer ${token}`}});
     if(!res.ok)return;
     const data=await res.json();
-    const listHash=JSON.stringify(data.map(c=>c.complaint_id+c.status+c.priority_score));
-    const mapHash=JSON.stringify(data.map(c=>c.complaint_id+c.latitude+c.longitude+c.severity+c.status));
-    const changed=listHash!==JSON.stringify(allComplaints.map(c=>c.complaint_id+c.status+c.priority_score));
-    if(!silent&&allComplaints.length>0&&data.length>allComplaints.length){showToast('New: '+data[0].complaint_id);}
+    if(!silent&&allComplaints.length>0&&data.length>allComplaints.length){showToast(`🆕 New: ${data[0].complaint_id} — ${(data[0].severity||'').toUpperCase()}`);}
     allComplaints=data;
-    updateStats();
-    if(changed||!silent)renderList();
-    if(mapHash!==lastMapHash){lastMapHash=mapHash;renderMapMarkers();}
-    buildCitizenData();
+    updateStats();renderList();renderMapMarkers();buildCitizenData();
   }catch(e){console.error(e);}
 }
 
@@ -385,43 +346,33 @@ function updateStats(){
 }
 
 function getFiltered(){
-  let list;
-  if(currentFilter==='all') list=[...allComplaints];
-  else if(['high','medium','low'].includes(currentFilter)) list=allComplaints.filter(c=>c.severity===currentFilter);
-  else list=allComplaints.filter(c=>c.status===currentFilter||(currentFilter==='pending'&&c.status==='assigned'));
-  // Sort by priority score descending (highest first)
-  return list.sort((a,b)=>(b.priority_score||0)-(a.priority_score||0));
+  if(currentFilter==='all')return allComplaints;
+  if(['high','medium','low'].includes(currentFilter))return allComplaints.filter(c=>c.severity===currentFilter);
+  return allComplaints.filter(c=>c.status===currentFilter||(currentFilter==='pending'&&c.status==='assigned'));
 }
 
-const AREA_TEXT={'hospital':'Hospital Zone','school':'School Zone','highway':'Highway','market':'Market Area','industrial':'Industrial','residential':'Residential','general':'General'};
 function renderList(){
   const filtered=getFiltered();
   const el=document.getElementById('complaints-list');
   if(!filtered.length){el.innerHTML='<div class="no-items">No complaints found</div>';return;}
-  const scroller=el.closest('.tab-content')||el.parentElement;
-  const scrollTop=scroller?scroller.scrollTop:0;
-  const html=filtered.map(c=>{
+  el.innerHTML=filtered.map(c=>{
     const ps=c.priority_score||0;
     const psCls=ps>=60?'badge-ps-high':ps>=35?'badge-ps-med':'badge-ps-low';
     const area=c.area_type||'residential';
-    const areaText=AREA_TEXT[area]||area;
-    const dateStr=fmtDate(c.created_at);
     return `<div class="c-card ${c.severity||'medium'} ${selectedComplaintId===c.complaint_id?'selected':''}" onclick="selectComplaint('${c.complaint_id}')">
       <div class="c-row1">
         <div class="c-id">${c.complaint_id}</div>
         <div class="c-status st-${c.status||'pending'}">${(c.status||'pending').replace('_',' ')}</div>
       </div>
-      <div class="c-row2"><strong>${(c.damage_type||'').replace('_',' ')}</strong> - ${(c.severity||'').toUpperCase()} - ${dateStr}</div>
-      ${c.citizen_name?`<div style="font-size:.7rem;color:var(--accent2);margin-top:2px">${c.citizen_name}</div>`:''}
+      <div class="c-row2"><strong>${(c.damage_type||'').replace('_',' ')}</strong> · ${(c.severity||'').toUpperCase()} · ${new Date(c.created_at).toLocaleDateString()}</div>
+      ${c.citizen_name?`<div style="font-size:.7rem;color:var(--accent2);margin-top:2px">👤 ${c.citizen_name}</div>`:''}
       <div class="c-badges">
         <span class="c-badge ${psCls}">P${ps}</span>
-        <span class="c-badge badge-area">${areaText}</span>
-        ${(c.report_count||1)>1?`<span class="c-badge badge-dup">x${c.report_count} reports</span>`:''}
+        <span class="c-badge badge-area">${AREA_LABELS[area]||area}</span>
+        ${(c.report_count||1)>1?`<span class="c-badge badge-dup">×${c.report_count} reports</span>`:''}
       </div>
     </div>`;
   }).join('');
-  if(el.innerHTML!==html) el.innerHTML=html;
-  if(scroller&&scrollTop) requestAnimationFrame(()=>{scroller.scrollTop=scrollTop;});
 }
 
 function renderPriorityList(){
@@ -431,16 +382,12 @@ function renderPriorityList(){
   html+=priorityData.slice(0,10).map((c,i)=>{
     const ps=c.priority_score||0;
     const col=ps>=60?'var(--danger)':ps>=35?'var(--accent)':'var(--accent2)';
-    // Show if score was boosted by time-of-day
-    const now=new Date();const h=now.getHours();
-    const isPeak=(h>=8&&h<=10)||(h>=17&&h<=20);
-    const peakBadge=isPeak?'<span style="font-size:.58rem;background:rgba(239,68,68,.15);color:#fca5a5;padding:.1rem .3rem;border-radius:4px;margin-left:3px">PEAK</span>':'';
     return `<div class="pri-card" onclick="selectComplaint('${c.complaint_id}')">
       <div style="display:flex;align-items:center;justify-content:space-between">
         <div style="display:flex;align-items:center;gap:.5rem">
           <span class="pri-rank">#${i+1}</span>
           <div><div style="font-size:.78rem;font-weight:700;color:var(--accent)">${c.complaint_id}</div>
-          <div style="font-size:.7rem;color:var(--muted)">${AREA_TEXT[c.area_type]||c.area_type||'—'} · ${(c.severity||'').toUpperCase()}</div></div>
+          <div style="font-size:.7rem;color:var(--muted)">${AREA_LABELS[c.area_type]||c.area_type||'—'} · ${(c.severity||'').toUpperCase()}</div></div>
         </div>
         <span class="pri-score" style="color:${col}">P${ps}</span>
       </div>
@@ -492,28 +439,14 @@ function switchTab(tab){
   currentTab=tab;
   document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
   document.getElementById(`tab-${tab}`).classList.add('active');
-  document.querySelectorAll('.tab-content').forEach(c=>c.style.display='none');
-  document.getElementById(`content-${tab}`).style.display='flex';
-  document.getElementById(`content-${tab}`).style.flexDirection='column';
+  ['complaints','priority','citizens'].forEach(t=>{document.getElementById(`content-${t}`).style.display=t===tab?'block':'none';});
   if(tab==='citizens')renderCitizens();
-  if(tab==='queue')loadZoneQueue();
+  if(tab==='priority')renderPriorityList();
 }
 
 function initLeafletMap(){
   leafletMap=L.map('map',{zoomControl:true,attributionControl:false}).setView([11.0168,76.9558],13);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
-    maxZoom:19,
-    attribution:'© OpenStreetMap',
-    crossOrigin:true
-  }).addTo(leafletMap);
-  // Event delegation for popup buttons — avoids scope issues with inline onclick
-  document.getElementById('map').addEventListener('click',function(e){
-    const btn=e.target.closest('.popup-view-btn');
-    if(btn){
-      const id=btn.getAttribute('data-id');
-      if(id) selectComplaint(id);
-    }
-  });
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(leafletMap);
 }
 
 function getSeverityColor(c){
@@ -532,14 +465,14 @@ function renderMapMarkers(){
     const ps=c.priority_score||0;
     const radius=c.severity==='high'?14:c.severity==='medium'?11:8;
     const m=L.circleMarker([c.latitude,c.longitude],{radius,fillColor:col,color:'#fff',weight:2,fillOpacity:.88})
-      .bindPopup(`<div style="min-width:160px"><div style="color:#f5a623;font-weight:700;margin-bottom:6px">${c.complaint_id}</div>
-        <div style="font-size:12px;margin-bottom:3px">${(c.damage_type||'').replace('_',' ')} - <span style="color:${col}">${(c.severity||'').toUpperCase()}</span></div>
-        ${AREA_TEXT[c.area_type]?`<div style="font-size:11px;color:#3ecfb2;margin-bottom:3px">${AREA_TEXT[c.area_type]}</div>`:''}
-        <div style="font-size:11px;margin-bottom:6px">Priority: P${ps}</div>
-        ${c.citizen_name?`<div style="font-size:11px;color:#3ecfb2;margin-bottom:6px">${c.citizen_name}</div>`:''}
-        <button class="popup-view-btn" data-id="${c.complaint_id}" style="background:#f5a623;color:#000;border:none;border-radius:4px;padding:5px 12px;cursor:pointer;font-size:12px;font-weight:700;width:100%">View Details</button></div>`)
+      .bindPopup(`<div style="min-width:160px"><div style="color:#f5a623;font-weight:700;margin-bottom:4px">${c.complaint_id}</div>
+        <div style="font-size:12px;margin-bottom:3px">${(c.damage_type||'').replace('_',' ')} · <span style="color:${col}">${(c.severity||'').toUpperCase()}</span></div>
+        ${AREA_LABELS[c.area_type]?`<div style="font-size:11px;color:#3ecfb2;margin-bottom:3px">${AREA_LABELS[c.area_type]}</div>`:''}
+        <div style="font-size:11px;margin-bottom:5px">Priority: P${ps}</div>
+        ${c.citizen_name?`<div style="font-size:11px;color:#3ecfb2;margin-bottom:5px">👤 ${c.citizen_name}</div>`:''}
+        <button onclick="selectComplaint('${c.complaint_id}')" style="background:#f5a623;color:#000;border:none;border-radius:4px;padding:3px 9px;cursor:pointer;font-size:11px;font-weight:700">View Details</button></div>`)
       .addTo(leafletMap);
-    m.on('click',()=>{leafletMap.closePopup();setTimeout(()=>selectComplaint(c.complaint_id),50);});
+    m.on('click',()=>selectComplaint(c.complaint_id));
     markers.push(m);
   });
 }
@@ -557,12 +490,8 @@ function goToMyLocation(){
 async function selectComplaint(id){
   selectedComplaintId=id;renderList();
   const c=allComplaints.find(x=>x.complaint_id===id);
-  if(c&&leafletMap){
-    leafletMap.closePopup();
-    leafletMap.setView([c.latitude,c.longitude],16);
-  }
+  if(c&&leafletMap){leafletMap.setView([c.latitude,c.longitude],16);}
   document.getElementById('detail-panel').classList.add('open');
-  setTimeout(()=>{if(leafletMap)leafletMap.invalidateSize();},350);
   document.getElementById('dp-title').textContent=id;
   document.getElementById('dp-body').innerHTML='<div style="color:var(--muted);text-align:center;padding:2rem">Loading...</div>';
   try{
@@ -585,7 +514,7 @@ function openFundAlloc(cid,suggested){
 }
 
 function renderDetailPanel(c,msgs=[]){
-  const BASE='http://localhost:8000';
+  const BASE=window.location.hostname==='localhost'?'http://localhost:8000':window.location.origin;
   const hasAfter=afterPhotos[c.complaint_id];
   const ps=c.priority_score||0;
   const psCls=ps>=60?'var(--danger)':ps>=35?'var(--accent)':'var(--accent2)';
@@ -595,11 +524,10 @@ function renderDetailPanel(c,msgs=[]){
   const sev=c.severity||'medium';
   const dmg=c.damage_type||'surface_damage';
   const psBreakdown={
-    'AI Severity':     {val: Math.round(c.accident_risk_score     || sev==='high'?33:sev==='medium'?20:9), max:35},
-    'Area Criticality':{val: Math.round(c.area_criticality_score  || (area==='hospital'?24:area==='school'?21:area==='highway'?19:area==='market'?15:7)), max:25},
-    'Traffic Risk':    {val: Math.round(c.traffic_density_score   || (area==='hospital'?14:area==='highway'?13:area==='market'?12:6)), max:15},
-    'Damage Impact':   {val: Math.round(c.damage_size_score       || (dmg==='pothole'?14:dmg==='multiple'?14:dmg==='crack'?9:5)), max:15},
-    'Report Density':  {val: Math.round(Math.max(0,(c.report_count||1)-1)*4), max:10},
+    'Damage Size':{val:sev==='high'?35:sev==='medium'?20:10,max:35},
+    'Area Criticality':{val:area==='hospital'?30:area==='school'?25:area==='highway'?25:area==='market'?20:10,max:30},
+    'Traffic Density':{val:area==='hospital'?20:area==='school'?18:area==='market'?18:8,max:20},
+    'Accident Risk':{val:dmg==='pothole'?15:dmg==='multiple'?14:dmg==='crack'?8:6,max:15},
   };
   
   document.getElementById('dp-body').innerHTML=`
@@ -610,7 +538,8 @@ function renderDetailPanel(c,msgs=[]){
       <div class="cib-row"><span class="label">Report Count</span><span style="color:var(--accent)">${c.report_count||1} reports</span></div>
     </div>`:''}
     <div class="area-zone-box az-${area}">
-      <div><div style="font-size:.82rem;font-weight:700">${AREA_TEXT[area]||area}</div><div style="font-size:.7rem;color:var(--muted)">Priority Zone Classification</div></div>
+      <span style="font-size:1.4rem">${area==='hospital'?'🏥':area==='school'?'🏫':area==='highway'?'🛣️':area==='market'?'🏪':'🏘️'}</span>
+      <div><div style="font-size:.82rem;font-weight:700">${AREA_LABELS[area]||area}</div><div style="font-size:.7rem;color:var(--muted)">Priority Zone Classification</div></div>
       <span style="margin-left:auto;font-family:'Syne',sans-serif;font-size:1rem;font-weight:800;color:${psCls}">P${ps}</span>
     </div>
     <div class="ba-labels"><span>Before Repair</span><span>${hasAfter?'After (drag)':'After pending'}</span></div>
@@ -620,14 +549,13 @@ function renderDetailPanel(c,msgs=[]){
       <div class="ba-slider" id="ba-slider"><div class="ba-handle">⟺</div></div>
     </div>`:`<img class="dp-img" src="${BASE}${c.image_url}"/><div class="no-after">Upload after-repair photo to enable comparison</div>`}
     ${['in_progress','completed'].includes(c.status)?`<button class="upload-after-btn" onclick="triggerAfterPhoto('${c.complaint_id}')">📸 ${hasAfter?'Update':'Upload'} After-Repair Photo</button>`:''}
-    <div id="dp-mini-map" style="height:140px;border-radius:10px;overflow:hidden;margin-bottom:.8rem;border:1px solid var(--border);background:var(--card)"></div>
     <div class="info-grid">
       <div class="info-cell"><div class="info-label">Type</div><div class="info-value">${(c.damage_type||'').replace('_',' ')}</div></div>
       <div class="info-cell"><div class="info-label">Severity</div><div class="info-value"><span class="sev-badge sev-${sev}">${sev.toUpperCase()}</span></div></div>
       <div class="info-cell"><div class="info-label">AI Confidence</div><div class="info-value">${((c.ai_confidence||0)*100).toFixed(1)}%</div></div>
-      <div class="info-cell"><div class="info-label">Reported</div><div class="info-value">${fmtDate(c.created_at)}</div></div>
+      <div class="info-cell"><div class="info-label">Reported</div><div class="info-value">${new Date(c.created_at).toLocaleDateString()}</div></div>
       ${c.allocated_fund>0?`<div class="info-cell"><div class="info-label">Budget</div><div class="info-value" style="color:#4ade80">₹${(c.allocated_fund||0).toLocaleString()}</div></div>`:''}
-      ${c.resolved_at?`<div class="info-cell"><div class="info-label">Resolved</div><div class="info-value">${fmtDate(c.resolved_at)}</div></div>`:''}
+      ${c.resolved_at?`<div class="info-cell"><div class="info-label">Resolved</div><div class="info-value">${new Date(c.resolved_at).toLocaleDateString()}</div></div>`:''}
     </div>
     <div style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:.7rem;margin-bottom:.8rem;font-size:.78rem;color:var(--muted)">${c.description||'—'}</div>
     <div class="ps-breakdown">
@@ -659,7 +587,7 @@ function renderDetailPanel(c,msgs=[]){
       <div class="msg-title">💬 Message Citizen</div>
       <div class="msg-list" id="msg-list-${c.complaint_id}">
         ${msgs.length?msgs.map(m=>`<div class="msg-bubble ${m.sender_role}">
-          <div class="msg-meta">${m.sender_name} · ${fmtTime(m.created_at)}</div>
+          <div class="msg-meta">${m.sender_name} · ${new Date(m.created_at).toLocaleTimeString()}</div>
           ${m.message}</div>`).join(''):'<div style="color:var(--muted);font-size:.78rem;text-align:center;padding:.8rem">No messages yet</div>'}
       </div>
       <div class="msg-input-row">
@@ -668,23 +596,7 @@ function renderDetailPanel(c,msgs=[]){
       </div>
     </div>`;
   if(hasAfter)initBASlider();
-  setTimeout(()=>{
-    const l=document.querySelector('.msg-list');if(l)l.scrollTop=l.scrollHeight;
-    // Init detail mini-map with Leaflet
-    const dmEl=document.getElementById('dp-mini-map');
-    if(dmEl&&c.latitude&&c.longitude){
-      dmEl.innerHTML='';
-      try{
-        if(window._dpMap){try{window._dpMap.remove();}catch(e){}}
-        window._dpMap=L.map(dmEl,{zoomControl:false,attributionControl:false,dragging:true,scrollWheelZoom:false}).setView([c.latitude,c.longitude],17);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(window._dpMap);
-        const col=c.severity==='high'?'#ef4444':c.severity==='medium'?'#f5a623':'#10b981';
-        const icon=L.divIcon({className:'',html:'<div style="width:20px;height:20px;background:'+col+';border:3px solid #fff;border-radius:50%;box-shadow:0 2px 8px rgba(0,0,0,.5)"></div>',iconSize:[20,20],iconAnchor:[10,10]});
-        L.marker([c.latitude,c.longitude],{icon}).addTo(window._dpMap);
-        setTimeout(()=>window._dpMap.invalidateSize(),150);
-      }catch(e){console.error('detail map',e);}
-    }
-  },200);
+  setTimeout(()=>{const l=document.querySelector('.msg-list');if(l)l.scrollTop=l.scrollHeight;},100);
 }
 
 async function allocateFund(cid){
@@ -708,7 +620,7 @@ async function sendMessage(complaintId){
     const msgRes=await fetch(`${API}/messages/${complaintId}`,{headers:{Authorization:`Bearer ${token}`}});
     const msgs=await msgRes.json();
     const list=document.getElementById(`msg-list-${complaintId}`);
-    if(list){list.innerHTML=msgs.map(m=>`<div class="msg-bubble ${m.sender_role}"><div class="msg-meta">${m.sender_name} · ${fmtTime(m.created_at)}</div>${m.message}</div>`).join('');list.scrollTop=list.scrollHeight;}
+    if(list){list.innerHTML=msgs.map(m=>`<div class="msg-bubble ${m.sender_role}"><div class="msg-meta">${m.sender_name} · ${new Date(m.created_at).toLocaleTimeString()}</div>${m.message}</div>`).join('');list.scrollTop=list.scrollHeight;}
     showToast('✅ Message sent to citizen!');
   }catch(e){showToast('❌ Failed to send');}
 }
@@ -754,13 +666,7 @@ function handleAfterPhoto(e){
   reader.readAsDataURL(file);
 }
 
-function closeDetail(){
-  document.getElementById('detail-panel').classList.remove('open');
-  selectedComplaintId=null;
-  renderList();
-  if(window._dpMap){try{window._dpMap.remove();}catch(e){} window._dpMap=null;}
-  setTimeout(()=>{if(leafletMap)leafletMap.invalidateSize();},350);
-}
+function closeDetail(){document.getElementById('detail-panel').classList.remove('open');selectedComplaintId=null;renderList();}
 
 function setView(view){
   const sb=document.getElementById('sidebar'),ma=document.getElementById('map-area');
@@ -773,97 +679,7 @@ function setView(view){
 }
 
 function showToast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),4000);}
-async function loadZoneQueue(){
-  const el=document.getElementById('zone-queue-list');
-  if(!el)return;
-  try{
-    const res=await fetch(`${API}/admin/queue`,{headers:{Authorization:`Bearer ${token}`}});
-    if(!res.ok){el.innerHTML='<div class="no-items">Queue unavailable</div>';return;}
-    zoneQueueData=await res.json();
-    renderZoneQueue();
-  }catch(e){el.innerHTML='<div class="no-items">Could not load queue</div>';}
-}
-
-function renderZoneQueue(){
-  const el=document.getElementById('zone-queue-list');
-  if(!el)return;
-  if(!zoneQueueData.length){el.innerHTML='<div class="no-items">No active officers</div>';return;}
-  
-  const html=zoneQueueData.map(o=>{
-    const wPct=o.workload_pct||0;
-    const wColor=wPct>=80?'var(--danger)':wPct>=50?'var(--accent)':'var(--accent2)';
-    const sevColors={high:'var(--danger)',medium:'var(--accent)',low:'var(--accent2)'};
-    return `<div class="zone-card">
-      <div class="zone-card-header">
-        <div class="zone-badge">${o.zone||'—'}</div>
-        <div class="zone-officer-name">${o.officer_name}</div>
-        <div class="rt-badge"><span class="rt-dot"></span>${o.total_active} active</div>
-      </div>
-      <div style="display:flex;gap:.3rem;margin-bottom:.4rem;font-size:.65rem">
-        <span style="color:var(--danger)">H:${o.high_priority}</span>
-        <span style="color:var(--accent)">M:${o.medium_priority}</span>
-        <span style="color:var(--accent2)">L:${o.low_priority}</span>
-        <span style="margin-left:auto;color:${wColor}">${wPct}% load</span>
-      </div>
-      <div class="zone-workload-bar"><div class="zone-workload-fill" style="width:${wPct}%;background:${wColor}"></div></div>
-      <div class="zone-mini-queue">
-        ${o.queue.length?o.queue.map(q=>`
-          <div class="zmq-item" onclick="selectComplaint('${q.complaint_id}')" style="cursor:pointer">
-            <div class="zmq-sev" style="background:${sevColors[q.severity]||'var(--muted)'}"></div>
-            <span class="zmq-id">${q.complaint_id.slice(-6)}</span>
-            <span class="zmq-addr">${q.address||'—'}</span>
-            <span class="zmq-score">P${Math.round(q.priority_score)}</span>
-            <button class="reassign-btn" onclick="event.stopPropagation();openReassignModal('${q.complaint_id}')">↔</button>
-          </div>`).join(''):'<div style="font-size:.68rem;color:var(--muted);padding:.3rem">Queue empty</div>'}
-      </div>
-    </div>`;
-  }).join('');
-  el.innerHTML=html;
-}
-
-// Reassign modal
-let reassignTarget=null;
-function openReassignModal(complaintId){
-  reassignTarget=complaintId;
-  // Build officer list
-  const officers=zoneQueueData.map(o=>`<option value="${o.officer_id}">${o.officer_name} (${o.zone}) — ${o.total_active} active</option>`).join('');
-  const modal=document.createElement('div');
-  modal.id='reassign-modal';
-  modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;z-index:9999;';
-  modal.innerHTML=`<div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:1.2rem;width:320px">
-    <div style="font-weight:700;margin-bottom:.8rem;color:var(--accent)">Reassign ${complaintId}</div>
-    <select id="reassign-select" style="width:100%;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:.5rem;font-family:inherit;margin-bottom:.8rem">
-      ${officers}
-    </select>
-    <div style="display:flex;gap:.5rem">
-      <button onclick="document.getElementById('reassign-modal').remove()" style="flex:1;background:var(--card);border:1px solid var(--border);color:var(--muted);padding:.6rem;border-radius:8px;font-family:inherit;cursor:pointer">Cancel</button>
-      <button onclick="doReassign()" style="flex:1;background:var(--accent);border:none;color:#000;padding:.6rem;border-radius:8px;font-family:inherit;font-weight:700;cursor:pointer">Reassign →</button>
-    </div>
-  </div>`;
-  document.body.appendChild(modal);
-}
-
-async function doReassign(){
-  const officerId=document.getElementById('reassign-select')?.value;
-  if(!officerId||!reassignTarget)return;
-  try{
-    const res=await fetch(`${API}/admin/complaints/${reassignTarget}/reassign`,{
-      method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},
-      body:JSON.stringify({officer_id:parseInt(officerId)})
-    });
-    if(!res.ok)throw new Error('Failed');
-    document.getElementById('reassign-modal')?.remove();
-    showToast('✅ Complaint reassigned!');
-    await loadComplaints(true);
-    await loadZoneQueue();
-  }catch(e){showToast('❌ Reassign failed');}
-}
-
-function startPolling(){
-  setInterval(()=>loadComplaints(true),10000);
-  setInterval(()=>loadPriorityData(),30000);
-  setInterval(()=>{if(currentTab==='queue')loadZoneQueue();},15000);
-}
+function startPolling(){setInterval(()=>loadComplaints(true),10000);setInterval(()=>loadPriorityData(),30000);}
 
 init();
 </script>

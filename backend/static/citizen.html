@@ -67,7 +67,7 @@ nav{display:flex;align-items:center;justify-content:space-between;padding:1rem 1
 .gps-dot{width:8px;height:8px;border-radius:50%;background:var(--muted);}
 .gps-dot.active{background:var(--accent2);box-shadow:0 0 6px var(--accent2);animation:pulse 1.5s infinite;}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
-#mini-map{height:200px;border-radius:12px;border:1px solid var(--border);margin-bottom:.8rem;overflow:hidden;}
+#mini-map{height:170px;border-radius:10px;border:1px solid var(--border);margin-bottom:1rem;overflow:hidden;}
 /* Area badge */
 .area-badge{display:inline-flex;align-items:center;gap:4px;padding:.25rem .7rem;border-radius:20px;font-size:.72rem;font-weight:700;margin-bottom:.8rem;}
 .area-hospital{background:rgba(224,92,92,.12);color:var(--danger);border:1px solid rgba(224,92,92,.25);}
@@ -105,7 +105,7 @@ nav{display:flex;align-items:center;justify-content:space-between;padding:1rem 1
 .status-in_progress{background:rgba(59,130,246,.15);color:#60a5fa;}
 .status-completed{background:rgba(34,197,94,.15);color:#4ade80;}
 .status-rejected{background:rgba(224,92,92,.15);color:var(--danger);}
-.complaint-meta{font-size:.82rem;color:var(--muted);}.complaint-addr{font-size:.75rem;color:var(--muted);margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.complaint-meta{font-size:.82rem;color:var(--muted);}
 .p-score-chip{display:inline-flex;align-items:center;gap:3px;font-size:.65rem;font-weight:700;padding:.15rem .45rem;border-radius:4px;margin-left:5px;}
 .progress-steps{display:flex;align-items:center;margin:.8rem 0 0;}
 .step{flex:1;text-align:center;position:relative;}
@@ -157,83 +157,12 @@ nav{display:flex;align-items:center;justify-content:space-between;padding:1rem 1
 #file-input{display:none;}
 .empty-state{text-align:center;padding:3rem 1rem;color:var(--muted);}
 .empty-state .empty-icon{font-size:3rem;margin-bottom:.8rem;}
-
-.dup-warning-box{background:linear-gradient(135deg,rgba(239,68,68,.15),rgba(245,158,11,.1));border:2px solid #ef4444;border-radius:16px;padding:1.2rem 1rem;margin:1rem 0;animation:dupPulse .6s ease;}
-@keyframes dupPulse{0%{transform:scale(.95);opacity:.5}100%{transform:scale(1);opacity:1}}
-.dup-icon{font-size:2.5rem;text-align:center;margin-bottom:.5rem;}
-.dup-title{font-size:1.1rem;font-weight:800;color:#ef4444;text-align:center;margin-bottom:.4rem;}
-.dup-subtitle{font-size:.82rem;color:var(--muted);text-align:center;margin-bottom:.8rem;}
-.dup-id{background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:8px;padding:.5rem .8rem;font-family:monospace;font-size:.85rem;color:#f87171;text-align:center;margin-bottom:.6rem;}
-.dup-dist{font-size:.78rem;color:var(--accent);text-align:center;margin-bottom:.8rem;}
-.dup-actions{display:flex;gap:.6rem;}
-.dup-btn-submit{flex:1;background:var(--muted);color:#fff;border:none;border-radius:10px;padding:.7rem;font-size:.85rem;font-weight:700;cursor:pointer;}
-.dup-btn-cancel{flex:1;background:linear-gradient(135deg,#ef4444,#dc2626);color:#fff;border:none;border-radius:10px;padding:.7rem;font-size:.85rem;font-weight:700;cursor:pointer;}
-
-/* ── 3D Animated Background ── */
-.road-grid{position:fixed;inset:0;z-index:0;opacity:.06;pointer-events:none;
-  background-image:linear-gradient(rgba(245,166,35,.8) 1px,transparent 1px),
-                   linear-gradient(90deg,rgba(245,166,35,.8) 1px,transparent 1px);
-  background-size:55px 55px;
-  animation:gridMove 25s linear infinite;}
-@keyframes gridMove{0%{background-position:0 0}100%{background-position:55px 55px}}
-.bg-overlay{position:fixed;inset:0;z-index:1;
-  background:radial-gradient(ellipse at 15% 40%,rgba(245,166,35,.07) 0%,transparent 55%),
-             radial-gradient(ellipse at 85% 20%,rgba(62,207,178,.06) 0%,transparent 55%),
-             radial-gradient(ellipse at 50% 90%,rgba(168,85,247,.05) 0%,transparent 55%);
-  pointer-events:none;}
-.particles{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden;}
-.particle{position:absolute;border-radius:50%;animation:floatUp linear infinite;opacity:0;}
-@keyframes floatUp{0%{opacity:0;transform:translateY(100vh) scale(0)}20%{opacity:.5}80%{opacity:.3}100%{opacity:0;transform:translateY(-10vh) scale(1.2)}}
-nav,body>.page,.user-bar{position:relative;z-index:10;}
-
-/* Glassmorphism auth card */
-#page-login .form-card, #page-register .form-card{
-  background:rgba(24,29,39,.85);
-  backdrop-filter:blur(20px);
-  -webkit-backdrop-filter:blur(20px);
-  border:1px solid rgba(245,166,35,.15);
-  box-shadow:0 24px 64px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.04);
-}
-.auth-logo-glow{font-size:3rem;display:block;text-align:center;margin-bottom:.5rem;filter:drop-shadow(0 0 20px rgba(245,166,35,.6));animation:logoGlow 3s ease-in-out infinite;}
-@keyframes logoGlow{0%,100%{filter:drop-shadow(0 0 20px rgba(245,166,35,.5))}50%{filter:drop-shadow(0 0 35px rgba(245,166,35,.9))}}
-
-.photo-opt:hover{border-color:var(--accent)!important;transform:translateY(-2px);box-shadow:0 6px 20px rgba(245,166,35,.2);}
-.photo-opt.selected{border-color:var(--accent)!important;background:rgba(245,166,35,.06)!important;box-shadow:0 0 0 3px rgba(245,166,35,.12);}
-
-#camera-modal{display:none;}
-#camera-modal.open{display:flex!important;}
-.shutter-ring{animation:shutterPulse .3s ease;}
-@keyframes shutterPulse{0%{transform:scale(1)}50%{transform:scale(.9)}100%{transform:scale(1)}}
-
-/* Priority context card */
-.priority-context{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:.9rem 1rem;margin-bottom:.9rem;display:none;}
-.priority-context.show{display:block;}
-.pc-title{font-size:.7rem;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.07em;margin-bottom:.6rem;display:flex;align-items:center;gap:.4rem;}
-.pc-score-row{display:flex;align-items:center;gap:.7rem;margin-bottom:.6rem;}
-.pc-score-circle{width:52px;height:52px;border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;flex-shrink:0;}
-.pc-score-num{font-family:'Bebas Neue',sans-serif;font-size:1.3rem;line-height:1;}
-.pc-score-lbl{font-size:.5rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;}
-.pc-desc{font-size:.78rem;color:var(--muted);line-height:1.4;flex:1;}
-.pc-pois{display:flex;flex-direction:column;gap:.35rem;}
-.pc-poi-row{display:flex;align-items:center;gap:.5rem;font-size:.75rem;padding:.3rem .5rem;border-radius:8px;background:rgba(245,166,35,.04);border:1px solid rgba(245,166,35,.08);}
-.pc-poi-icon{font-size:.9rem;width:22px;text-align:center;flex-shrink:0;}
-.pc-poi-name{flex:1;color:var(--text);font-weight:500;}
-.pc-poi-dist{color:var(--muted);font-size:.68rem;flex-shrink:0;}
-.pc-poi-impact{font-size:.62rem;font-weight:700;padding:.1rem .35rem;border-radius:20px;flex-shrink:0;}
-.pc-impact-critical{background:rgba(239,68,68,.15);color:#fca5a5;}
-.pc-impact-high{background:rgba(245,166,35,.15);color:var(--accent);}
-.pc-impact-medium{background:rgba(62,207,178,.15);color:var(--accent2);}
-.pc-scanning{font-size:.75rem;color:var(--muted);display:flex;align-items:center;gap:.4rem;}
 </style>
 </head>
 <body>
-<!-- 3D Animated Background -->
-<div class="road-grid"></div>
-<div class="particles" id="particles"></div>
-<div class="bg-overlay"></div>
 <nav>
   <div class="logo">🛣 RoadWatch</div>
-  <div class="nav-links" id="nav-links" style="display:none">
+  <div class="nav-links" id="nav-links">
     <button class="nav-btn active" onclick="showPage('report')">📷 Report</button>
     <button class="nav-btn" onclick="showPage('complaints')">📋 My Reports</button>
     <button class="nav-btn" id="notif-btn" onclick="showPage('notifications')">
@@ -280,125 +209,36 @@ nav,body>.page,.user-bar{position:relative;z-index:10;}
 <!-- REPORT -->
 <div class="page" id="page-report">
   <div class="page-title">Report <span>Road Damage</span></div>
-  <div class="ai-badge">🤖 AI-Powered Detection — Auto-classifies damage &amp; severity</div>
-
-  <!-- STEP 1: Choose source -->
-  <div id="photo-source-step">
-    <div style="font-size:.72rem;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.08em;margin-bottom:.6rem;">Step 1 — Choose Photo Source</div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:.7rem;margin-bottom:1rem;">
-      <div class="photo-opt" id="opt-camera" onclick="selectPhotoSource('camera')"
-           style="background:var(--card);border:2px solid var(--border);border-radius:14px;padding:1.2rem .8rem;text-align:center;cursor:pointer;transition:all .25s;">
-        <div style="font-size:2rem;margin-bottom:.4rem">📷</div>
-        <div style="font-weight:700;font-size:.85rem">Camera</div>
-        <div style="font-size:.7rem;color:var(--muted);margin-top:.2rem">Take live photo</div>
-        <div style="font-size:.65rem;color:var(--accent2);margin-top:.3rem;font-weight:600">✓ Auto GPS geotag</div>
-      </div>
-      <div class="photo-opt" id="opt-gallery" onclick="selectPhotoSource('gallery')"
-           style="background:var(--card);border:2px solid var(--border);border-radius:14px;padding:1.2rem .8rem;text-align:center;cursor:pointer;transition:all .25s;">
-        <div style="font-size:2rem;margin-bottom:.4rem">🖼️</div>
-        <div style="font-weight:700;font-size:.85rem">Gallery</div>
-        <div style="font-size:.7rem;color:var(--muted);margin-top:.2rem">Choose from files</div>
-        <div style="font-size:.65rem;color:var(--muted);margin-top:.3rem">Manual location</div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Photo capture zone (shown after source selected) -->
-  <div class="capture-zone" id="capture-zone" style="display:none">
-    <div class="capture-placeholder" id="capture-placeholder" onclick="retriggerCapture()" style="cursor:pointer">
-      <div class="icon" id="capture-placeholder-icon">📷</div>
-      <p id="capture-placeholder-text">Tap to take photo</p>
-      <p style="font-size:.72rem;color:var(--muted)" id="capture-placeholder-sub"></p>
+  <div class="ai-badge">🤖 AI-Powered Detection · Auto-classifies damage type & severity</div>
+  <div class="capture-zone" id="capture-zone" onclick="triggerCapture()">
+    <div class="capture-placeholder" id="capture-placeholder">
+      <div class="icon">📷</div>
+      <p>Tap to capture road damage photo</p>
+      <p style="font-size:.75rem;color:var(--muted)">Camera or Gallery</p>
     </div>
     <img id="preview-img" style="display:none"/>
     <div class="capture-overlay" id="capture-overlay" style="display:none">
       <button class="btn-capture" onclick="retakePhoto(event)">📷 Retake</button>
-      <button class="btn-capture secondary" onclick="changeSource(event)">↩ Change</button>
+      <button class="btn-capture secondary" onclick="triggerGallery(event)">🖼 Gallery</button>
     </div>
   </div>
-
-  <!-- Geotag indicator -->
-  <div id="geotag-strip" style="display:none;background:rgba(62,207,178,.08);border:1px solid rgba(62,207,178,.2);border-radius:10px;padding:.5rem .8rem;margin-bottom:.8rem;font-size:.75rem;color:var(--accent2);align-items:center;gap:.5rem;">
-    📍 Geotagged: <span id="geotag-coord" style="font-family:monospace;font-size:.72rem;background:rgba(62,207,178,.1);padding:.1rem .4rem;border-radius:4px">—</span>
-  </div>
-
-  <div id="camera-fallback-note" style="display:none;background:rgba(245,166,35,.1);border:1px solid rgba(245,166,35,.3);border-radius:10px;padding:.6rem .9rem;margin-bottom:.6rem;font-size:.8rem;color:var(--accent)">
-    📷 Opening your device camera app... Take a photo of the road damage.
-  </div>
-  <input type="file" id="file-input" accept="image/*" onchange="handleFile(event)"/>
-
-  <!-- Live Camera Modal -->
-  <div id="camera-modal" style="display:none;position:fixed;inset:0;z-index:9999;background:#000;flex-direction:column">
-    <div style="padding:.8rem 1rem;display:flex;justify-content:space-between;align-items:center;background:rgba(0,0,0,.8);border-bottom:1px solid #333">
-      <div style="font-size:.85rem;font-weight:700;color:#fff">📷 Live Camera</div>
-      <button onclick="closeCamera()" style="background:rgba(255,255,255,.1);border:1px solid #555;color:#fff;padding:.3rem .7rem;border-radius:6px;font-family:inherit;font-size:.78rem;cursor:pointer">✕ Cancel</button>
-    </div>
-    <div style="flex:1;position:relative;overflow:hidden">
-      <video id="camera-video" autoplay playsinline muted style="width:100%;height:100%;object-fit:cover"></video>
-      <!-- GPS overlay on camera -->
-      <div id="cam-status" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:#fff;font-size:.9rem;text-align:center;background:rgba(0,0,0,.7);padding:.5rem 1rem;border-radius:8px;pointer-events:none;z-index:2;white-space:nowrap"></div>
-      <div id="cam-gps-overlay" style="position:absolute;bottom:80px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.7);border:1px solid rgba(62,207,178,.4);border-radius:20px;padding:.3rem .8rem;font-size:.7rem;color:#3ecfb2;font-family:monospace;white-space:nowrap;backdrop-filter:blur(4px)">
-        📍 <span id="cam-gps-text">Getting GPS...</span>
-      </div>
-      <!-- Aim overlay -->
-      <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none">
-        <div style="width:200px;height:150px;border:2px solid rgba(245,166,35,.6);border-radius:12px;box-shadow:0 0 0 9999px rgba(0,0,0,.3)"></div>
-      </div>
-    </div>
-    <div style="padding:1rem;background:rgba(0,0,0,.9);display:flex;justify-content:center;align-items:center;gap:1.5rem">
-      <button onclick="switchCamera()" style="background:rgba(255,255,255,.1);border:1px solid #555;color:#fff;width:44px;height:44px;border-radius:50%;font-size:1.1rem;cursor:pointer;display:flex;align-items:center;justify-content:center">🔄</button>
-      <button onclick="captureFromCamera()" id="shutter-btn" style="width:68px;height:68px;border-radius:50%;background:linear-gradient(135deg,#f5a623,#e8941a);border:3px solid #fff;cursor:pointer;font-size:1.5rem;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 16px rgba(245,166,35,.5)">📸</button>
-      <div style="width:44px"></div>
-    </div>
-    <canvas id="camera-canvas" style="display:none"></canvas>
-  </div>
+  <input type="file" id="file-input" accept="image/*" capture="environment" onchange="handleFile(event)"/>
   <div class="gps-card">
     <div class="gps-icon">📍</div>
     <div class="gps-info">
       <div class="gps-label">GPS Location</div>
       <div class="gps-value" id="gps-text">Detecting location...</div>
       <div class="gps-addr" id="gps-addr"></div>
-      <div id="gps-acc-bar-wrap" style="display:none;margin-top:5px">
-        <div style="height:4px;background:var(--border);border-radius:2px;overflow:hidden">
-          <div id="gps-acc-bar" style="height:100%;border-radius:2px;transition:width .5s,background .5s;width:0%"></div>
-        </div>
-        <div id="gps-acc-label" style="font-size:.62rem;color:var(--muted);margin-top:2px"></div>
-      </div>
     </div>
     <div style="display:flex;flex-direction:column;align-items:center;gap:.2rem">
       <div class="gps-dot" id="gps-dot"></div>
       <span id="gps-status-text" style="font-size:.65rem;color:var(--muted)">Searching</span>
-      <button onclick="refreshGPS()" title="Refresh GPS" style="background:none;border:none;color:var(--muted);font-size:1rem;cursor:pointer;padding:0;line-height:1;margin-top:2px">↻</button>
     </div>
   </div>
-  <!-- Manual location fallback -->
-  <button id="manual-location-btn" onclick="toggleManualEntry()" style="display:none;width:100%;background:none;border:1px dashed var(--border);color:var(--muted);padding:.5rem;border-radius:8px;font-family:inherit;font-size:.78rem;cursor:pointer;margin-bottom:.7rem;transition:all .2s">
-    📌 GPS unavailable? Enter location manually
-  </button>
-  <div id="manual-fields" style="display:none;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:1rem;margin-bottom:.8rem;">
-    <div style="font-size:.72rem;color:var(--muted);margin-bottom:.6rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em">Manual Location Entry</div>
-    <input id="manual-lat" type="number" placeholder="Latitude (e.g. 11.0168)" step="any" style="width:100%;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:.55rem .8rem;font-family:inherit;font-size:.85rem;margin-bottom:.5rem"/>
-    <input id="manual-lng" type="number" placeholder="Longitude (e.g. 76.9558)" step="any" style="width:100%;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:.55rem .8rem;font-family:inherit;font-size:.85rem;margin-bottom:.5rem"/>
-    <input id="manual-addr" type="text" placeholder="Address / Landmark description" style="width:100%;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:.55rem .8rem;font-family:inherit;font-size:.85rem;margin-bottom:.6rem"/>
-    <button onclick="applyManualLocation()" style="background:var(--accent2);color:#000;border:none;border-radius:8px;padding:.55rem 1.2rem;font-family:inherit;font-weight:700;font-size:.82rem;cursor:pointer">✓ Confirm Location</button>
-  </div>
-
   <div id="area-badge-wrap"></div>
-
-  <!-- Priority Context: Nearby sensitive places -->
-  <div class="priority-context" id="priority-context">
-    <div class="pc-title">⚡ Impact Priority Analysis <span id="pc-scanning-ind" class="pc-scanning" style="display:none"><span class="spinner" style="border-top-color:var(--accent)"></span>Scanning 1km radius...</span></div>
-    <div id="pc-content">
-      <div class="pc-scanning">Scanning nearby places...</div>
-    </div>
-  </div>
-
-  <div id="map-drag-hint" style="display:none;background:rgba(245,166,35,.07);border:1px solid rgba(245,166,35,.2);border-radius:8px;padding:.4rem .7rem;margin-bottom:.4rem;font-size:.73rem;color:var(--accent);align-items:center;gap:.4rem;">
-    ✋ Drag the pin or tap the map to correct your exact location
-  </div>
-  <div id="mini-map" style="height:200px;border-radius:12px;border:1px solid var(--border);margin-bottom:.8rem;overflow:hidden;"></div>
+  <div id="mini-map"></div>
   <div id="submit-error" style="display:none;margin-bottom:.8rem"></div>
-  <button class="btn-primary" id="submit-btn" onclick="submitComplaint()" style="display:none">🚨 Submit Complaint</button>
+  <button class="btn-primary" id="submit-btn" onclick="submitComplaint()">🚨 Submit Complaint</button>
   <div class="result-card" id="result-card">
     <div class="result-icon">✅</div>
     <div style="font-size:.85rem;color:var(--muted);margin-bottom:.3rem">Complaint Registered</div>
@@ -446,343 +286,124 @@ nav,body>.page,.user-bar{position:relative;z-index:10;}
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-// ── Animated particles ──
-(function(){
-  const c=document.getElementById('particles');if(!c)return;
-  const cols=['rgba(245,166,35,.5)','rgba(62,207,178,.45)','rgba(168,85,247,.4)','rgba(59,130,246,.4)'];
-  for(let i=0;i<16;i++){
-    const p=document.createElement('div');p.className='particle';
-    const s=Math.random()*4+2;
-    p.style.cssText=`width:${s}px;height:${s}px;left:${Math.random()*100}%;background:${cols[Math.floor(Math.random()*cols.length)]};animation-duration:${Math.random()*14+10}s;animation-delay:${Math.random()*8}s;`;
-    c.appendChild(p);
-  }
-})();
-
-// ── State ──
-// Auto-detect API URL — works on HTTP:8000 and HTTPS:8443
-const API=(()=>{
-  const proto=location.protocol;
-  const host=location.hostname;
-  const port=location.port;
-  // If served from HTTPS:8443 → API is also on HTTPS:8443
-  // If served from HTTP:8000  → API is on HTTP:8000
-  if(port==='8443') return `https://${host}:8443/api`;
-  if(port==='8000') return `http://${host}:8000/api`;
-  // Fallback: same origin
-  return `${proto}//${host}${port?':'+port:''}/api`;
-})();
+const API=(window.location.hostname==='localhost'?'http://localhost:8000':window.location.origin)+'/api';
 let token=localStorage.getItem('citizen_token');
 let userName=localStorage.getItem('citizen_name');
 let currentLat=null,currentLng=null,currentAddr='',currentArea='residential';
-let selectedFile=null,miniMap=null,detailMap=null;
-let photoSourceMode=null,forceSubmitFlag=false;
-let cameraStream=null,facingMode='environment';
-let gpsWatchId=null;
-
-// ── Robust date parser — handles SQLite, ISO, null ──
-function parseDate(raw){
-  if(!raw||raw==='None'||raw==='null')return null;
-  const cleaned=String(raw).trim().replace(' ','T');
-  const d=new Date(cleaned);
-  if(!d||isNaN(d.getTime()))return null;
-  // Convert UTC → IST (+5:30)
-  return new Date(d.getTime()+(5.5*60*60*1000));
-}
-function fmtDate(raw){
-  const d=parseDate(raw);
-  return d?d.toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric',timeZone:'UTC'}):'—';
-}
-function fmtTime(raw){
-  const d=parseDate(raw);
-  return d?d.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',timeZone:'UTC'}):'—';
-}
-function fmtDateTime(raw){
-  const d=parseDate(raw);
-  if(!d)return '—';
-  return d.toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric',timeZone:'UTC'})+' '+
-         d.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',timeZone:'UTC'});
-}
-
-
-// ── Background particles ──
-function createParticles(){
-  const c=document.getElementById('particles');
-  if(!c)return;
-  for(let i=0;i<18;i++){
-    const p=document.createElement('div');
-    p.className='particle';
-    const sz=Math.random()*6+3;
-    p.style.cssText=`width:${sz}px;height:${sz}px;left:${Math.random()*100}%;` +
-      `background:${['rgba(245,166,35,.4)','rgba(62,207,178,.3)','rgba(168,85,247,.3)'][Math.floor(Math.random()*3)]};` +
-      `animation-duration:${Math.random()*15+10}s;animation-delay:${Math.random()*10}s;`;
-    c.appendChild(p);
-  }
-}
+let selectedFile=null,miniMap=null,miniMarker=null,detailMap=null;
 
 function init(){
-  createParticles();
   const p=new URLSearchParams(window.location.search);
   const ut=p.get('tk'),un=p.get('nm');
   if(ut){localStorage.setItem('citizen_token',ut);localStorage.setItem('citizen_name',un||'citizen');window.history.replaceState({},'','/citizen');}
   token=localStorage.getItem('citizen_token');
   userName=localStorage.getItem('citizen_name');
-  if(token){verifyTokenAndInit();}
+  if(token){showLoggedIn();showPage('report');getLocation();checkNotifications();}
   else{showPage('login');}
-}
-
-async function verifyTokenAndInit(){
-  try{
-    const res=await fetch(`${API}/complaints/my`,{headers:{Authorization:`Bearer ${token}`}});
-    if(res.status===401){
-      token=null;userName=null;
-      localStorage.removeItem('citizen_token');localStorage.removeItem('citizen_name');
-      showPage('login');return;
-    }
-  }catch(e){/* network error — proceed */}
-  showLoggedIn();showPage('report');startAccurateGPS();checkNotifications();
 }
 
 function showLoggedIn(){
   document.getElementById('user-bar').classList.add('show');
   document.getElementById('user-name-display').textContent=userName||'Citizen';
-  document.getElementById('nav-links').style.display='flex';
 }
 
-// ── Auth ──
 async function doLogin(){
-  const email=document.getElementById('login-email').value.trim();
+  const email=document.getElementById('login-email').value;
   const pass=document.getElementById('login-password').value;
-  if(!email||!pass){showError('login-error','Enter email and password.');return;}
   const btn=document.getElementById('login-btn');
   btn.innerHTML='<span class="spinner"></span>Signing in...';btn.disabled=true;
   try{
     const res=await fetch(`${API}/auth/login`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email,password:pass})});
     const data=await res.json();
     if(!res.ok)throw new Error(data.detail||'Login failed');
-    token=data.access_token;userName=data.name||email.split('@')[0];
-    localStorage.setItem('citizen_token',token);localStorage.setItem('citizen_name',userName);
-    showLoggedIn();showPage('report');startAccurateGPS();checkNotifications();
+    token=data.access_token;
+    userName=data.name||email.split('@')[0];
+    localStorage.setItem('citizen_token',token);
+    localStorage.setItem('citizen_name',userName);
+    showLoggedIn();showPage('report');getLocation();checkNotifications();
   }catch(e){showError('login-error',e.message);}
   btn.innerHTML='Sign In';btn.disabled=false;
 }
 
 async function doRegister(){
-  const name=document.getElementById('reg-name').value.trim();
-  const email=document.getElementById('reg-email').value.trim();
-  const phone=document.getElementById('reg-phone').value.trim();
+  const name=document.getElementById('reg-name').value;
+  const email=document.getElementById('reg-email').value;
+  const phone=document.getElementById('reg-phone').value;
   const password=document.getElementById('reg-password').value;
-  if(!name||!email||!password){showError('reg-error','Fill all required fields.');return;}
   try{
     const res=await fetch(`${API}/auth/register`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,email,phone,password})});
     const data=await res.json();
     if(!res.ok)throw new Error(data.detail||'Registration failed');
-    document.getElementById('reg-success').textContent='Account created! Signing in...';
+    document.getElementById('reg-success').textContent='Account created! Please sign in.';
     document.getElementById('reg-success').style.display='block';
-    const lr=await fetch(`${API}/auth/login`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email,password})});
-    const ld=await lr.json();
-    if(lr.ok){token=ld.access_token;userName=ld.name||name;localStorage.setItem('citizen_token',token);localStorage.setItem('citizen_name',userName);setTimeout(()=>{showLoggedIn();showPage('report');checkNotifications();},800);}
-    else setTimeout(()=>showPage('login'),1500);
+    setTimeout(()=>showPage('login'),1500);
   }catch(e){showError('reg-error',e.message);}
 }
 
 function logout(){
-  token=null;userName=null;stopGPSWatch();closeCamera();
+  token=null;userName=null;
   localStorage.removeItem('citizen_token');localStorage.removeItem('citizen_name');
   document.getElementById('user-bar').classList.remove('show');
-  document.getElementById('nav-links').style.display='none';
-  // Reset report state
-  selectedFile=null;photoSourceMode=null;
   showPage('login');
 }
 
-// ══════════════════════════════════════════════════
-// ── LIVE CAMERA (getUserMedia) ──
-// ══════════════════════════════════════════════════
-function selectPhotoSource(src){
-  photoSourceMode=src;
-  document.querySelectorAll('.photo-opt').forEach(o=>o.classList.remove('selected'));
-  document.getElementById(`opt-${src}`).classList.add('selected');
-  document.getElementById('capture-zone').style.display='block';
-  document.getElementById('location-step').style.display='block';
-  if(!currentLat)startAccurateGPS();
-  if(src==='camera'){
-    document.getElementById('geotag-strip').style.display='flex';
-    // Show loading state in placeholder while camera opens
-    document.getElementById('capture-placeholder-icon').textContent='⏳';
-    document.getElementById('capture-placeholder-text').textContent='Opening camera...';
-    document.getElementById('capture-placeholder-sub').textContent='Allow camera permission if asked';
-    openCamera();
-  } else {
-    document.getElementById('geotag-strip').style.display='none';
-    const fi=document.getElementById('file-input');
-    fi.removeAttribute('capture');
-    fi.click();
-  }
+function getLocation(){
+  if(!navigator.geolocation){document.getElementById('gps-text').textContent='GPS not supported';return;}
+  document.getElementById('gps-status-text').textContent='Searching...';
+  navigator.geolocation.getCurrentPosition(async pos=>{
+    currentLat=pos.coords.latitude;currentLng=pos.coords.longitude;
+    document.getElementById('gps-text').textContent=`${currentLat.toFixed(5)}, ${currentLng.toFixed(5)}`;
+    document.getElementById('gps-dot').classList.add('active');
+    document.getElementById('gps-status-text').textContent='Locked ✓';
+    // Reverse geocode
+    currentAddr=await reverseGeocode(currentLat,currentLng);
+    document.getElementById('gps-addr').textContent=currentAddr.substring(0,60)+'...';
+    // Detect area type
+    currentArea=detectArea(currentAddr);
+    showAreaBadge(currentArea);
+    initMiniMap(currentLat,currentLng);
+  },err=>{
+    document.getElementById('gps-text').textContent='Using default location';
+    document.getElementById('gps-status-text').textContent='⚠ Manual';
+    currentLat=11.0168;currentLng=76.9558;
+    currentAddr='Coimbatore, Tamil Nadu';
+    currentArea='residential';
+    initMiniMap(currentLat,currentLng);
+  },{enableHighAccuracy:true,timeout:15000});
 }
 
-async function openCamera(){
-  // First check if mediaDevices API exists at all
-  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){
-    // No API — use native camera via file input (works on all phones)
-    useFallbackCamera('Camera API not available on HTTP. Using device camera app.');
-    return;
-  }
-  const modal=document.getElementById('camera-modal');
-  modal.classList.add('open');
-  const status=document.getElementById('cam-status');
-  status.innerHTML='<div style="display:flex;flex-direction:column;align-items:center;gap:.5rem"><span style="font-size:1.5rem">📷</span><span>Starting camera...</span><span style="font-size:.75rem;opacity:.7">Allow camera permission when asked</span></div>';
-  await startCameraStream();
+function detectArea(addr){
+  const a=addr.toLowerCase();
+  if(/hospital|clinic|medical|health/.test(a))return 'hospital';
+  if(/school|college|university|academy/.test(a))return 'school';
+  if(/highway|nh-|sh-|expressway/.test(a))return 'highway';
+  if(/mall|market|shopping|commercial/.test(a))return 'market';
+  return 'residential';
 }
 
-async function startCameraStream(){
-  const status=document.getElementById('cam-status');
-  try{
-    if(cameraStream){cameraStream.getTracks().forEach(t=>t.stop());}
-    // Try rear camera first, fall back to any camera
-    let stream=null;
-    const attempts=[
-      {video:{facingMode:{ideal:'environment'},width:{ideal:1920},height:{ideal:1080}},audio:false},
-      {video:{facingMode:'environment'},audio:false},
-      {video:true,audio:false}
-    ];
-    for(const constraints of attempts){
-      try{stream=await navigator.mediaDevices.getUserMedia(constraints);break;}
-      catch(e){if(e.name==='NotAllowedError')throw e;}
-    }
-    if(!stream)throw new Error('No camera available');
-    cameraStream=stream;
-    const video=document.getElementById('camera-video');
-    video.srcObject=cameraStream;
-    await video.play();
-    if(status)status.innerHTML='';
-  }catch(err){
-    closeCamera();
-    if(err.name==='NotAllowedError'){
-      // Permission denied → show instructions + native fallback
-      showCameraPermissionHelp();
-    } else if(err.name==='NotFoundError'){
-      useFallbackCamera('No camera found. Using file picker.');
-    } else {
-      // HTTP blocked → native camera app
-      useFallbackCamera('Live camera needs HTTPS. Opening device camera instead.');
-    }
-  }
+const AREA_LABELS={'hospital':'🏥 Hospital Zone','school':'🏫 School Zone','highway':'🛣️ Highway','market':'🏪 Market Area','residential':'🏘️ Residential','general':'📍 General Area'};
+const AREA_ICONS={'hospital':'🏥','school':'🏫','highway':'🛣️','market':'🏪','residential':'🏘️','general':'📍'};
+function showAreaBadge(area){
+  document.getElementById('area-badge-wrap').innerHTML=`<div class="area-badge area-${area}">${AREA_LABELS[area]||area} — Priority Zone Detected</div>`;
 }
 
-function useFallbackCamera(msg){
-  // Use native device camera app — works on ALL phones without HTTPS
-  closeCamera();
-  if(msg){
-    const note=document.getElementById('camera-fallback-note');
-    if(note){note.textContent='📷 '+msg;note.style.display='block';setTimeout(()=>note.style.display='none',3500);}
-  }
-  const fi=document.getElementById('file-input');
-  fi.setAttribute('capture','environment');
-  fi.click();
+function initMiniMap(lat,lng){
+  if(miniMap){miniMap.remove();}
+  document.getElementById('mini-map').innerHTML='';
+  miniMap=L.map('mini-map',{zoomControl:false,attributionControl:false}).setView([lat,lng],16);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(miniMap);
+  miniMarker=L.circleMarker([lat,lng],{radius:10,fillColor:'#f5a623',color:'#fff',weight:2,fillOpacity:.9}).addTo(miniMap);
 }
 
-function showCameraPermissionHelp(){
-  const note=document.getElementById('camera-fallback-note');
-  if(note){
-    note.innerHTML=`
-      <div style="font-weight:700;margin-bottom:.3rem">🔒 Camera Permission Denied</div>
-      <div style="font-size:.78rem">To allow: click the 🔒 icon in your browser address bar → Allow camera → Reload page.</div>
-      <div style="font-size:.78rem;margin-top:.3rem;color:var(--muted)">Or use Gallery option to upload a photo.</div>`;
-    note.style.display='block';
-  }
-}
-
-async function switchCamera(){
-  facingMode=facingMode==='environment'?'user':'environment';
-  await startCameraStream();
-}
-
-function captureFromCamera(){
-  const video=document.getElementById('camera-video');
-  const canvas=document.getElementById('camera-canvas');
-  canvas.width=video.videoWidth||1280;
-  canvas.height=video.videoHeight||720;
-  const ctx=canvas.getContext('2d');
-
-  // Add GPS geotag watermark on canvas
-  ctx.drawImage(video,0,0);
-  if(currentLat&&currentLng){
-    const ts=new Date().toLocaleString('en-IN');
-    const gpsText=`${currentLat.toFixed(6)}, ${currentLng.toFixed(6)}`;
-    ctx.fillStyle='rgba(0,0,0,0.55)';
-    ctx.fillRect(0,canvas.height-62,canvas.width,62);
-    ctx.font='bold 16px monospace';ctx.fillStyle='#f5a623';
-    ctx.fillText(`📍 ${gpsText}`,12,canvas.height-38);
-    ctx.font='13px monospace';ctx.fillStyle='#aaa';
-    ctx.fillText(`RoadWatch · ${ts}`,12,canvas.height-16);
-  }
-
-  // Convert to File
-  canvas.toBlob(blob=>{
-    if(!blob)return;
-    selectedFile=new File([blob],'roadwatch_capture.jpg',{type:'image/jpeg'});
-    const url=URL.createObjectURL(blob);
-    const img=document.getElementById('preview-img');
-    img.src=url;img.style.display='block';
-    document.getElementById('capture-placeholder').style.display='none';
-    document.getElementById('capture-overlay').style.display='flex';
-    document.getElementById('capture-zone').style.borderColor='var(--accent2)';
-    document.getElementById('submit-btn').style.display='block';
-    // Update geotag strip
-    if(currentLat&&currentLng){
-      document.getElementById('geotag-coord').textContent=`${currentLat.toFixed(5)}, ${currentLng.toFixed(5)}`;
-    }
-    closeCamera();
-  },'image/jpeg',0.92);
-}
-
-function closeCamera(){
-  if(cameraStream){cameraStream.getTracks().forEach(t=>t.stop());cameraStream=null;}
-  document.getElementById('camera-modal').classList.remove('open');
-  // Reset placeholder if no photo taken
-  if(!selectedFile){
-    document.getElementById('capture-placeholder-icon').textContent='📷';
-    document.getElementById('capture-placeholder-text').textContent='Tap to take photo';
-    document.getElementById('capture-placeholder-sub').textContent='';
-  }
-}
-
+function triggerCapture(){if(selectedFile)return;document.getElementById('file-input').setAttribute('capture','environment');document.getElementById('file-input').click();}
+function triggerGallery(e){e.stopPropagation();document.getElementById('file-input').removeAttribute('capture');document.getElementById('file-input').click();}
 function retakePhoto(e){
-  e.stopPropagation();
-  selectedFile=null;
+  e.stopPropagation();selectedFile=null;
   document.getElementById('preview-img').style.display='none';
   document.getElementById('capture-placeholder').style.display='flex';
   document.getElementById('capture-overlay').style.display='none';
-  document.getElementById('capture-zone').style.borderColor='var(--border)';
   document.getElementById('result-card').classList.remove('show');
-  document.getElementById('submit-btn').style.display='none';
-  document.getElementById('dup-warning-box')?.remove();
-  if(photoSourceMode==='camera') openCamera();
-  else document.getElementById('file-input').click();
 }
-
-function changeSource(e){
-  e.stopPropagation();
-  selectedFile=null;photoSourceMode=null;
-  closeCamera();
-  document.getElementById('capture-zone').style.display='none';
-  document.getElementById('submit-btn').style.display='none';
-  document.getElementById('result-card').classList.remove('show');
-  document.getElementById('dup-warning-box')?.remove();
-  document.getElementById('capture-placeholder').style.display='flex';
-  document.getElementById('capture-overlay').style.display='none';
-  document.getElementById('preview-img').style.display='none';
-  document.getElementById('geotag-strip').style.display='none';
-  document.querySelectorAll('.photo-opt').forEach(o=>o.classList.remove('selected'));
-  if(miniMap){miniMap.remove();miniMap=null;}
-  document.getElementById('priority-context').classList.remove('show');
-}
-
-function retriggerCapture(){
-  if(photoSourceMode==='camera') openCamera();
-  else document.getElementById('file-input').click();
-}
-
 function handleFile(e){
   const file=e.target.files[0];if(!file)return;
   selectedFile=file;
@@ -792,701 +413,218 @@ function handleFile(e){
     img.src=ev.target.result;img.style.display='block';
     document.getElementById('capture-placeholder').style.display='none';
     document.getElementById('capture-overlay').style.display='flex';
-    document.getElementById('capture-zone').style.borderColor='var(--accent2)';
-    document.getElementById('submit-btn').style.display='block';
   };
   reader.readAsDataURL(file);
-  e.target.value='';
 }
 
-// ══════════════════════════════════════════════════
-// ── ACCURATE GPS (watch position, no cache) ──
-// ══════════════════════════════════════════════════
-async function startAccurateGPS(){
-  if(gpsWatchId!==null){navigator.geolocation.clearWatch(gpsWatchId);gpsWatchId=null;}
-  currentLat=null;currentLng=null;currentAddr='';
-  setGPSSearching();
-  updateAccBar(0,'Waiting...','var(--muted)');
-
-  if(!navigator.geolocation){
-    await tryIPGeolocation();return;
-  }
-
-  // Strategy 1: High-accuracy browser GPS with fresh fix (no cache)
-  let gpsSuccess=false;
-  let bestAccuracy=Infinity;
-
-  // Initial fresh fix attempt
-  try{
-    const pos=await new Promise((res,rej)=>
-      navigator.geolocation.getCurrentPosition(res,rej,
-        {enableHighAccuracy:true,timeout:10000,maximumAge:0})
-    );
-    gpsSuccess=true;
-    bestAccuracy=pos.coords.accuracy;
-    await processGPSPosition(pos);
-  }catch(e){
-    if(e.code===1){setGPSFailed('Location permission denied. Enable in Settings.');return;}
-  }
-
-  // Strategy 2: Keep watching for better accuracy
-  gpsWatchId=navigator.geolocation.watchPosition(
-    async pos=>{
-      if(pos.coords.accuracy<bestAccuracy){
-        gpsSuccess=true;
-        bestAccuracy=pos.coords.accuracy;
-        await processGPSPosition(pos);
-        // Stop at excellent accuracy
-        if(bestAccuracy<25&&gpsWatchId!==null){
-          navigator.geolocation.clearWatch(gpsWatchId);gpsWatchId=null;
-          document.getElementById('gps-status-text').textContent='Locked ✓';
-        }
-      }
-    },
-    err=>{if(!gpsSuccess&&!currentLat)setGPSFailed('GPS unavailable. Drag map pin.');},
-    {enableHighAccuracy:true,timeout:30000,maximumAge:0}
-  );
-
-  // Timeout: if GPS still coarse after 15s, also try IP as reference
-  setTimeout(async()=>{
-    if(!gpsSuccess){
-      await tryIPGeolocation();
-    } else if(bestAccuracy>500){
-      // GPS very coarse — show manual entry suggestion
-      const mb=document.getElementById('manual-location-btn');
-      if(mb)mb.style.display='block';
-      const lbl=document.getElementById('gps-acc-label');
-      if(lbl)lbl.textContent+=` · Drag pin to fine-tune`;
-    }
-  },15000);
-}
-
-async function tryIPGeolocation(){
-  // Try multiple IP geolocation providers for best result
-  document.getElementById('gps-status-text').textContent='Locating...';
-  const providers=[
-    ()=>fetch('https://ipwho.is/').then(r=>r.json()).then(d=>d.success?{lat:d.latitude,lng:d.longitude,src:'ipwho.is'}:null),
-    ()=>fetch('https://ipapi.co/json/').then(r=>r.json()).then(d=>d.latitude?{lat:d.latitude,lng:d.longitude,src:'ipapi.co'}:null),
-    ()=>fetch('https://ip-api.com/json/').then(r=>r.json()).then(d=>d.status==='success'?{lat:d.lat,lng:d.lon,src:'ip-api.com'}:null),
-  ];
-  let result=null;
-  for(const fn of providers){
-    try{result=await fn();if(result&&result.lat&&result.lng)break;}catch(e){}
-  }
-  if(result){
-    currentLat=parseFloat(result.lat);
-    currentLng=parseFloat(result.lng);
-    document.getElementById('gps-text').textContent=`${currentLat.toFixed(5)}, ${currentLng.toFixed(5)}`;
-    document.getElementById('gps-status-text').textContent='~City level';
-    document.getElementById('gps-dot').style.background='var(--accent)';
-    updateAccBar(15,`City-level only (${result.src}) · Drag pin to exact spot`,'var(--accent)');
-    currentAddr=await reverseGeocode(currentLat,currentLng);
-    const addrEl=document.getElementById('gps-addr');
-    if(addrEl)addrEl.textContent=currentAddr.substring(0,60);
-    currentArea=detectArea(currentAddr);showAreaBadge(currentArea);
-    initMiniMap(currentLat,currentLng);
-    document.getElementById('manual-location-btn').style.display='block';
-    showSubmitError('📍 Laptop GPS is city-level only. Drag the map pin to your exact location for accuracy.','warn');
-  } else {
-    setGPSFailed('Auto-location unavailable on laptop. Drag the map pin to your location.');
-  }
-}
-
-function updateAccBar(pct,label,color){
-  const wrap=document.getElementById('gps-acc-bar-wrap');
-  if(!wrap)return;
-  wrap.style.display='block';
-  const bar=document.getElementById('gps-acc-bar');
-  bar.style.width=pct+'%';bar.style.background=color;
-  const lbl=document.getElementById('gps-acc-label');
-  if(lbl)lbl.textContent=label;
-}
-
-async function processGPSPosition(pos){
-  const acc=pos.coords.accuracy;
-  const lat=pos.coords.latitude;
-  const lng=pos.coords.longitude;
-  if(lat===0&&lng===0)return; // reject null island
-  
-  currentLat=lat;currentLng=lng;
-  
-  // Accuracy display
-  const accStr=acc<20?'Excellent':acc<50?'High':acc<150?'Good':acc<400?'Fair':'Low';
-  const accColor=acc<20?'#4ade80':acc<50?'var(--accent2)':acc<150?'#86efac':acc<400?'var(--accent)':'var(--danger)';
-  const accPct=Math.max(5,Math.min(100,100-(acc/5)));
-  document.getElementById('gps-text').textContent=`${lat.toFixed(6)}, ${lng.toFixed(6)}`;
-  document.getElementById('gps-status-text').textContent=`±${Math.round(acc)}m`;
-  document.getElementById('gps-dot').className='gps-dot active';
-  document.getElementById('gps-dot').style.background='';
-  updateAccBar(accPct,`${accStr} · ±${Math.round(acc)}m accuracy`,accColor);
-  // Camera overlay
-  const camGps=document.getElementById('cam-gps-text');
-  if(camGps)camGps.textContent=`${lat.toFixed(5)}, ${lng.toFixed(5)} ±${Math.round(acc)}m`;
-  
-  // Reverse geocode + area detection
-  currentAddr=await reverseGeocode(lat,lng);
-  const addrEl=document.getElementById('gps-addr');
-  if(addrEl)addrEl.textContent=currentAddr.length>60?currentAddr.substring(0,60)+'...':currentAddr;
-  currentArea=detectArea(currentAddr);
-  showAreaBadge(currentArea);
-  if(acc<300)scanNearbyPOIs(lat,lng);
-  
-  // Update map
-  if(miniMap&&miniMarker)updateMapMarker(lat,lng);
-  else initMiniMap(lat,lng);
-  
-  // Geotag strip
-  if(photoSourceMode==='camera'){
-    document.getElementById('geotag-coord').textContent=`${lat.toFixed(5)}, ${lng.toFixed(5)}`;
-  }
-  // Lock when excellent
-  if(acc<20&&gpsWatchId!==null){
-    navigator.geolocation.clearWatch(gpsWatchId);gpsWatchId=null;
-    document.getElementById('gps-status-text').textContent='Locked ✓';
-  }
-}
-
-function refreshGPS(){
-  if(gpsWatchId!==null){navigator.geolocation.clearWatch(gpsWatchId);gpsWatchId=null;}
-  startAccurateGPS();
-}
-
-function stopGPSWatch(){
-  if(gpsWatchId!==null){navigator.geolocation.clearWatch(gpsWatchId);gpsWatchId=null;}
-}
-
-function setGPSSearching(){
-  document.getElementById('gps-text').textContent='Detecting accurate location...';
-  document.getElementById('gps-status-text').textContent='Searching';
-  document.getElementById('gps-dot').className='gps-dot';
-  document.getElementById('gps-dot').style.background='';
-}
-
-function setGPSFailed(msg){
-  document.getElementById('gps-text').textContent='GPS unavailable';
-  document.getElementById('gps-addr').textContent=msg||'Enter location manually below';
-  document.getElementById('gps-dot').className='gps-dot';
-  document.getElementById('gps-dot').style.background='var(--danger)';
-  document.getElementById('gps-status-text').textContent='Failed';
-  const mb=document.getElementById('manual-location-btn');
-  if(mb)mb.style.display='block';
-  if(!currentLat){
-    // Don't default to Coimbatore — show empty map centered on India
-    currentLat=20.5937;currentLng=78.9629;currentAddr='India';
-  }
-  initMiniMap(currentLat,currentLng);
-}
-
-function toggleManualEntry(){
-  const f=document.getElementById('manual-fields');
-  f.style.display=f.style.display==='block'?'none':'block';
-}
-
-async function applyManualLocation(){
-  const lat=parseFloat(document.getElementById('manual-lat').value);
-  const lng=parseFloat(document.getElementById('manual-lng').value);
-  const addr=document.getElementById('manual-addr').value.trim();
-  if(isNaN(lat)||isNaN(lng)){alert('Please enter valid coordinates.');return;}
-  stopGPSWatch();
-  currentLat=lat;currentLng=lng;
-  document.getElementById('gps-text').textContent=`${lat.toFixed(5)}, ${lng.toFixed(5)}`;
-  document.getElementById('gps-status-text').textContent='Manual ✓';
-  document.getElementById('gps-dot').style.background='var(--accent)';
-  if(addr){
-    currentAddr=addr;
-    document.getElementById('gps-addr').textContent=addr;
-  } else {
-    currentAddr=await reverseGeocode(lat,lng);
-    document.getElementById('gps-addr').textContent=currentAddr.substring(0,60);
-  }
-  currentArea=detectArea(currentAddr);showAreaBadge(currentArea);
-  initMiniMap(lat,lng);
-  scanNearbyPOIs(lat,lng);
-  document.getElementById('manual-fields').style.display='none';
-}
-
-async function reverseGeocode(lat,lng){
-  try{
-    const r=await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=16`,{headers:{'Accept-Language':'en'}});
-    const d=await r.json();
-    return d.display_name||`${lat.toFixed(5)}, ${lng.toFixed(5)}`;
-  }catch{return `${lat.toFixed(5)}, ${lng.toFixed(5)}`;}
-}
-
-function detectArea(addr){
-  const a=(addr||'').toLowerCase();
-  if(/hospital|clinic|medical|health/.test(a))return 'hospital';
-  if(/school|college|university|academy/.test(a))return 'school';
-  if(/highway|nh-|sh-|expressway/.test(a))return 'highway';
-  if(/mall|market|shopping|commercial/.test(a))return 'market';
-  return 'residential';
-}
-
-const AREA_LABELS={'hospital':'Hospital Zone','school':'School Zone','highway':'Highway','market':'Market Area','residential':'Residential','general':'General'};
-const AREA_ICONS={'hospital':'🏥','school':'🏫','highway':'🛣️','market':'🏪','residential':'🏘️','general':'📍'};
-function showAreaBadge(area){
-  document.getElementById('area-badge-wrap').innerHTML=`<div class="area-badge area-${area}">${AREA_ICONS[area]||'📍'} ${AREA_LABELS[area]||area} — Priority Zone Detected</div>`;
-}
-
-let miniMarker=null;
-function initMiniMap(lat,lng){
-  const el=document.getElementById('mini-map');
-  if(miniMap){miniMap.remove();miniMap=null;miniMarker=null;}
-  el.innerHTML='';
-  // Show drag hint
-  const hint=document.getElementById('map-drag-hint');
-  if(hint)hint.style.display='flex';
-
-  miniMap=L.map(el,{
-    zoomControl:true,
-    attributionControl:false,
-    dragging:true,
-    scrollWheelZoom:true
-  }).setView([lat,lng],16);
-
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(miniMap);
-
-  // Draggable marker
-  const icon=L.divIcon({
-    className:'',
-    html:'<div style="width:22px;height:22px;background:#f5a623;border:3px solid #fff;border-radius:50%;box-shadow:0 3px 10px rgba(0,0,0,.5);cursor:grab;transition:transform .1s"></div>',
-    iconSize:[22,22],iconAnchor:[11,11]
-  });
-
-  miniMarker=L.marker([lat,lng],{icon,draggable:true}).addTo(miniMap);
-  miniMarker.bindTooltip('Drag to correct location',{permanent:false,direction:'top'});
-
-  // On drag end → update GPS coords
-  miniMarker.on('dragend',async function(e){
-    const pos=e.target.getLatLng();
-    currentLat=pos.lat;currentLng=pos.lng;
-    document.getElementById('gps-text').textContent=`${pos.lat.toFixed(6)}, ${pos.lng.toFixed(6)}`;
-    document.getElementById('gps-status-text').textContent='Pinned ✓';
-    document.getElementById('gps-dot').style.background='var(--accent)';
-    // Reverse geocode the new pin location
-    document.getElementById('gps-addr').textContent='Fetching address...';
-    currentAddr=await reverseGeocode(pos.lat,pos.lng);
-    document.getElementById('gps-addr').textContent=currentAddr.substring(0,60)+(currentAddr.length>60?'...':'');
-    currentArea=detectArea(currentAddr);
-    showAreaBadge(currentArea);
-    // Rescan POIs from new location
-    scanNearbyPOIs(pos.lat,pos.lng);
-    // Update geotag if camera mode
-    if(photoSourceMode==='camera'){
-      document.getElementById('geotag-coord').textContent=`${pos.lat.toFixed(5)}, ${pos.lng.toFixed(5)}`;
-    }
-    if(hint)hint.style.display='none';
-  });
-
-  // Also allow clicking map to move pin
-  miniMap.on('click',function(e){
-    if(miniMarker)miniMarker.setLatLng(e.latlng);
-    miniMarker.fire('dragend',{target:{getLatLng:()=>e.latlng}});
-  });
-
-  setTimeout(()=>miniMap&&miniMap.invalidateSize(),200);
-}
-
-// Update marker position when GPS improves
-function updateMapMarker(lat,lng){
-  if(miniMarker){
-    miniMarker.setLatLng([lat,lng]);
-    if(miniMap)miniMap.setView([lat,lng],16);
-  } else if(miniMap){
-    initMiniMap(lat,lng);
-  }
-}
-
-// ══════════════════════════════════════════════════
-// ── NEARBY POI SCAN (Overpass API, 1km radius) ──
-// ══════════════════════════════════════════════════
-const POI_TYPES=[
-  {key:'hospital', icon:'🏥', label:'Hospital/Clinic', tags:'amenity~"hospital|clinic|healthcare"', impact:'CRITICAL', score:30, color:'#fca5a5'},
-  {key:'school',   icon:'🏫', label:'School/College',  tags:'amenity~"school|college|university"', impact:'HIGH',     score:25, color:'#fbbf24'},
-  {key:'railway',  icon:'🚉', label:'Railway Station', tags:'railway="station"',                   impact:'HIGH',     score:22, color:'#fbbf24'},
-  {key:'market',   icon:'🛒', label:'Market/Mall',     tags:'shop~"mall|supermarket|market"',      impact:'HIGH',     score:18, color:'#86efac'},
-  {key:'bus',      icon:'🚌', label:'Bus Stand',       tags:'amenity="bus_station"',               impact:'MEDIUM',   score:15, color:'#93c5fd'},
-  {key:'police',   icon:'👮', label:'Police Station',  tags:'amenity="police"',                    impact:'HIGH',     score:20, color:'#fbbf24'},
-  {key:'govt',     icon:'🏛️', label:'Govt Office',    tags:'amenity~"townhall|courthouse"',        impact:'MEDIUM',   score:12, color:'#c4b5fd'},
-];
-
-async function scanNearbyPOIs(lat,lng){
-  const ctx=document.getElementById('priority-context');
-  const content=document.getElementById('pc-content');
-  ctx.classList.add('show');
-  document.getElementById('pc-scanning-ind').style.display='flex';
-  content.innerHTML='<div class="pc-scanning"><span class="spinner" style="width:14px;height:14px;border-top-color:var(--accent)"></span>Scanning 1km radius for sensitive locations...</div>';
-
-  const radius=1000; // 1km
-  const overpassQuery=`
-    [out:json][timeout:10];
-    (
-      node[amenity~"^(hospital|clinic|school|college|university|bus_station|police|townhall)$"](around:${radius},${lat},${lng});
-      node[railway="station"](around:${radius},${lat},${lng});
-      node[shop~"^(mall|supermarket|market)$"](around:${radius},${lat},${lng});
-      way[amenity~"^(hospital|clinic|school|college|university|bus_station|police)$"](around:${radius},${lat},${lng});
-    );
-    out center 20;`;
-
-  let pois=[];
-  try{
-    const res=await fetch('https://overpass-api.de/api/interpreter',{
-      method:'POST',
-      body:'data='+encodeURIComponent(overpassQuery),
-      headers:{'Content-Type':'application/x-www-form-urlencoded'}
-    });
-    const data=await res.json();
-    pois=parsePOIs(data.elements||[],lat,lng);
-  }catch(e){
-    // Fallback: use address-based detection
-    pois=[];
-  }
-
-  document.getElementById('pc-scanning-ind').style.display='none';
-  renderPriorityContext(pois,lat,lng);
-}
-
-function parsePOIs(elements,refLat,refLng){
-  const results=[];
-  for(const el of elements){
-    const tags=el.tags||{};
-    const elLat=el.lat||(el.center&&el.center.lat);
-    const elLng=el.lon||(el.center&&el.center.lon);
-    if(!elLat||!elLng)continue;
-    const dist=haversine(refLat,refLng,elLat,elLng);
-    const name=tags.name||tags['name:en']||'Unnamed';
-    let type=null;
-    if(/hospital|clinic/.test(tags.amenity))type=POI_TYPES[0];
-    else if(/school|college|university/.test(tags.amenity))type=POI_TYPES[1];
-    else if(tags.railway==='station')type=POI_TYPES[2];
-    else if(/mall|supermarket|market/.test(tags.shop))type=POI_TYPES[3];
-    else if(tags.amenity==='bus_station')type=POI_TYPES[4];
-    else if(tags.amenity==='police')type=POI_TYPES[5];
-    else if(/townhall|courthouse/.test(tags.amenity))type=POI_TYPES[6];
-    if(type&&dist<=1000){
-      results.push({name,dist:Math.round(dist),type,icon:type.icon,impact:type.impact,score:type.score,color:type.color});
-    }
-  }
-  // Sort by distance
-  results.sort((a,b)=>a.dist-b.dist);
-  // Deduplicate similar names
-  const seen=new Set();
-  return results.filter(r=>{
-    const key=r.name.toLowerCase().substring(0,15);
-    if(seen.has(key))return false;
-    seen.add(key);return true;
-  }).slice(0,6);
-}
-
-function haversine(lat1,lng1,lat2,lng2){
-  const R=6371000;
-  const dLat=(lat2-lat1)*Math.PI/180;
-  const dLng=(lng2-lng1)*Math.PI/180;
-  const a=Math.sin(dLat/2)**2+Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)**2;
-  return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
-}
-
-function renderPriorityContext(pois,lat,lng){
-  const content=document.getElementById('pc-content');
-  if(!pois.length){
-    // No POIs found - still show basic area score
-    const areaScore=getAreaScore(currentArea);
-    content.innerHTML=`
-      <div class="pc-score-row">
-        <div class="pc-score-circle" style="background:rgba(62,207,178,.1);border:2px solid rgba(62,207,178,.3)">
-          <span class="pc-score-num" style="color:var(--accent2)">${areaScore}</span>
-          <span class="pc-score-lbl" style="color:var(--muted)">pts</span>
-        </div>
-        <div class="pc-desc">No sensitive locations detected within 1km. Area classified as <strong style="color:var(--text)">${AREA_LABELS[currentArea]||currentArea}</strong>.</div>
-      </div>`;
-    return;
-  }
-
-  // Calculate priority score from POIs
-  let totalBoost=0;
-  const criticals=pois.filter(p=>p.impact==='CRITICAL');
-  const highs=pois.filter(p=>p.impact==='HIGH');
-  totalBoost=Math.min(pois.reduce((s,p)=>s+p.score,0),45);
-  const baseScore=getAreaScore(currentArea);
-  const finalScore=Math.min(baseScore+totalBoost,100);
-  const scoreColor=finalScore>=70?'#fca5a5':finalScore>=50?'var(--accent)':'var(--accent2)';
-  const urgency=finalScore>=70?'URGENT':finalScore>=50?'HIGH':'STANDARD';
-  const urgencyColor=finalScore>=70?'#fca5a5':finalScore>=50?'var(--accent)':'var(--accent2)';
-
-  content.innerHTML=`
-    <div class="pc-score-row">
-      <div class="pc-score-circle" style="background:rgba(245,166,35,.08);border:2px solid ${scoreColor}40">
-        <span class="pc-score-num" style="color:${scoreColor}">${finalScore}</span>
-        <span class="pc-score-lbl" style="color:var(--muted)">pts</span>
-      </div>
-      <div class="pc-desc">
-        <strong style="color:${urgencyColor}">${urgency} PRIORITY</strong> — ${pois.length} sensitive location${pois.length>1?'s':''} within 1km.
-        ${criticals.length?`<br><span style="color:#fca5a5">⚠ ${criticals.length} hospital/clinic nearby — immediate attention needed.</span>`:''}
-        ${highs.length&&!criticals.length?`<br><span style="color:var(--accent)">${highs.length} high-traffic area${highs.length>1?'s':''} affected.</span>`:''}
-      </div>
-    </div>
-    <div class="pc-pois">
-      ${pois.map(p=>`
-        <div class="pc-poi-row">
-          <span class="pc-poi-icon">${p.icon}</span>
-          <span class="pc-poi-name">${p.name}</span>
-          <span class="pc-poi-dist">${p.dist<1000?p.dist+'m':(p.dist/1000).toFixed(1)+'km'}</span>
-          <span class="pc-poi-impact pc-impact-${p.impact.toLowerCase()}">${p.impact}</span>
-        </div>`).join('')}
-    </div>`;
-}
-
-function getAreaScore(area){
-  return {hospital:70,school:60,highway:55,market:50,residential:30}[area]||30;
-}
-
-// ── Duplicate Warning ──
-function showDuplicateWarning(data){
-  document.getElementById('submit-error').style.display='none';
-  document.getElementById('dup-warning-box')?.remove();
-  // HIDE submit button — duplicate means DO NOT submit
-  document.getElementById('submit-btn').style.display='none';
-
-  const existId=data.existing_complaint_id||data.complaint_id||'—';
-  const dist=data.distance_meters?`${Math.round(data.distance_meters)}m away`:'Nearby';
-  const dateStr=fmtDate(data.existing_created_at);
-  const timeStr=fmtTime(data.existing_created_at);
-  const when=(dateStr!=='—')?`${dateStr} at ${timeStr}`:'Recently reported';
-
-  const box=document.createElement('div');
-  box.id='dup-warning-box';
-  box.innerHTML=`
-    <div style="background:linear-gradient(135deg,rgba(239,68,68,.1),rgba(245,158,11,.06));border:2px solid rgba(239,68,68,.5);border-radius:16px;padding:1.3rem 1.1rem;margin:1rem 0;animation:dupAnim .4s ease">
-      <div style="text-align:center;margin-bottom:1rem">
-        <div style="width:60px;height:60px;border-radius:50%;background:rgba(239,68,68,.1);border:2px solid rgba(239,68,68,.4);display:flex;align-items:center;justify-content:center;margin:0 auto .7rem;font-size:1.8rem;animation:dupPulse2 1.2s ease-in-out infinite">🚨</div>
-        <div style="font-size:1.15rem;font-weight:800;color:#ef4444;margin-bottom:.4rem">Already Reported!</div>
-        <div style="font-size:.85rem;color:var(--muted);line-height:1.6">This road damage is already being tracked<br>by municipal authorities.</div>
-      </div>
-      <div style="background:rgba(239,68,68,.07);border:1px solid rgba(239,68,68,.2);border-radius:12px;padding:.8rem 1rem;margin-bottom:.8rem">
-        <div style="font-size:.62rem;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;margin-bottom:.3rem">Existing Complaint</div>
-        <div style="font-family:monospace;font-size:.95rem;color:#f87171;font-weight:700;margin-bottom:.3rem">${existId}</div>
-        <div style="font-size:.75rem;color:var(--muted)">📍 ${dist} · 🕐 ${when}</div>
-      </div>
-      <div style="background:rgba(62,207,178,.06);border:1px solid rgba(62,207,178,.2);border-radius:10px;padding:.6rem .9rem;margin-bottom:.9rem;font-size:.8rem;color:var(--accent2);line-height:1.5">
-        ✓ Your report has been noted and will boost the priority of this complaint.
-      </div>
-      <div style="display:flex;gap:.6rem">
-        <button onclick="dismissDuplicate()" style="flex:1;background:var(--card);color:var(--muted);border:1px solid var(--border);border-radius:10px;padding:.7rem;font-family:inherit;font-weight:700;font-size:.85rem;cursor:pointer;transition:all .2s" onmouseover="this.style.borderColor='var(--accent2)';this.style.color='var(--accent2)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">← Go Back</button>
-        <button onclick="viewExistingComplaint('${existId}')" style="flex:1;background:linear-gradient(135deg,var(--accent2),#2ab89a);color:#000;border:none;border-radius:10px;padding:.7rem;font-family:inherit;font-weight:700;font-size:.85rem;cursor:pointer;transition:all .2s">Track This →</button>
-      </div>
-    </div>`;
-  const btn=document.getElementById('submit-btn');
-  btn.parentNode.insertBefore(box,btn);
-  box.scrollIntoView({behavior:'smooth',block:'center'});
-}
-
-function dismissDuplicate(){
-  document.getElementById('dup-warning-box')?.remove();
-  // Show submit button again when dismissed
-  if(selectedFile) document.getElementById('submit-btn').style.display='block';
-}
-
-function viewExistingComplaint(id){
-  document.getElementById('dup-warning-box')?.remove();
-  showPage('complaints');
-  // After complaints load, open the detail
-  setTimeout(()=>showDetail(id),600);
-}
-
-// ── Submit ──
 async function submitComplaint(){
-  if(!selectedFile){showSubmitError('Please select or take a photo first.','warn');return;}
-  if(!currentLat||!currentLng){showSubmitError('Location not set. Enable GPS or enter manually.','warn');return;}
+  token=localStorage.getItem('citizen_token');
+  if(!token){showPage('login');return;}
+  if(!selectedFile){showErrMsg('Please capture a road damage photo first.');return;}
   const btn=document.getElementById('submit-btn');
-  btn.innerHTML='<span class="spinner"></span>Analyzing & Submitting...';btn.disabled=true;
+  btn.innerHTML='<span class="spinner"></span>AI analyzing damage...';btn.disabled=true;
   document.getElementById('submit-error').style.display='none';
   try{
     const form=new FormData();
-    form.append('latitude',currentLat);
-    form.append('longitude',currentLng);
+    form.append('latitude',currentLat||11.0168);
+    form.append('longitude',currentLng||76.9558);
     form.append('address',currentAddr||`${currentLat},${currentLng}`);
     form.append('image',selectedFile);
-    if(forceSubmitFlag){form.append('force_submit','true');forceSubmitFlag=false;}
     const res=await fetch(`${API}/complaints/submit`,{method:'POST',headers:{Authorization:`Bearer ${token}`},body:form});
     const data=await res.json();
     if(!res.ok)throw new Error(data.detail||'Submission failed');
-    if(data.warning==='duplicate'||data.is_duplicate){showDuplicateWarning(data);btn.innerHTML='🚨 Submit Complaint';btn.disabled=false;return;}
-    const sev=(data.severity||'medium').toString().split('.').pop().toLowerCase();
-    document.getElementById('result-id').textContent=data.complaint_id||'—';
+    
+    if(data.warning==='duplicate'){
+      showErrMsg(`⚠️ Similar complaint already exists nearby: ${data.existing_complaint_id}. ${data.message}`,'warn');
+      btn.innerHTML='🚨 Submit Complaint';btn.disabled=false;
+      return;
+    }
+    
+    // Show result
+    document.getElementById('result-id').textContent=data.complaint_id;
     const sevEl=document.getElementById('result-severity');
-    sevEl.textContent=sev.toUpperCase()+' SEVERITY';
-    sevEl.className=`result-severity sev-${sev}`;
-    const ps=Math.round(data.priority_score||0);
+    sevEl.textContent=(data.severity||'medium').toUpperCase()+' SEVERITY';
+    sevEl.className=`result-severity sev-${data.severity||'medium'}`;
+    
+    const ps=data.priority_score||0;
     const psEl=document.getElementById('result-priority');
-    if(psEl){psEl.textContent=`P${ps}`;psEl.className=`priority-score ${ps>=60?'ps-high':ps>=35?'ps-medium':'ps-low'}`;}
-    const raEl=document.getElementById('result-area');if(raEl)raEl.textContent=AREA_LABELS[data.area_type||'residential']||'';
-    document.getElementById('result-desc').textContent=data.ai_description||data.description||'Road damage detected.';
+    psEl.textContent=`P${ps}`;
+    psEl.className=`priority-score ${ps>=60?'ps-high':ps>=35?'ps-medium':'ps-low'}`;
+    
+    document.getElementById('result-area').textContent=AREA_LABELS[data.area_type||'residential']||'';
+    document.getElementById('result-desc').textContent=data.description||'Road damage detected.';
     document.getElementById('result-card').classList.add('show');
     btn.style.display='none';
-    stopGPSWatch();
     checkNotifications();
-  }catch(e){showSubmitError(e.message,'error');btn.innerHTML='🚨 Submit Complaint';btn.disabled=false;}
+  }catch(e){showErrMsg(e.message);btn.innerHTML='🚨 Submit Complaint';btn.disabled=false;}
 }
 
-function showSubmitError(msg,type='error'){
+function showErrMsg(msg,type='error'){
   const el=document.getElementById('submit-error');
   el.className=type==='warn'?'warn-msg':'error-msg';
   el.textContent=msg;el.style.display='block';
 }
 
-// ── My Complaints ──
-async function loadComplaints(){
-  const list=document.getElementById('complaints-list');
-  list.innerHTML='<div class="empty-state"><div class="empty-icon">⏳</div><p>Loading...</p></div>';
-  const filter=document.getElementById('filter-status').value;
+async function reverseGeocode(lat,lng){
   try{
-    const res=await fetch(`${API}/complaints/my`,{headers:{Authorization:`Bearer ${token}`}});
-    if(!res.ok)throw new Error('Failed to load');
+    const res=await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`);
+    const data=await res.json();
+    return data.display_name?.substring(0,300)||`${lat},${lng}`;
+  }catch{return `${lat},${lng}`;}
+}
+
+async function loadComplaints(){
+  token=localStorage.getItem('citizen_token');
+  if(!token){showPage('login');return;}
+  const list=document.getElementById('complaints-list');
+  list.innerHTML='<div class="empty-state"><div class="empty-icon">⏳</div><p>Loading reports...</p></div>';
+  try{
+    const statusFilter=document.getElementById('filter-status').value;
+    let url=`${API}/complaints/my`;
+    const res=await fetch(url,{headers:{Authorization:`Bearer ${token}`}});
+    if(res.status===401){localStorage.clear();showPage('login');return;}
     let data=await res.json();
-    if(filter)data=data.filter(c=>c.status===filter);
-    if(!data.length){list.innerHTML='<div class="empty-state"><div class="empty-icon">📋</div><p>No complaints yet.</p></div>';return;}
-    data.sort((a,b)=>new Date(b.created_at||0)-new Date(a.created_at||0));
+    if(!Array.isArray(data)||!data.length){list.innerHTML='<div class="empty-state"><div class="empty-icon">📋</div><p>No reports yet. Submit your first complaint!</p></div>';return;}
+    if(statusFilter)data=data.filter(c=>c.status===statusFilter);
     list.innerHTML=data.map(c=>{
-      const sev=(c.severity||'medium').toString().split('.').pop().toLowerCase();
-      const dateStr=fmtDate(c.created_at);
-      const timeStr=fmtTime(c.created_at);
-      const steps=['pending','assigned','in_progress','completed'];
-      const ci=steps.indexOf(c.status);
-      return `<div class="complaint-card ${sev}" onclick="showDetail('${c.complaint_id}')">
+      const ps=c.priority_score||0;
+      const psCls=ps>=60?'ps-high':ps>=35?'ps-medium':'ps-low';
+      return `<div class="complaint-card ${c.severity||'medium'}" onclick="showDetail('${c.complaint_id}')">
         <div class="complaint-header">
-          <div class="complaint-id">${c.complaint_id}</div>
-          <div class="status-badge status-${c.status||'pending'}">${(c.status||'pending').replace('_',' ')}</div>
+          <div class="complaint-id">${c.complaint_id}<span class="p-score-chip ${psCls}" style="background:var(--card);border:1px solid var(--border)">P${ps}</span></div>
+          <div class="status-badge status-${c.status}">${(c.status||'pending').replace('_',' ')}</div>
         </div>
-        <div class="complaint-meta">${(c.damage_type||'').replace('_',' ')} · ${sev.toUpperCase()} · ${dateStr} ${timeStr}</div>
-        <div class="complaint-addr">${c.address||'—'}</div>
-        <div class="progress-steps">
-          ${steps.map((s,i)=>{
-            const done=(ci>i)||(c.status==='completed'&&i===3);
-            const active=ci===i&&c.status!=='completed';
-            const icons={pending:'📝',assigned:'👤',in_progress:'🔧',completed:'✅'};
-            return `<div class="step ${done||c.status===s?'done':''} ${active?'active':''}">
-              <div class="step-dot">${done||c.status===s?'✓':icons[s]||''}</div>
-              <div class="step-label">${s.replace('_',' ')}</div>
-            </div>`;
-          }).join('')}
-        </div>
+        <div class="complaint-meta">${(c.damage_type||'').replace('_',' ')} · ${(c.severity||'').toUpperCase()} · ${new Date(c.created_at).toLocaleDateString()}</div>
+        ${c.area_type?`<div class="complaint-meta" style="margin-top:2px">${AREA_ICONS[c.area_type]||'📍'} ${c.area_type}</div>`:''}
+        ${c.address?`<div class="complaint-meta" style="margin-top:3px;font-size:.72rem">${c.address.substring(0,55)}...</div>`:''}
+        ${buildProgressSteps(c.status)}
       </div>`;
     }).join('');
   }catch(e){list.innerHTML=`<div class="error-msg">${e.message}</div>`;}
 }
 
-// ── Detail ──
+function buildProgressSteps(status){
+  const steps=[{icon:'📤',label:'Submitted'},{icon:'👮',label:'Assigned'},{icon:'🔧',label:'In Progress'},{icon:'✅',label:'Fixed'}];
+  const order=['pending','assigned','in_progress','completed'];
+  const idx=order.indexOf(status);
+  return `<div class="progress-steps">${steps.map((s,i)=>{
+    const cls=i<idx?'done':i===idx?'active':'';
+    return `<div class="step ${cls}"><div class="step-dot">${cls==='done'?'✓':s.icon}</div><div class="step-label">${s.label}</div></div>`;
+  }).join('')}</div>`;
+}
+
 async function showDetail(complaintId){
   showPage('detail');
   const content=document.getElementById('detail-content');
   content.innerHTML='<div class="empty-state"><div class="empty-icon">⏳</div><p>Loading...</p></div>';
   try{
-    const [cr,mr]=await Promise.all([
+    const [cRes,msgRes]=await Promise.all([
       fetch(`${API}/complaints/${complaintId}`,{headers:{Authorization:`Bearer ${token}`}}),
       fetch(`${API}/messages/${complaintId}`,{headers:{Authorization:`Bearer ${token}`}})
     ]);
-    const c=await cr.json();const msgs=mr.ok?await mr.json():[];
-    const sev=(c.severity||'medium').toString().split('.').pop().toLowerCase();
-    const dateStr=fmtDate(c.created_at);
-    const timeStr=fmtTime(c.created_at);
-    const BASE=location.port==='8443'?`https://${location.hostname}:8443`:`http://${location.hostname}:8000`;
+    const c=await cRes.json();
+    const msgs=msgRes.ok?await msgRes.json():[];
+    const BASE=window.location.hostname==='localhost'?'http://localhost:8000':window.location.origin;
+    const ps=c.priority_score||0;
+    const psCls=ps>=60?'ps-high':ps>=35?'ps-medium':'ps-low';
     content.innerHTML=`
-      ${c.image_url?`<img class="detail-img" src="${BASE}${c.image_url}"/>`:''}
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:1.5rem;color:var(--accent);margin-bottom:.5rem">${c.complaint_id}</div>
+      <img class="detail-img" src="${BASE}${c.image_url}"/>
       <div class="detail-grid">
-        <div class="detail-cell"><div class="dlabel">ID</div><div class="dvalue" style="color:var(--accent);font-size:.78rem">${c.complaint_id}</div></div>
-        <div class="detail-cell"><div class="dlabel">Status</div><div class="dvalue"><span class="status-badge status-${c.status}">${(c.status||'').replace('_',' ')}</span></div></div>
-        <div class="detail-cell"><div class="dlabel">Damage</div><div class="dvalue">${(c.damage_type||'—').replace('_',' ')}</div></div>
-        <div class="detail-cell"><div class="dlabel">Severity</div><div class="dvalue"><span class="result-severity sev-${sev}" style="margin:0;padding:.15rem .55rem;font-size:.7rem">${sev.toUpperCase()}</span></div></div>
-        <div class="detail-cell"><div class="dlabel">Date</div><div class="dvalue">${dateStr}</div></div>
-        <div class="detail-cell"><div class="dlabel">Time</div><div class="dvalue">${timeStr}</div></div>
+        <div class="detail-cell"><div class="dlabel">Damage Type</div><div class="dvalue">${(c.damage_type||'').replace('_',' ')}</div></div>
+        <div class="detail-cell"><div class="dlabel">Severity</div><div class="dvalue"><span class="result-severity sev-${c.severity}" style="margin:0">${(c.severity||'').toUpperCase()}</span></div></div>
         <div class="detail-cell"><div class="dlabel">AI Confidence</div><div class="dvalue">${((c.ai_confidence||0)*100).toFixed(1)}%</div></div>
-        <div class="detail-cell"><div class="dlabel">Priority</div><div class="dvalue"><span class="priority-score ps-${Math.round(c.priority_score||0)>=60?'high':Math.round(c.priority_score||0)>=35?'medium':'low'}" style="font-size:.82rem">P${Math.round(c.priority_score||0)}</span></div></div>
-        ${c.allocated_fund>0?`<div class="detail-cell"><div class="dlabel">Budget</div><div class="dvalue" style="color:#4ade80">₹${(c.allocated_fund||0).toLocaleString('en-IN')}</div></div>`:''}
-        ${c.officer_name?`<div class="detail-cell"><div class="dlabel">Officer</div><div class="dvalue">${c.officer_name}</div></div>`:''}
+        <div class="detail-cell"><div class="dlabel">Priority Score</div><div class="dvalue"><span class="priority-score ${psCls}">P${ps}</span></div></div>
+        <div class="detail-cell"><div class="dlabel">Area Type</div><div class="dvalue">${AREA_LABELS[c.area_type]||c.area_type||'—'}</div></div>
+        <div class="detail-cell"><div class="dlabel">Status</div><div class="dvalue"><span class="status-badge status-${c.status}">${(c.status||'').replace('_',' ')}</span></div></div>
+        ${c.allocated_fund>0?`<div class="detail-cell"><div class="dlabel">Budget Allocated</div><div class="dvalue" style="color:#4ade80">₹${(c.allocated_fund||0).toLocaleString()}</div></div>`:''}
+        ${c.officer_name?`<div class="detail-cell"><div class="dlabel">Assigned Officer</div><div class="dvalue">${c.officer_name}</div></div>`:''}
       </div>
-      ${c.description?`<div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:.7rem .9rem;font-size:.82rem;color:var(--muted);margin-bottom:1rem;line-height:1.5">${c.description}</div>`:''}
-      <div id="detail-map"></div>
-      <div class="msg-box">
-        <div class="msg-box-title">💬 Messages
-          ${msgs.filter(m=>m.sender_role==='officer').length?`<span style="background:rgba(245,166,35,.12);color:var(--accent);font-size:.62rem;padding:.1rem .45rem;border-radius:20px">${msgs.filter(m=>m.sender_role==='officer').length} from officer</span>`:''}
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:.8rem;margin-bottom:1rem;font-size:.85rem;color:var(--muted)">${c.description||'—'}</div>
+      ${buildProgressSteps(c.status)}
+      ${c.officer_notes?`<div style="background:var(--card);border:1px solid rgba(59,130,246,.3);border-radius:8px;padding:.8rem;margin-top:1rem">
+        <div style="font-size:.72rem;color:#60a5fa;text-transform:uppercase;font-weight:700;margin-bottom:.4rem">👮 Officer Notes</div>
+        <div style="font-size:.88rem">${c.officer_notes.replace(/\[AFTER_PHOTO:[^\]]+\]/g,'')}</div>
+      </div>`:''}
+      <div id="detail-map" style="margin-top:1rem"></div>
+      <div class="msg-box" style="margin-top:1rem">
+        <div class="msg-box-title">💬 Messages with Officer
+          ${msgs.filter(m=>m.sender_role==='officer').length?`<span style="background:rgba(245,166,35,.15);color:var(--accent);font-size:.65rem;padding:.15rem .5rem;border-radius:20px">${msgs.filter(m=>m.sender_role==='officer').length} from officer</span>`:''}
         </div>
         <div class="msg-list" id="detail-msg-list">
-          ${msgs.length?msgs.map(m=>{
-            const mt=fmtTime(m.created_at);
-            return `<div class="msg-bubble ${m.sender_role}"><div class="msg-meta">${m.sender_role==='officer'?'Officer':'You'} · ${mt}</div>${m.message}</div>`;
-          }).join(''):'<div style="color:var(--muted);font-size:.8rem;text-align:center;padding:.8rem">No messages yet</div>'}
+          ${msgs.length?msgs.map(m=>`<div class="msg-bubble ${m.sender_role}">
+            <div class="msg-meta">${m.sender_role==='officer'?'👮 Officer':'👤 You'} · ${new Date(m.created_at).toLocaleTimeString()}</div>
+            ${m.message}</div>`).join(''):'<div style="color:var(--muted);font-size:.82rem;text-align:center;padding:1rem">No messages yet</div>'}
         </div>
         <div class="msg-input-row">
           <input class="msg-input" id="citizen-msg-input" placeholder="Reply to officer..." onkeydown="if(event.key==='Enter')sendCitizenMessage('${c.complaint_id}')"/>
           <button class="msg-send-btn" onclick="sendCitizenMessage('${c.complaint_id}')">Send</button>
         </div>
       </div>`;
+    // Init detail map
     setTimeout(()=>{
-      if(detailMap){detailMap.remove();detailMap=null;}
-      const me=document.getElementById('detail-map');
-      if(me&&c.latitude&&c.longitude){
-        detailMap=L.map(me,{zoomControl:true,attributionControl:false}).setView([c.latitude,c.longitude],17);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(detailMap);
-        const col={high:'#ef4444',medium:'#f5a623',low:'#3ecfb2'}[sev]||'#f5a623';
-        L.circleMarker([c.latitude,c.longitude],{radius:12,fillColor:col,color:'#fff',weight:2,fillOpacity:.9}).bindPopup(`<b>${c.complaint_id}</b>`).addTo(detailMap).openPopup();
-      }
-      const ml=document.getElementById('detail-msg-list');if(ml)ml.scrollTop=ml.scrollHeight;
+      if(detailMap){detailMap.remove();}
+      detailMap=L.map('detail-map',{zoomControl:true,attributionControl:false}).setView([c.latitude,c.longitude],17);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(detailMap);
+      const colors={'high':'#e05c5c','medium':'#f5a623','low':'#3ecfb2'};
+      L.circleMarker([c.latitude,c.longitude],{radius:12,fillColor:colors[c.severity]||'#f5a623',color:'#fff',weight:2,fillOpacity:.9})
+        .bindPopup(`<b>${c.complaint_id}</b><br>${c.damage_type}<br>${c.severity} severity`).addTo(detailMap).openPopup();
+      const ml=document.getElementById('detail-msg-list');
+      if(ml)ml.scrollTop=ml.scrollHeight;
     },200);
   }catch(e){content.innerHTML=`<div class="error-msg">${e.message}</div>`;}
 }
 
-async function sendCitizenMessage(cid){
-  const inp=document.getElementById('citizen-msg-input');
-  const msg=inp.value.trim();if(!msg)return;inp.value='';
+async function sendCitizenMessage(complaintId){
+  const input=document.getElementById('citizen-msg-input');
+  const msg=input.value.trim();if(!msg)return;
+  input.value='';
   try{
-    await fetch(`${API}/messages/${cid}/send-citizen`,{method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify({message:msg})});
-    const mr=await fetch(`${API}/messages/${cid}`,{headers:{Authorization:`Bearer ${token}`}});
-    const msgs=await mr.json();
+    await fetch(`${API}/messages/${complaintId}/send-citizen`,{method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify({message:msg})});
+    const msgRes=await fetch(`${API}/messages/${complaintId}`,{headers:{Authorization:`Bearer ${token}`}});
+    const msgs=await msgRes.json();
     const list=document.getElementById('detail-msg-list');
     if(list){
-      list.innerHTML=msgs.map(m=>{
-        const mt=fmtTime(m.created_at);
-        return `<div class="msg-bubble ${m.sender_role}"><div class="msg-meta">${m.sender_role==='officer'?'Officer':'You'} · ${mt}</div>${m.message}</div>`;
-      }).join('');
+      list.innerHTML=msgs.map(m=>`<div class="msg-bubble ${m.sender_role}">
+        <div class="msg-meta">${m.sender_role==='officer'?'👮 Officer':'👤 You'} · ${new Date(m.created_at).toLocaleTimeString()}</div>
+        ${m.message}</div>`).join('');
       list.scrollTop=list.scrollHeight;
     }
   }catch(e){console.error(e);}
 }
 
-// ── Notifications ──
 async function checkNotifications(){
   if(!token)return;
   try{
-    const r=await fetch(`${API}/complaints/notifications/my`,{headers:{Authorization:`Bearer ${token}`}});
-    if(!r.ok)return;
-    const n=await r.json();
-    const u=n.filter(x=>!x.is_read).length;
-    const b=document.getElementById('notif-badge');
-    if(u>0){b.textContent=u;b.classList.add('show');}else b.classList.remove('show');
+    const res=await fetch(`${API}/complaints/notifications/my`,{headers:{Authorization:`Bearer ${token}`}});
+    if(!res.ok)return;
+    const notifs=await res.json();
+    const unread=notifs.filter(n=>!n.is_read).length;
+    const badge=document.getElementById('notif-badge');
+    if(unread>0){badge.textContent=unread;badge.classList.add('show');}
+    else{badge.classList.remove('show');}
   }catch(e){}
 }
 
 async function loadNotifications(){
   const list=document.getElementById('notifications-list');
-  list.innerHTML='<div class="empty-state"><div class="empty-icon">⏳</div><p>Loading...</p></div>';
+  list.innerHTML='<div class="empty-state"><div class="empty-icon">⏳</div><p>Loading alerts...</p></div>';
   try{
     const res=await fetch(`${API}/complaints/notifications/my`,{headers:{Authorization:`Bearer ${token}`}});
     const notifs=await res.json();
-    if(!notifs.length){list.innerHTML='<div class="empty-state"><div class="empty-icon">🔔</div><p>No alerts yet.</p></div>';return;}
-    list.innerHTML=notifs.map(n=>{
-      const ds=fmtDate(n.created_at);
-      const ts=fmtTime(n.created_at);
-      return `<div class="notif-card ${n.is_read?'':'unread'}">
+    if(!notifs.length){list.innerHTML='<div class="empty-state"><div class="empty-icon">🔔</div><p>No alerts yet. Your updates will appear here.</p></div>';return;}
+    list.innerHTML=notifs.map(n=>`
+      <div class="notif-card ${n.is_read?'':'unread'}">
         <div class="notif-header">
-          <span class="notif-type-badge notif-${n.type||'info'}">${(n.type||'info').replace('_',' ')}</span>
-          <div class="notif-time">${ds} ${ts}</div>
+          <div><span class="notif-type-badge notif-${n.type}">${n.type?.replace('_',' ')}</span></div>
+          <div class="notif-time">${new Date(n.created_at).toLocaleString()}</div>
         </div>
         ${n.complaint_id?`<div class="notif-id">${n.complaint_id}</div>`:''}
         <div class="notif-msg">${n.message}</div>
-        ${n.complaint_id?`<button onclick="showDetail('${n.complaint_id}')" style="margin-top:.5rem;background:none;border:1px solid var(--border);color:var(--muted);padding:.25rem .6rem;border-radius:6px;font-family:inherit;font-size:.72rem;cursor:pointer">View →</button>`:''}
-      </div>`;
-    }).join('');
-    fetch(`${API}/complaints/notifications/read-all`,{method:'POST',headers:{Authorization:`Bearer ${token}`}}).catch(()=>{});
+        ${n.complaint_id?`<button onclick="showDetail('${n.complaint_id}')" style="margin-top:.5rem;background:none;border:1px solid var(--border);color:var(--muted);padding:.25rem .6rem;border-radius:6px;font-family:inherit;font-size:.72rem;cursor:pointer">View Complaint →</button>`:''}
+      </div>`).join('');
+    // Mark as read
+    fetch(`${API}/complaints/notifications/read-all`,{method:'POST',headers:{Authorization:`Bearer ${token}`}});
     document.getElementById('notif-badge').classList.remove('show');
   }catch(e){list.innerHTML=`<div class="error-msg">${e.message}</div>`;}
 }
@@ -1499,40 +637,24 @@ async function markAllRead(){
   }catch(e){}
 }
 
-// ── Navigation ──
-const PROTECTED_PAGES=['report','complaints','notifications','detail'];
 function showPage(page){
-  // Auth guard — protected pages require login
-  if(PROTECTED_PAGES.includes(page)&&!token){
-    showPage('login');
-    showError('login-error','Please sign in to continue.');
-    return;
-  }
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
-  document.getElementById(`page-${page}`)?.classList.add('active');
+  document.getElementById(`page-${page}`).classList.add('active');
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
-  const map={report:0,complaints:1,notifications:2};
-  if(map[page]!==undefined)document.querySelectorAll('.nav-btn')[map[page]]?.classList.add('active');
-  if(page==='report'){
-    document.getElementById('submit-btn').style.display=selectedFile?'block':'none';
+  if(page==='report'){document.querySelectorAll('.nav-btn')[0].classList.add('active');
+    document.getElementById('submit-btn').style.display='block';
+    document.getElementById('submit-btn').disabled=false;
+    document.getElementById('submit-btn').innerHTML='🚨 Submit Complaint';
     document.getElementById('result-card').classList.remove('show');
-    document.getElementById('submit-error').style.display='none';
-    document.getElementById('dup-warning-box')?.remove();
-    // Restart GPS if needed
-    if(!currentLat && token) startAccurateGPS();
-  }
-  if(page==='complaints')loadComplaints();
-  if(page==='notifications')loadNotifications();
+    document.getElementById('submit-error').style.display='none';}
+  if(page==='complaints'){document.querySelectorAll('.nav-btn')[1].classList.add('active');loadComplaints();}
+  if(page==='notifications'){document.querySelectorAll('.nav-btn')[2].classList.add('active');loadNotifications();}
 }
 
-function showError(id,msg){const el=document.getElementById(id);if(el){el.textContent=msg;el.style.display='block';}}
-
-setInterval(()=>{if(token)checkNotifications();},15000);
+function showError(id,msg){const el=document.getElementById(id);el.textContent=msg;el.style.display='block';}
+setInterval(()=>{if(token){checkNotifications();}},15000);
 setInterval(()=>{const p=document.querySelector('.page.active');if(p&&p.id==='page-complaints'&&token)loadComplaints();},20000);
 init();
 </script>
-
-
-<!-- HTTPS handled gracefully in camera fallback -->
 </body>
 </html>

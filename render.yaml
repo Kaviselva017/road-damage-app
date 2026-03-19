@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: roadwatch-api
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: DATABASE_URL
+        value: sqlite:///./road_damage.db
+      - key: SECRET_KEY
+        value: roadwatch-secure-key-2026
+      - key: ALGORITHM
+        value: HS256
+      - key: ACCESS_TOKEN_EXPIRE_MINUTES
+        value: 10080
+      - key: UPLOAD_DIR
+        value: uploads

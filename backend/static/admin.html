@@ -248,35 +248,19 @@ tr:hover td { background:rgba(255,255,255,0.02); }
 
       <div class="row triple">
         <div class="card">
-          <div class="card-title">Total Officers</div>
+          <div class="card-title"><span class="ct-icon">👮</span> Total Officers</div>
           <div style="font-family:'Clash Display',sans-serif;font-size:2.5rem;color:var(--accent)" id="s-officers">—</div>
           <div style="font-size:0.78rem;color:var(--muted);margin-top:4px">Field officers active</div>
         </div>
         <div class="card">
-          <div class="card-title">Total Citizens</div>
+          <div class="card-title"><span class="ct-icon">👥</span> Total Citizens</div>
           <div style="font-family:'Clash Display',sans-serif;font-size:2.5rem;color:var(--accent2)" id="s-citizens">—</div>
           <div style="font-size:0.78rem;color:var(--muted);margin-top:4px">Registered reporters</div>
         </div>
         <div class="card">
-          <div class="card-title">Resolution Rate</div>
+          <div class="card-title"><span class="ct-icon">✅</span> Resolution Rate</div>
           <div style="font-family:'Clash Display',sans-serif;font-size:2.5rem;color:var(--green)" id="s-resolution">—</div>
           <div style="font-size:0.78rem;color:var(--muted);margin-top:4px">% complaints fixed</div>
-        </div>
-      </div>
-
-      <!-- LIVE MAP -->
-      <div class="card" style="margin-top:0">
-        <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
-          <span>Live Complaint Map</span>
-          <div style="display:flex;gap:0.5rem;font-size:0.72rem">
-            <span style="color:var(--red)">● High</span>
-            <span style="color:var(--accent)">● Medium</span>
-            <span style="color:var(--accent2)">● Low</span>
-            <span style="color:#4ade80">● Completed</span>
-          </div>
-        </div>
-        <div id="overview-map" style="height:320px;border-radius:10px;overflow:hidden;background:var(--s3)">
-          <div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--muted);font-size:0.85rem">Loading map...</div>
         </div>
       </div>
     </div>
@@ -486,31 +470,7 @@ tr:hover td { background:rgba(255,255,255,0.02); }
 </div>
 
 <script>
-const API = window.location.port === '8443' ? 'https://localhost:8443/api' : 'http://localhost:8000/api';
-
-// ── DATE/TIME HELPERS (IST = UTC+5:30) ─────────────────
-function toIST(dateStr) {
-  if (!dateStr) return null;
-  const d = new Date(String(dateStr).replace(' ', 'T'));
-  if (isNaN(d)) return null;
-  return new Date(d.getTime() + (5.5 * 60 * 60 * 1000));
-}
-function fmtDate(dateStr) {
-  const d = toIST(dateStr);
-  if (!d) return '—';
-  return d.toLocaleDateString('en-IN', {day:'2-digit', month:'short', year:'numeric'});
-}
-function fmtTime(dateStr) {
-  const d = toIST(dateStr);
-  if (!d) return '—';
-  return d.toLocaleTimeString('en-IN', {hour:'2-digit', minute:'2-digit', hour12:true});
-}
-function fmtDateTime(dateStr) {
-  const d = toIST(dateStr);
-  if (!d) return '—';
-  return d.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'}) + ' ' +
-         d.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true});
-}
+const API = (window.location.hostname === 'localhost' ? 'http://localhost:8000' : window.location.origin) + '/api';
 let token = localStorage.getItem('admin_token');
 let adminName = localStorage.getItem('admin_name');
 let allComplaints = [], allOfficers = [], allCitizens = [], stats = {};
@@ -523,7 +483,7 @@ function init() {
     document.getElementById('login-overlay').style.display = 'none';
     document.getElementById('admin-name').textContent = adminName || 'Admin';
     loadAll();
-    setInterval(loadAll, 10000); // Refresh every 10 seconds
+    setInterval(loadAll, 30000);
   }
 }
 
@@ -543,7 +503,7 @@ async function doLogin() {
     document.getElementById('login-overlay').style.display = 'none';
     document.getElementById('admin-name').textContent = adminName;
     loadAll();
-    setInterval(loadAll, 10000); // Refresh every 10 seconds
+    setInterval(loadAll, 30000);
   } catch(e) {
     document.getElementById('login-err').textContent = e.message;
     document.getElementById('login-err').style.display = 'block';
@@ -557,67 +517,8 @@ function logout() {
 }
 
 async function loadAll() {
-  await Promise.all([loadComplaints(), loadOfficers(), loadCitizens()]);
-  await Promise.all([loadStats(), loadChartData()]); // Load stats after data so counts are accurate
+  await Promise.all([loadStats(), loadComplaints(), loadOfficers(), loadCitizens(), loadChartData()]);
   document.getElementById('last-updated').textContent = 'Updated ' + new Date().toLocaleTimeString();
-  renderOverviewMap();
-}
-
-function renderOverviewMap() {
-  const mapEl = document.getElementById('overview-map');
-  if (!mapEl || !allComplaints.length) return;
-  // Build OpenStreetMap with complaint markers using iframe + custom overlay
-  const centerLat = allComplaints.reduce((s,c)=>s+c.latitude,0)/allComplaints.length;
-  const centerLng = allComplaints.reduce((s,c)=>s+c.longitude,0)/allComplaints.length;
-  
-  // Use Leaflet via CDN for the overview map
-  if (!window.L) {
-    const link = document.createElement('link');
-    link.rel = 'stylesheet';
-    link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
-    document.head.appendChild(link);
-    const script = document.createElement('script');
-    script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
-    script.onload = () => initLeafletMap(mapEl, centerLat, centerLng);
-    document.head.appendChild(script);
-  } else {
-    initLeafletMap(mapEl, centerLat, centerLng);
-  }
-}
-
-function initLeafletMap(mapEl, lat, lng) {
-  if (mapEl._leaflet_id) {
-    mapEl._leaflet_map.remove();
-    mapEl._leaflet_id = null;
-  }
-  const map = L.map(mapEl).setView([lat, lng], 13);
-  mapEl._leaflet_map = map;
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '© OpenStreetMap'
-  }).addTo(map);
-
-  const colors = {high:'#e05c5c', medium:'#f5a623', low:'#3ecfb2', completed:'#4ade80'};
-  allComplaints.forEach(c => {
-    const color = c.status==='completed' ? colors.completed : colors[c.severity] || colors.medium;
-    const marker = L.circleMarker([c.latitude, c.longitude], {
-      radius: c.severity==='high' ? 12 : c.severity==='medium' ? 9 : 7,
-      fillColor: color, color: '#fff', weight: 2, fillOpacity: 0.9
-    }).addTo(map);
-    marker.bindPopup(`<div style="font-family:sans-serif;min-width:160px">
-      <b style="color:#f5a623">${c.complaint_id}</b><br>
-      ${(c.damage_type||'').replace('_',' ')} · <b style="color:${color}">${(c.severity||'').toUpperCase()}</b><br>
-      Status: ${(c.status||'').replace('_',' ')}<br>
-      Citizen: ${c.citizen_name||'Unknown'}<br>
-      Officer: ${c.officer_name||'Unassigned'}
-      ${c.allocated_fund > 0 ? '<br>Fund: Rs.' + c.allocated_fund : ''}
-    </div>`);
-  });
-
-  // Fit bounds to all markers
-  if (allComplaints.length > 1) {
-    const bounds = allComplaints.map(c=>[c.latitude, c.longitude]);
-    map.fitBounds(bounds, {padding:[20,20]});
-  }
 }
 
 async function refreshAll() { await loadAll(); showToast('✅ Data refreshed!'); }
@@ -625,46 +526,21 @@ async function refreshAll() { await loadAll(); showToast('✅ Data refreshed!');
 async function loadStats() {
   try {
     const res = await fetch(`${API}/admin/stats`, {headers:{Authorization:`Bearer ${token}`}});
-    if (!res.ok) { console.error('Stats API error:', res.status); return; }
     stats = await res.json();
-    console.log('Stats received:', stats);
-
-    // Normalize all possible field names from API
-    const total = Number(stats.total || stats.total_complaints || 0);
-    const pending = Number(stats.pending || 0);
-    const inProgress = Number(stats.in_progress || stats.inProgress || 0);
-    const completed = Number(stats.completed || 0);
-    const high = Number(stats.high || stats.high_severity || 0);
-    const medium = Number(stats.medium || stats.medium_severity || 0);
-    const low = Number(stats.low || stats.low_severity || 0);
-    const officers = Number(stats.total_officers || stats.active_officers || allOfficers.length || 0);
-    const citizens = Number(stats.total_citizens || allCitizens.length || 0);
-    const rate = Number(stats.resolution_rate || stats.avg_resolution_hours || 0);
-    const recent = Number(stats.recent_7days || 0);
-
-    // Store normalized back
-    stats.total = total; stats.pending = pending; stats.in_progress = inProgress;
-    stats.completed = completed; stats.high = high; stats.medium = medium; stats.low = low;
-    stats.total_officers = officers; stats.total_citizens = citizens;
-    stats.resolution_rate = rate; stats.recent_7days = recent;
-
-    // Update DOM safely
-    const set = (id, val) => { const el = document.getElementById(id); if(el) el.textContent = val; };
-    set('s-total', total);
-    set('s-pending', pending);
-    set('s-progress', inProgress);
-    set('s-done', completed);
-    set('s-high', high);
-    set('s-officers', officers);
-    set('s-citizens', citizens);
-    set('s-resolution', rate + '%');
-    set('s-recent', recent + ' this week');
-    set('s-rate', rate + '% resolved');
-
+    document.getElementById('s-total').textContent = stats.total;
+    document.getElementById('s-pending').textContent = stats.pending;
+    document.getElementById('s-progress').textContent = stats.in_progress;
+    document.getElementById('s-done').textContent = stats.completed;
+    document.getElementById('s-high').textContent = stats.high;
+    document.getElementById('s-officers').textContent = stats.total_officers;
+    document.getElementById('s-citizens').textContent = stats.total_citizens;
+    document.getElementById('s-resolution').textContent = stats.resolution_rate + '%';
+    document.getElementById('s-recent').textContent = stats.recent_7days + ' this week';
+    document.getElementById('s-rate').textContent = stats.resolution_rate + '% resolved';
     renderSeverityBars();
     renderSevChart();
     renderStatusChart();
-  } catch(e) { console.error('Stats error:', e); }
+  } catch(e) { console.error(e); }
 }
 
 function renderSeverityBars() {
@@ -715,10 +591,10 @@ function filterComplaints() {
       <td><div style="font-size:0.8rem">${c.citizen_name}</div><div style="font-size:0.7rem;color:var(--muted)">${c.citizen_phone||''}</div></td>
       <td style="font-size:0.8rem">${c.officer_name}</td>
       <td style="font-size:0.75rem;color:var(--muted);max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${(c.address||'').substring(0,40)}...</td>
-      <td style="font-size:0.75rem;color:var(--muted)">${fmtDate(c.created_at)}</td>
+      <td style="font-size:0.75rem;color:var(--muted)">${new Date(c.created_at).toLocaleDateString()}</td>
       <td>
         <button class="act-btn" onclick="openReassign('${c.complaint_id}')">Reassign</button>
-        ${c.image_url?`<button class="act-btn" onclick="window.open('http://localhost:8000${c.image_url}','_blank')">Photo</button>`:''}
+        ${c.image_url?`<button class="act-btn" onclick="window.open(''${BASE}${c.image_url}','_blank')">Photo</button>`:''}
       </td>
     </tr>`).join('');
 }
@@ -786,9 +662,9 @@ function filterCitizens() {
       <td><div style="font-weight:600">${c.name}</div></td>
       <td style="font-size:0.78rem;color:var(--muted)">${c.email}</td>
       <td style="font-size:0.78rem">${c.phone||'—'}</td>
-      <td style="font-weight:700;color:var(--accent)">${c.total_reports ?? c.total_complaints ?? 0}</td>
-      <td style="color:var(--green)">${c.fixed ?? c.completed ?? 0}</td>
-      <td style="color:var(--red)">${c.high_severity ?? 0}</td>
+      <td style="font-weight:700;color:var(--accent)">${c.total_complaints}</td>
+      <td style="color:var(--green)">${c.completed}</td>
+      <td style="color:var(--red)">${c.high_severity}</td>
       <td><span style="color:var(--yellow);font-weight:700">${c.points||0} pts</span></td>
       <td><span class="badge ${c.is_active!==false?'badge-active':'badge-inactive'}">${c.is_active!==false?'Active':'Blocked'}</span></td>
       <td><button class="act-btn ${c.is_active!==false?'danger':'success'}" onclick="toggleCitizen(${c.id})">${c.is_active!==false?'Block':'Unblock'}</button></td>
@@ -810,7 +686,7 @@ function renderDailyChart(data) {
   charts.daily = new Chart(ctx, {
     type: 'bar',
     data: {
-      labels: data.map(d=>{ const dt=new Date(d.date); return isNaN(dt)?d.date:dt.toLocaleDateString('en-GB',{day:'2-digit',month:'short'}); }),
+      labels: data.map(d=>d.date),
       datasets: [{ label:'Complaints', data: data.map(d=>d.count), backgroundColor:'rgba(0,212,255,0.3)', borderColor:'rgba(0,212,255,0.8)', borderWidth:2, borderRadius:6 }]
     },
     options: { responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}},
@@ -832,22 +708,20 @@ function renderSevChart() {
 }
 
 function getFilteredComplaints() {
-  const status = (document.getElementById('chart-filter-status')?.value || '').trim();
-  const sev = (document.getElementById('chart-filter-severity')?.value || '').trim();
-  const officerName = (document.getElementById('chart-filter-officer')?.value || '').trim();
-  const zone = (document.getElementById('chart-filter-zone')?.value || '').trim();
-  let filtered = [...allComplaints];
-  if (status) filtered = filtered.filter(c => (c.status||'') === status);
-  if (sev) filtered = filtered.filter(c => (c.severity||'') === sev);
-  if (officerName) filtered = filtered.filter(c => (c.officer_name||'').toLowerCase() === officerName.toLowerCase());
+  const status = document.getElementById('chart-filter-status')?.value || '';
+  const sev = document.getElementById('chart-filter-severity')?.value || '';
+  const officerName = document.getElementById('chart-filter-officer')?.value || '';
+  const zone = document.getElementById('chart-filter-zone')?.value || '';
+  let filtered = allComplaints;
+  if (status) filtered = filtered.filter(c => c.status === status);
+  if (sev) filtered = filtered.filter(c => c.severity === sev);
+  if (officerName) filtered = filtered.filter(c => c.officer_name === officerName);
   if (zone) {
-    const zoneOfficers = allOfficers.filter(o => (o.zone||'') === zone).map(o => (o.name||'').toLowerCase());
-    filtered = filtered.filter(c => zoneOfficers.includes((c.officer_name||'').toLowerCase()));
+    const zoneOfficers = allOfficers.filter(o => o.zone === zone).map(o => o.name);
+    filtered = filtered.filter(c => zoneOfficers.includes(c.officer_name));
   }
   const el = document.getElementById('chart-filtered-count');
-  if (el) el.textContent = filtered.length === allComplaints.length ? 
-    `Showing all ${allComplaints.length} complaints` : 
-    `Showing ${filtered.length} of ${allComplaints.length} complaints`;
+  if (el) el.textContent = `Showing ${filtered.length} of ${allComplaints.length} complaints`;
   return filtered;
 }
 
