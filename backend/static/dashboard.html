@@ -73,15 +73,15 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;hei
 /* MAP AREA */
 .map-area{flex:1;position:relative;}
 #map{width:100%;height:100%;}
-.map-controls{position:absolute;top:.8rem;left:.8rem;z-index:10;display:flex;flex-direction:column;gap:.35rem;}
+.map-controls{position:absolute;top:.8rem;left:.8rem;z-index:9500;display:flex;flex-direction:column;gap:.35rem;}
 .map-btn{background:var(--card);border:1px solid var(--border);color:var(--text);padding:.45rem .75rem;border-radius:8px;font-family:inherit;font-size:.75rem;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.4);}
 .map-btn:hover{border-color:var(--accent);color:var(--accent);}
-.map-legend{position:absolute;bottom:.8rem;left:.8rem;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:.6rem .8rem;z-index:10;font-size:.73rem;box-shadow:0 2px 8px rgba(0,0,0,.4);}
+.map-legend{position:absolute;bottom:.8rem;left:.8rem;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:.6rem .8rem;z-index:9500;font-size:.73rem;box-shadow:0 2px 8px rgba(0,0,0,.4);}
 .map-legend-title{color:var(--muted);font-weight:700;text-transform:uppercase;margin-bottom:.4rem;font-size:.65rem;}
 .legend-item{display:flex;align-items:center;gap:.4rem;margin-bottom:.2rem;}
 .legend-dot{width:10px;height:10px;border-radius:50%;}
 /* DETAIL PANEL */
-.detail-panel{position:absolute;top:0;right:0;bottom:0;width:390px;background:var(--surface);border-left:1px solid var(--border);overflow-y:auto;transform:translateX(100%);transition:transform .3s;z-index:20;}
+.detail-panel{position:absolute;top:0;right:0;bottom:0;width:390px;background:var(--surface);border-left:1px solid var(--border);overflow-y:auto;transform:translateX(100%);transition:transform .3s;z-index:9500;}
 .detail-panel.open{transform:translateX(0);}
 .detail-panel::-webkit-scrollbar{width:3px;}
 .detail-panel::-webkit-scrollbar-thumb{background:var(--border);}
@@ -181,7 +181,27 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;hei
 .spinner{display:inline-block;width:14px;height:14px;border:2px solid rgba(0,0,0,.3);border-top-color:#000;border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle;margin-right:4px;}
 @keyframes spin{to{transform:rotate(360deg)}}
 .no-items{text-align:center;padding:2rem 1rem;color:var(--muted);font-size:.82rem;}
-</style>
+
+    /* ═══ PERMANENT Z-INDEX FIX ═══ */
+    /* Leaflet layers stay inside map */
+    .leaflet-pane          { z-index: 400 !important; }
+    .leaflet-tile-pane     { z-index: 200 !important; }
+    .leaflet-overlay-pane  { z-index: 400 !important; }
+    .leaflet-shadow-pane   { z-index: 500 !important; }
+    .leaflet-marker-pane   { z-index: 600 !important; }
+    .leaflet-tooltip-pane  { z-index: 650 !important; }
+    .leaflet-popup-pane    { z-index: 700 !important; }
+    .leaflet-control-container { z-index: 800 !important; }
+    /* UI always above map */
+    .sidebar              { z-index: 9000 !important; position: relative !important; }
+    #detail-panel         { z-index: 9500 !important; }
+    .map-controls         { z-index: 9500 !important; }
+    .map-legend           { z-index: 9500 !important; }
+    nav                   { z-index: 9999 !important; position: relative !important; }
+    .login-overlay        { z-index: 99999 !important; }
+    .toast                { z-index: 99999 !important; }
+
+    </style>
 </head>
 <body>
 <div class="login-overlay" id="login-overlay">
@@ -317,43 +337,63 @@ async function loadComplaints(silent=false){
 }
 
 
-function renderPriorityMarkers(){
-  if(!leafletMap || !priorityData.length) return;
-  // Add pulsing rings to top priority items
-  priorityData.slice(0,5).forEach((c,i)=>{
-    if(!c.latitude||!c.longitude) return;
-    const colors=['#ff1744','#ff5722','#ff9800','#ffc107','#8bc34a'];
-    const col = colors[i] || '#ff1744';
+function highlightPriorityOnMap(){
+  if(!leafletMap) return;
+  // Remove old rings
+  if(window._priorityRings){window._priorityRings.forEach(r=>{try{r.remove()}catch(e){}});}
+  window._priorityRings=[];
+  
+  const top = priorityData.filter(c=>c.latitude&&c.longitude).slice(0,8);
+  const bounds = [];
+  
+  top.forEach((c,i)=>{
+    const cols=['#ff1744','#ff5722','#ff9800','#ffc107','#cddc39','#8bc34a','#4caf50','#00bcd4'];
+    const col = cols[i]||'#ff9800';
+    const ps = parseFloat(c.priority_score)||0;
+    
+    // Pulsing outer ring
     const ring = L.circleMarker([c.latitude,c.longitude],{
-      radius:18+(5-i)*2, color:col, weight:2,
-      fillOpacity:0, opacity:0.6+i*0.05
+      radius:20-i,color:col,weight:2,fillOpacity:0,opacity:0.7
     }).addTo(leafletMap);
-    ring.bindTooltip(`#${i+1} Priority: ${c.complaint_id}<br>Score: ${c.priority_score||0}`,{permanent:false});
-    setTimeout(()=>ring.remove(), 8000);
+    ring.bindTooltip(`#${i+1} · ${c.complaint_id}<br>Score: ${ps.toFixed(1)} · ${c.severity||''}`,{sticky:true});
+    window._priorityRings.push(ring);
+    bounds.push([c.latitude,c.longitude]);
+    
+    // Number label
+    const icon = L.divIcon({
+      html:`<div style="background:${col};color:#000;font-size:9px;font-weight:900;width:16px;height:16px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:1px solid #fff">${i+1}</div>`,
+      className:'', iconSize:[16,16], iconAnchor:[8,8]
+    });
+    const lbl = L.marker([c.latitude,c.longitude],{icon}).addTo(leafletMap);
+    lbl.on('click',()=>openDetail(c.complaint_id||c.id));
+    window._priorityRings.push(lbl);
   });
-  // Fit map to show all priority complaints
-  const pts = priorityData.filter(c=>c.latitude&&c.longitude).map(c=>[c.latitude,c.longitude]);
-  if(pts.length) leafletMap.fitBounds(pts, {padding:[40,40],maxZoom:14});
+  
+  // Fit map to show all priority items
+  if(bounds.length>0){
+    leafletMap.fitBounds(bounds,{padding:[60,60],maxZoom:14,animate:true});
+  }
+  
+  // Switch to priority tab
+  switchTab('priority');
 }
 
 async function loadPriorityData(){
   try{
-    // Immediately sort current complaints by priority score
+    // Sort existing complaints by priority score immediately
     if(allComplaints.length > 0){
       priorityData = [...allComplaints]
         .filter(c => c.status !== 'completed')
-        .sort((a,b) => (b.priority_score||0) - (a.priority_score||0));
+        .sort((a,b) => (parseFloat(b.priority_score)||0) - (parseFloat(a.priority_score)||0));
+      renderPriorityList();
+      highlightPriorityOnMap();
     }
-    switchTab('priority');
-    renderPriorityList();
-    // Highlight priority markers on map
-    renderPriorityMarkers();
-    // Try API too
+    // Try API in background
     const [p,b]=await Promise.all([
-      fetch(`${API}/complaints/priority/ranking`,{headers:{Authorization:`Bearer ${token}`}}).catch(()=>({ok:false})),
+      fetch(`${API}/complaints/priority/ranking`,{headers:{Authorization:`Bearer ${token}`}}).catch(()=>({ok:false})),,{headers:{Authorization:`Bearer ${token}`}}),
       fetch(`${API}/complaints/budget/recommendations`,{headers:{Authorization:`Bearer ${token}`}})
     ]);
-    if(p&&p.ok){const d=await p.json();if(Array.isArray(d)&&d.length>0)priorityData=d;}
+    if(p&&p.ok){try{const d=await p.json();if(Array.isArray(d)&&d.length>0){priorityData=d;renderPriorityList();highlightPriorityOnMap();}}catch(e){}}
     if(b.ok)budgetData=await b.json();
     renderPriorityList();
   }catch(e){console.error(e);}
