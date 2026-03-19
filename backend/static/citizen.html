@@ -158,17 +158,40 @@ nav{display:flex;align-items:center;justify-content:space-between;padding:1rem 1
 .empty-state{text-align:center;padding:3rem 1rem;color:var(--muted);}
 .empty-state .empty-icon{font-size:3rem;margin-bottom:.8rem;}
 
-    .photo-source-grid{display:grid;grid-template-columns:1fr 1fr;gap:.8rem;margin-bottom:1rem;}
-    .source-card{background:var(--card);border:2px solid var(--border);border-radius:16px;padding:1.5rem 1rem;text-align:center;cursor:pointer;transition:all .2s;}
-    .source-card:hover,.source-card.selected{border-color:var(--accent);background:rgba(0,212,255,0.07);}
-    .source-card.camera.selected{border-color:#f5a623;background:rgba(245,166,35,0.07);}
-    .source-icon{font-size:2.2rem;margin-bottom:.5rem;}
-    .source-title{font-weight:700;font-size:.95rem;margin-bottom:.25rem;}
-    .source-sub{font-size:.72rem;color:var(--muted);}
-    .source-badge{font-size:.62rem;color:var(--accent2);font-weight:600;margin-top:.3rem;}
-    </style>
+    /* Animated background */
+    .bg-canvas{position:fixed;inset:0;z-index:0;pointer-events:none;}
+    body>*:not(.bg-canvas){position:relative;z-index:1;}
+    @keyframes floatUp{0%{transform:translateY(0) scale(1);opacity:0.7}100%{transform:translateY(-100vh) scale(0.5);opacity:0}}
+    .road-particle{position:fixed;border-radius:50%;pointer-events:none;z-index:0;animation:floatUp linear infinite;}
+
+</style>
 </head>
 <body>
+<canvas class="bg-canvas" id="bg-canvas"></canvas>
+<script>
+(function(){
+  const c=document.getElementById('bg-canvas');
+  if(!c)return;
+  const ctx=c.getContext('2d');
+  let W,H,particles=[];
+  function resize(){W=c.width=innerWidth;H=c.height=innerHeight;}
+  resize();window.addEventListener('resize',resize);
+  function mkP(){return{x:Math.random()*W,y:H+10,r:Math.random()*2+1,speed:Math.random()*0.5+0.3,color:`hsla(${Math.random()*60+160},80%,60%,${Math.random()*0.4+0.1})`};}
+  for(let i=0;i<60;i++)particles.push(mkP());
+  function draw(){
+    ctx.clearRect(0,0,W,H);
+    particles.forEach(p=>{
+      p.y-=p.speed;
+      if(p.y<-10){Object.assign(p,mkP());p.y=H+10;}
+      ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);
+      ctx.fillStyle=p.color;ctx.fill();
+    });
+    requestAnimationFrame(draw);
+  }
+  draw();
+})();
+</script>
+
 <nav>
   <div class="logo">🛣 RoadWatch</div>
   <div class="nav-links" id="nav-links">
@@ -219,35 +242,16 @@ nav{display:flex;align-items:center;justify-content:space-between;padding:1rem 1
 <div class="page" id="page-report">
   <div class="page-title">Report <span>Road Damage</span></div>
   <div class="ai-badge">🤖 AI-Powered Detection · Auto-classifies damage type & severity</div>
-  <!-- Step 1: Choose source -->
-  <div id="photo-source-step">
-    <div style="font-size:.8rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:.6rem;font-weight:700">Step 1 — Choose Photo Source</div>
-    <div class="photo-source-grid">
-      <div class="source-card camera" id="src-camera" onclick="selectSource('camera')">
-        <div class="source-icon">📷</div>
-        <div class="source-title">Camera</div>
-        <div class="source-sub">Take live photo</div>
-        <div class="source-badge">✓ Auto GPS geotag</div>
-      </div>
-      <div class="source-card gallery" id="src-gallery" onclick="selectSource('gallery')">
-        <div class="source-icon">🖼️</div>
-        <div class="source-title">Gallery</div>
-        <div class="source-sub">Choose from files</div>
-        <div class="source-badge">Manual location</div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Step 2: Capture zone (shown after source selected) -->
-  <div class="capture-zone" id="capture-zone" onclick="triggerCapture()" style="display:none">
+  <div class="capture-zone" id="capture-zone" onclick="triggerCapture()">
     <div class="capture-placeholder" id="capture-placeholder">
-      <div class="icon" id="capture-icon">📷</div>
-      <p id="capture-hint">Tap to take photo</p>
+      <div class="icon">📷</div>
+      <p>Tap to capture road damage photo</p>
+      <p style="font-size:.75rem;color:var(--muted)">Camera or Gallery</p>
     </div>
     <img id="preview-img" style="display:none"/>
     <div class="capture-overlay" id="capture-overlay" style="display:none">
       <button class="btn-capture" onclick="retakePhoto(event)">📷 Retake</button>
-      <button class="btn-capture secondary" onclick="resetSource(event)">↩ Change Source</button>
+      <button class="btn-capture secondary" onclick="triggerGallery(event)">🖼 Gallery</button>
     </div>
   </div>
   <input type="file" id="file-input" accept="image/*" onchange="handleFile(event)"/>
@@ -418,39 +422,32 @@ function showAreaBadge(area){
 function initMiniMap(lat,lng){
   if(miniMap){miniMap.remove();}
   document.getElementById('mini-map').innerHTML='';
-  miniMap=L.map('mini-map',{zoomControl:false,attributionControl:false}).setView([lat,lng],16);
+  miniMap=L.map('mini-map',{zoomControl:true,attributionControl:false}).setView([lat,lng],16);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(miniMap);
   miniMarker=L.circleMarker([lat,lng],{radius:10,fillColor:'#f5a623',color:'#fff',weight:2,fillOpacity:.9}).addTo(miniMap);
-}
-
-
-let photoSource = null;
-function selectSource(src) {
-  photoSource = src;
-  document.getElementById('src-camera').classList.toggle('selected', src === 'camera');
-  document.getElementById('src-gallery').classList.toggle('selected', src === 'gallery');
-  document.getElementById('capture-zone').style.display = 'block';
-  if (src === 'camera') {
-    document.getElementById('capture-icon').textContent = '📷';
-    document.getElementById('capture-hint').textContent = 'Tap to take photo';
-    document.getElementById('file-input').setAttribute('capture', 'environment');
-  } else {
-    document.getElementById('capture-icon').textContent = '🖼️';
-    document.getElementById('capture-hint').textContent = 'Tap to choose from gallery';
-    document.getElementById('file-input').removeAttribute('capture');
-  }
-  document.getElementById('capture-zone').click();
-}
-function resetSource(e) {
-  if(e) e.stopPropagation();
-  photoSource = null;
-  document.getElementById('src-camera').classList.remove('selected');
-  document.getElementById('src-gallery').classList.remove('selected');
-  document.getElementById('capture-zone').style.display = 'none';
-  document.getElementById('preview-img').style.display = 'none';
-  document.getElementById('capture-placeholder').style.display = 'flex';
-  document.getElementById('capture-overlay').style.display = 'none';
-  selectedFile = null;
+  // Allow manual location by clicking the map
+  miniMap.on('click', function(e){
+    const {lat,lng} = e.latlng;
+    if(miniMarker) miniMarker.setLatLng([lat,lng]);
+    currentLat=lat; currentLng=lng;
+    document.getElementById('gps-text').textContent=lat.toFixed(6)+', '+lng.toFixed(6);
+    document.getElementById('gps-status-text').textContent='Manual ✓';
+    document.getElementById('gps-dot').className='gps-dot active';
+    // Reverse geocode
+    fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`)
+      .then(r=>r.json()).then(d=>{
+        const addr=d.display_name||'';
+        document.getElementById('gps-addr').textContent=addr.substring(0,60)+'...';
+        const area=getAreaType(addr);
+        showAreaBadge(area);
+      }).catch(()=>{});
+  });
+  // Add tip
+  const tip=document.createElement('div');
+  tip.style.cssText='position:absolute;bottom:8px;right:8px;background:rgba(0,0,0,0.7);color:#fff;font-size:0.65rem;padding:3px 7px;border-radius:4px;z-index:999;pointer-events:none';
+  tip.textContent='👆 Tap map to set location manually';
+  document.getElementById('mini-map').appendChild(tip);
+  setTimeout(()=>tip.remove(), 4000);
 }
 
 function triggerCapture(){if(selectedFile)return;document.getElementById('file-input').setAttribute('capture','environment');document.getElementById('file-input').click();}

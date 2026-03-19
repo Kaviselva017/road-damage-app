@@ -382,6 +382,13 @@ html, body {
   .role-selector { gap: 0.7rem; }
   .form-glass { padding: 1.5rem; }
 }
+
+    .passkey-field{display:none;margin-top:.8rem;}
+    .passkey-field.show{display:block;animation:fadeDown 0.3s ease;}
+    .passkey-hint{font-size:.65rem;color:var(--muted);margin-top:.3rem;padding:.3rem .6rem;border-radius:4px;border-left:2px solid;}
+    .officer-theme .passkey-hint{border-color:var(--officer-a);color:var(--officer-a);}
+    .admin-theme .passkey-hint{border-color:var(--admin-a);color:var(--admin-a);}
+
 </style>
 </head>
 <body>
@@ -466,6 +473,16 @@ html, body {
         </div>
       </div>
 
+      <!-- Access Key for Officer/Admin -->
+      <div class="field-group passkey-field" id="passkey-field">
+        <label class="field-label">Access Key</label>
+        <div class="field-input-wrap">
+          <span class="field-icon">🛡</span>
+          <input class="field-input" id="key-input" type="password" placeholder="Enter access key" onkeydown="if(event.key==='Enter')handleSubmit()"/>
+        </div>
+        <div class="passkey-hint" id="passkey-hint"></div>
+      </div>
+
       <button class="btn-submit" id="submit-btn" onclick="handleSubmit()">
         Enter Portal
       </button>
@@ -511,6 +528,8 @@ const themes = {
     redirectUrl: '/static/dashboard.html',
     endpoint: '/auth/officer/login',
     tickerColor: '#ff6b35',
+    passkey: 'OFF-2030',
+    passkeyHint: '🔐 Officer key: OFF-2030',
   },
   admin: {
     color: '#a855f7',
@@ -522,12 +541,25 @@ const themes = {
     redirectUrl: '/admin',
     endpoint: '/auth/officer/login',
     tickerColor: '#a855f7',
+    passkey: 'ADM-2030',
+    passkeyHint: '🔐 Admin key: ADM-2030',
   }
 };
 
 function selectRole(role) {
   currentRole = role;
   isRegisterMode = false;
+  // Show passkey for officer/admin
+  const t = themes[role];
+  const pkField = document.getElementById('passkey-field');
+  const pkHint = document.getElementById('passkey-hint');
+  if(t.passkey){
+    pkField.classList.add('show');
+    pkHint.textContent = t.passkeyHint;
+  } else {
+    pkField.classList.remove('show');
+    document.getElementById('key-input').value = '';
+  }
 
   // Update role cards
   document.querySelectorAll('.role-card').forEach(c => c.classList.remove('active'));
@@ -627,6 +659,12 @@ async function handleSubmit() {
 }
 
 async function doLogin(email, password, t) {
+  // Validate passkey for officer/admin
+  if(t.passkey){
+    const key = document.getElementById('key-input').value.trim();
+    if(!key){ showError('Access key is required for '+currentRole+' login'); return; }
+    if(key !== t.passkey){ showError('Invalid access key. Please check your credentials.'); return; }
+  }
   const res = await fetch(`${API}${t.endpoint}`, {
     method:'POST', headers:{'Content-Type':'application/json'},
     body: JSON.stringify({email, password})

@@ -21,7 +21,7 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;hei
 .btn-sm.active{background:var(--accent);border-color:var(--accent);color:#000;font-weight:700;}
 .main-layout{display:flex;flex:1;overflow:hidden;}
 /* SIDEBAR */
-.sidebar{width:340px;flex-shrink:0;display:flex;flex-direction:column;border-right:1px solid var(--border);overflow:hidden;}
+.sidebar{width:340px;flex-shrink:0;display:flex;flex-direction:column;border-right:1px solid var(--border);overflow:hidden;position:relative;z-index:500;}
 .sidebar-header{padding:.7rem;border-bottom:1px solid var(--border);flex-shrink:0;}
 .stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:.35rem;margin-bottom:.6rem;}
 .stat-mini{background:var(--card);border-radius:8px;padding:.45rem;text-align:center;border:1px solid var(--border);}
@@ -71,17 +71,17 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;hei
 .budget-card{background:var(--card);border:1px solid rgba(245,166,35,.2);border-radius:9px;padding:.7rem .9rem;margin-bottom:.35rem;}
 .budget-amt{font-family:'Syne',sans-serif;font-size:1rem;font-weight:800;color:#4ade80;}
 /* MAP AREA */
-.map-area{flex:1;position:relative;}
+.map-area{flex:1;position:relative;isolation:isolate;}
 #map{width:100%;height:100%;}
-.map-controls{position:absolute;top:.8rem;left:.8rem;z-index:10;display:flex;flex-direction:column;gap:.35rem;}
+.map-controls{position:absolute;top:.8rem;left:.8rem;z-index:1001;display:flex;flex-direction:column;gap:.35rem;}
 .map-btn{background:var(--card);border:1px solid var(--border);color:var(--text);padding:.45rem .75rem;border-radius:8px;font-family:inherit;font-size:.75rem;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.4);}
 .map-btn:hover{border-color:var(--accent);color:var(--accent);}
-.map-legend{position:absolute;bottom:.8rem;left:.8rem;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:.6rem .8rem;z-index:10;font-size:.73rem;box-shadow:0 2px 8px rgba(0,0,0,.4);}
+.map-legend{position:absolute;bottom:.8rem;left:.8rem;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:.6rem .8rem;z-index:1001;font-size:.73rem;box-shadow:0 2px 8px rgba(0,0,0,.4);}
 .map-legend-title{color:var(--muted);font-weight:700;text-transform:uppercase;margin-bottom:.4rem;font-size:.65rem;}
 .legend-item{display:flex;align-items:center;gap:.4rem;margin-bottom:.2rem;}
 .legend-dot{width:10px;height:10px;border-radius:50%;}
 /* DETAIL PANEL */
-.detail-panel{position:absolute;top:0;right:0;bottom:0;width:390px;background:var(--surface);border-left:1px solid var(--border);overflow-y:auto;transform:translateX(100%);transition:transform .3s;z-index:20;}
+.detail-panel{position:absolute;top:0;right:0;bottom:0;width:390px;background:var(--surface);border-left:1px solid var(--border);overflow-y:auto;transform:translateX(100%);transition:transform .3s;z-index:1000;}
 .detail-panel.open{transform:translateX(0);}
 .detail-panel::-webkit-scrollbar{width:3px;}
 .detail-panel::-webkit-scrollbar-thumb{background:var(--border);}
@@ -181,7 +181,25 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;hei
 .spinner{display:inline-block;width:14px;height:14px;border:2px solid rgba(0,0,0,.3);border-top-color:#000;border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle;margin-right:4px;}
 @keyframes spin{to{transform:rotate(360deg)}}
 .no-items{text-align:center;padding:2rem 1rem;color:var(--muted);font-size:.82rem;}
-</style>
+
+    /* Force Leaflet layers below UI elements */
+    .leaflet-pane{z-index:400 !important;}
+    .leaflet-tile-pane{z-index:200 !important;}
+    .leaflet-overlay-pane{z-index:400 !important;}
+    .leaflet-shadow-pane{z-index:500 !important;}
+    .leaflet-marker-pane{z-index:600 !important;}
+    .leaflet-tooltip-pane{z-index:650 !important;}
+    .leaflet-popup-pane{z-index:700 !important;}
+    .leaflet-map-pane{z-index:0 !important;}
+    /* Sidebar and detail panel always on top */
+    #sidebar{z-index:900 !important;position:relative !important;}
+    #detail-panel{z-index:1000 !important;}
+    .map-controls{z-index:1001 !important;}
+    .map-legend{z-index:1001 !important;}
+    /* Prevent map from overflowing sidebar */
+    .main-layout{position:relative;overflow:hidden;}
+
+    </style>
 </head>
 <body>
 <div class="login-overlay" id="login-overlay">
@@ -240,7 +258,7 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;hei
     <div class="map-controls">
       <button class="map-btn" onclick="fitAllMarkers()">📍 Fit All</button>
       <button class="map-btn" onclick="goToMyLocation()">🎯 My Location</button>
-      <button class="map-btn" onclick="loadPriorityData();switchTab('priority')">⚡ Priority</button>
+      <button class="map-btn" onclick="loadPriorityData()">⚡ Priority</button>
     </div>
     <div class="map-legend">
       <div class="map-legend-title">Map Legend</div>
@@ -318,18 +336,11 @@ async function loadComplaints(silent=false){
 
 async function loadPriorityData(){
   try{
-    // Sort existing complaints by priority_score as fallback
-    if(allComplaints.length > 0){
-      priorityData = [...allComplaints]
-        .filter(c=>c.status!=='completed')
-        .sort((a,b)=>(b.priority_score||0)-(a.priority_score||0));
-      renderPriorityList();
-    }
     const [p,b]=await Promise.all([
-      fetch(`${API}/complaints/priority/ranking`,{headers:{Authorization:`Bearer ${token}`}}).catch(()=>({ok:false})),
+      fetch(`${API}/complaints/priority/ranking`,{headers:{Authorization:`Bearer ${token}`}}),
       fetch(`${API}/complaints/budget/recommendations`,{headers:{Authorization:`Bearer ${token}`}})
     ]);
-    if(p.ok){const d=await p.json();if(Array.isArray(d)&&d.length)priorityData=d;}
+    if(p.ok)priorityData=await p.json();
     if(b.ok)budgetData=await b.json();
     renderPriorityList();
   }catch(e){console.error(e);}
@@ -363,7 +374,7 @@ function renderList(){
   const el=document.getElementById('complaints-list');
   if(!filtered.length){el.innerHTML='<div class="no-items">No complaints found</div>';return;}
   el.innerHTML=filtered.map(c=>{
-    const ps=parseFloat(c.priority_score)||0;
+    const ps=c.priority_score||0;
     const psCls=ps>=60?'badge-ps-high':ps>=35?'badge-ps-med':'badge-ps-low';
     const area=c.area_type||'residential';
     return `<div class="c-card ${c.severity||'medium'} ${selectedComplaintId===c.complaint_id?'selected':''}" onclick="selectComplaint('${c.complaint_id}')">
@@ -387,7 +398,7 @@ function renderPriorityList(){
   if(!priorityData.length&&!budgetData.length){el.innerHTML='<div class="no-items">No priority data yet</div>';return;}
   let html='<div style="padding:.5rem .4rem"><div style="font-size:.65rem;color:var(--muted);text-transform:uppercase;font-weight:700;margin-bottom:.5rem;letter-spacing:.05em">⚡ Top Priority Queue</div>';
   html+=priorityData.slice(0,10).map((c,i)=>{
-    const ps=parseFloat(c.priority_score)||0;
+    const ps=c.priority_score||0;
     const col=ps>=60?'var(--danger)':ps>=35?'var(--accent)':'var(--accent2)';
     return `<div class="pri-card" onclick="selectComplaint('${c.complaint_id}')">
       <div style="display:flex;align-items:center;justify-content:space-between">
@@ -469,7 +480,7 @@ function renderMapMarkers(){
   getFiltered().forEach(c=>{
     if(!c.latitude||!c.longitude)return;
     const col=getSeverityColor(c);
-    const ps=parseFloat(c.priority_score)||0;
+    const ps=c.priority_score||0;
     const radius=c.severity==='high'?14:c.severity==='medium'?11:8;
     const m=L.circleMarker([c.latitude,c.longitude],{radius,fillColor:col,color:'#fff',weight:2,fillOpacity:.88})
       .bindPopup(`<div style="min-width:160px"><div style="color:#f5a623;font-weight:700;margin-bottom:4px">${c.complaint_id}</div>
@@ -523,7 +534,7 @@ function openFundAlloc(cid,suggested){
 function renderDetailPanel(c,msgs=[]){
   const BASE=window.location.hostname==='localhost'?'http://localhost:8000':window.location.origin;
   const hasAfter=afterPhotos[c.complaint_id];
-  const ps=parseFloat(c.priority_score)||0;
+  const ps=c.priority_score||0;
   const psCls=ps>=60?'var(--danger)':ps>=35?'var(--accent)':'var(--accent2)';
   const area=c.area_type||'residential';
   
