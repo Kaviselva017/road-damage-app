@@ -158,170 +158,123 @@ nav{display:flex;align-items:center;justify-content:space-between;padding:1rem 1
 .empty-state{text-align:center;padding:3rem 1rem;color:var(--muted);}
 .empty-state .empty-icon{font-size:3rem;margin-bottom:.8rem;}
 
-    /* Camera/Gallery Step */
+    /* ══ ANIMATED BACKGROUND ══ */
+    #bg-canvas{position:fixed;top:0;left:0;width:100%;height:100%;z-index:0;pointer-events:none;}
+    body>*:not(#bg-canvas){position:relative;z-index:1;}
     .photo-source-grid{display:grid;grid-template-columns:1fr 1fr;gap:.8rem;margin-bottom:1rem;}
-    .source-card{background:var(--card);border:2px solid var(--border);border-radius:16px;padding:1.2rem 1rem;text-align:center;cursor:pointer;transition:all .2s;position:relative;}
-    .source-card:hover{border-color:var(--accent);transform:translateY(-2px);}
-    .source-card.sel-camera{border-color:#f5a623;background:rgba(245,166,35,.07);box-shadow:0 0 20px rgba(245,166,35,.15);}
-    .source-card.sel-gallery{border-color:var(--accent2);background:rgba(62,207,178,.07);box-shadow:0 0 20px rgba(62,207,178,.15);}
-    .src-icon{font-size:2rem;margin-bottom:.4rem;}
-    .src-title{font-weight:700;font-size:.95rem;margin-bottom:.2rem;}
-    .src-sub{font-size:.72rem;color:var(--muted);}
-    .src-badge{font-size:.62rem;font-weight:700;margin-top:.3rem;color:var(--accent2);}
-    /* Nearby area panel */
-    .nearby-panel{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:.8rem 1rem;margin-bottom:.8rem;display:none;}
-    .nearby-panel.show{display:block;}
-    .nearby-title{font-size:.7rem;color:var(--muted);text-transform:uppercase;font-weight:700;letter-spacing:.05em;margin-bottom:.5rem;}
-    .nearby-item{display:flex;align-items:center;gap:.5rem;padding:.3rem 0;border-bottom:1px solid rgba(255,255,255,.05);font-size:.78rem;}
+    .source-card{background:rgba(255,255,255,.04);border:2px solid rgba(255,255,255,.08);border-radius:16px;padding:1.3rem 1rem;text-align:center;cursor:pointer;transition:all .25s;backdrop-filter:blur(8px);}
+    .source-card:hover{transform:translateY(-3px);border-color:rgba(255,255,255,.2);}
+    .source-card.sel-camera{border-color:#f5a623;background:rgba(245,166,35,.08);box-shadow:0 0 30px rgba(245,166,35,.2);}
+    .source-card.sel-gallery{border-color:#3ecfb2;background:rgba(62,207,178,.08);box-shadow:0 0 30px rgba(62,207,178,.2);}
+    .src-icon{font-size:2.2rem;margin-bottom:.5rem;}
+    .src-title{font-weight:700;font-size:1rem;}
+    .src-sub{font-size:.72rem;color:var(--muted);margin-top:.2rem;}
+    .src-badge{font-size:.62rem;font-weight:700;margin-top:.35rem;color:#3ecfb2;}
+    .nearby-panel{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:.8rem 1rem;margin-bottom:.8rem;backdrop-filter:blur(8px);display:none;}
+    .nearby-panel.show{display:block;animation:fadeUp .3s ease;}
+    .nearby-title{font-size:.68rem;color:var(--muted);text-transform:uppercase;font-weight:700;letter-spacing:.08em;margin-bottom:.5rem;}
+    .nearby-item{display:flex;align-items:center;gap:.6rem;padding:.35rem 0;border-bottom:1px solid rgba(255,255,255,.04);font-size:.78rem;}
     .nearby-item:last-child{border-bottom:none;}
-    .nearby-dist{font-size:.65rem;color:var(--muted);margin-left:auto;}
-    /* Vehicles bg */
-    #road-bg{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden;}
-    body>*:not(#road-bg){position:relative;z-index:1;}
+    .nearby-dist{font-size:.62rem;color:var(--muted);margin-left:auto;padding:.1rem .4rem;background:rgba(255,255,255,.06);border-radius:4px;}
+    .nearby-priority{font-size:.6rem;font-weight:700;padding:.1rem .4rem;border-radius:4px;margin-left:.3rem;}
+    .p-high{background:rgba(239,68,68,.15);color:#ef4444;}
+    .p-med{background:rgba(245,158,11,.15);color:#f59e0b;}
+    .impact-panel{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:.8rem 1rem;margin-bottom:.8rem;backdrop-filter:blur(8px);}
+    .impact-title{font-size:.68rem;color:var(--muted);text-transform:uppercase;font-weight:700;letter-spacing:.08em;margin-bottom:.6rem;}
+    .impact-score{display:flex;align-items:center;gap:.8rem;}
+    .score-circle{width:52px;height:52px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-direction:column;font-weight:900;font-size:1.1rem;flex-shrink:0;}
+    .score-high{background:rgba(239,68,68,.15);border:2px solid #ef4444;color:#ef4444;}
+    .score-med{background:rgba(245,158,11,.15);border:2px solid #f59e0b;color:#f59e0b;}
+    .score-low{background:rgba(62,207,178,.15);border:2px solid #3ecfb2;color:#3ecfb2;}
+    .score-label{font-size:.45rem;font-weight:600;opacity:.8;}
+    .impact-desc{font-size:.78rem;line-height:1.5;}
+    @keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
 
     </style>
 </head>
 <body>
-<canvas id="bg-canvas" style="position:fixed;inset:0;z-index:0;pointer-events:none;width:100%;height:100%"></canvas>
+<canvas id="bg-canvas"></canvas>
 <script>
 (function(){
-  const canvas = document.getElementById('bg-canvas');
-  const ctx = canvas.getContext('2d');
-  let W, H, t = 0;
-  
-  function resize(){ W = canvas.width = window.innerWidth; H = canvas.height = window.innerHeight; }
-  resize(); window.addEventListener('resize', resize);
+  const C=document.getElementById('bg-canvas'),ctx=C.getContext('2d');
+  let W,H,t=0;
+  function resize(){W=C.width=innerWidth;H=C.height=innerHeight;}
+  resize();addEventListener('resize',resize);
 
-  // ── HEX GRID ──
-  const hexes = [];
-  function initHexes(){
-    hexes.length = 0;
-    const size = 42, cols = Math.ceil(W/(size*1.73))+2, rows = Math.ceil(H/(size*1.5))+2;
-    for(let r=0;r<rows;r++) for(let c=0;c<cols;c++){
-      const x = c*size*1.73 + (r%2)*size*0.865;
-      const y = r*size*1.5;
-      hexes.push({ x, y, size,
-        pulse: Math.random()*Math.PI*2,
-        speed: 0.003 + Math.random()*0.008,
-        baseAlpha: 0.02 + Math.random()*0.04,
-        accent: Math.random() < 0.08,
-        color: Math.random() < 0.05 ? '#f5a623' : Math.random() < 0.05 ? '#a855f7' : '#3ecfb2'
-      });
-    }
-  }
-  initHexes();
-  window.addEventListener('resize', initHexes);
+  // Orbs
+  const orbs=[
+    {x:.15,y:.2,r:.35,c:'#3ecfb2',s:.0003},
+    {x:.85,y:.75,r:.3,c:'#a855f7',s:.0004},
+    {x:.5,y:.9,r:.25,c:'#f5a623',s:.0005},
+    {x:.7,y:.1,r:.2,c:'#3b82f6',s:.0003},
+  ];
 
-  function drawHex(x, y, size, alpha, col){
-    ctx.beginPath();
-    for(let i=0;i<6;i++){
-      const a = Math.PI/3*i - Math.PI/6;
-      const px = x + size*Math.cos(a), py = y + size*Math.sin(a);
-      i===0 ? ctx.moveTo(px,py) : ctx.lineTo(px,py);
-    }
-    ctx.closePath();
-    ctx.strokeStyle = col + Math.round(alpha*255).toString(16).padStart(2,'0');
-    ctx.lineWidth = 0.8;
-    ctx.stroke();
-    if(alpha > 0.06){
-      ctx.fillStyle = col + Math.round(alpha*0.15*255).toString(16).padStart(2,'0');
-      ctx.fill();
-    }
-  }
+  // Grid lines
+  const GCOLS=Math.ceil(1600/40)+2,GROWS=Math.ceil(900/40)+2;
 
-  // ── PARTICLES ──
-  const particles = Array.from({length:50}, ()=>({
-    x: Math.random()*1000, y: Math.random()*1000,
-    vx: (Math.random()-0.5)*0.4, vy: -Math.random()*0.6-0.2,
-    r: Math.random()*2+0.5,
-    alpha: Math.random()*0.5+0.1,
-    col: ['#3ecfb2','#f5a623','#a855f7','#60a5fa'][Math.floor(Math.random()*4)],
-    life: Math.random()
+  // Particles
+  const P=Array.from({length:60},()=>({
+    x:Math.random(),y:Math.random()+.5,
+    vx:(Math.random()-.5)*.0003,vy:-Math.random()*.0008-.0002,
+    r:Math.random()*1.5+.3,
+    a:Math.random()*.4+.1,
+    c:['#3ecfb2','#a855f7','#f5a623','#60a5fa'][Math.floor(Math.random()*4)],
+    life:Math.random()
   }));
 
-  // ── SCAN LINE ──
-  let scanY = -2;
-
-  // ── DATA NODES ──
-  const nodes = Array.from({length:6}, ()=>({
-    x: Math.random()*800, y: Math.random()*600,
-    vx: (Math.random()-0.5)*0.3, vy: (Math.random()-0.5)*0.3,
-    r: Math.random()*3+2,
-    col: ['#3ecfb2','#f5a623','#a855f7'][Math.floor(Math.random()*3)],
-    connections: []
-  }));
+  // Radar rings
+  let radarR=0;
 
   function draw(ts){
-    t = ts * 0.001;
+    t=ts*.001;
     ctx.clearRect(0,0,W,H);
-    
-    // Dark bg
-    ctx.fillStyle = '#08080f';
-    ctx.fillRect(0,0,W,H);
 
-    // Radial glow center
-    const gr = ctx.createRadialGradient(W/2,H/2,0,W/2,H/2,Math.max(W,H)*0.6);
-    gr.addColorStop(0,'rgba(62,207,178,0.04)');
-    gr.addColorStop(0.5,'rgba(168,85,247,0.02)');
-    gr.addColorStop(1,'rgba(0,0,0,0)');
-    ctx.fillStyle=gr; ctx.fillRect(0,0,W,H);
+    // Base dark bg
+    ctx.fillStyle='#07070e';ctx.fillRect(0,0,W,H);
 
-    // Hex grid
-    hexes.forEach(h=>{
-      const pulse = Math.sin(t*h.speed*10 + h.pulse);
-      const a = h.baseAlpha + (h.accent ? pulse*0.06 : pulse*0.01);
-      drawHex(h.x, h.y, h.size, Math.max(0,a), h.accent ? h.color : '#3ecfb2');
+    // Orb glows
+    orbs.forEach((o,i)=>{
+      const px=(o.x+Math.sin(t*o.s*7+i)*0.04)*W;
+      const py=(o.y+Math.cos(t*o.s*5+i)*0.04)*H;
+      const gr=ctx.createRadialGradient(px,py,0,px,py,Math.max(W,H)*o.r);
+      gr.addColorStop(0,o.c+'18');gr.addColorStop(1,'transparent');
+      ctx.fillStyle=gr;ctx.fillRect(0,0,W,H);
     });
 
-    // Data nodes + connections
-    nodes.forEach(n=>{
-      n.x += n.vx; n.y += n.vy;
-      if(n.x<0||n.x>W) n.vx*=-1;
-      if(n.y<0||n.y>H) n.vy*=-1;
-    });
-    for(let i=0;i<nodes.length;i++){
-      for(let j=i+1;j<nodes.length;j++){
-        const dx=nodes[j].x-nodes[i].x, dy=nodes[j].y-nodes[i].y;
-        const dist=Math.sqrt(dx*dx+dy*dy);
-        if(dist<220){
-          ctx.beginPath();
-          ctx.moveTo(nodes[i].x,nodes[i].y);
-          ctx.lineTo(nodes[j].x,nodes[j].y);
-          ctx.strokeStyle=`rgba(62,207,178,${(1-dist/220)*0.12})`;
-          ctx.lineWidth=0.6; ctx.stroke();
-        }
-      }
-    }
-    nodes.forEach(n=>{
-      ctx.beginPath(); ctx.arc(n.x,n.y,n.r,0,Math.PI*2);
-      ctx.fillStyle=n.col+'99'; ctx.fill();
-      ctx.beginPath(); ctx.arc(n.x,n.y,n.r+3+Math.sin(t*2)*2,0,Math.PI*2);
-      ctx.strokeStyle=n.col+'33'; ctx.lineWidth=1; ctx.stroke();
-    });
+    // Subtle grid
+    ctx.strokeStyle='rgba(255,255,255,0.025)';ctx.lineWidth=.5;
+    const gx=40,gy=40;
+    const ox=(t*8)%gx,oy=(t*5)%gy;
+    for(let x=-gx+ox;x<W+gx;x+=gx){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
+    for(let y=-gy+oy;y<H+gy;y+=gy){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+
+    // Radar ping from center-bottom
+    radarR=(radarR+.8)%(Math.max(W,H)*.7);
+    const ra=1-radarR/(Math.max(W,H)*.7);
+    ctx.beginPath();ctx.arc(W*.5,H,radarR,Math.PI,0);
+    ctx.strokeStyle=`rgba(62,207,178,${ra*.08})`;ctx.lineWidth=1.5;ctx.stroke();
 
     // Particles
-    particles.forEach(p=>{
-      p.x+=p.vx; p.y+=p.vy; p.life+=0.003;
-      if(p.y<-5||p.life>1){ p.x=Math.random()*W; p.y=H+5; p.life=0; p.alpha=Math.random()*0.5+0.1; }
-      const a = p.alpha * Math.sin(p.life*Math.PI);
-      ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2);
-      ctx.fillStyle=p.col+Math.round(a*255).toString(16).padStart(2,'0');
-      ctx.fill();
+    P.forEach(p=>{
+      p.x+=p.vx;p.y+=p.vy;p.life+=.004;
+      if(p.y<-.02||p.life>1){p.x=Math.random();p.y=1.05;p.life=0;p.a=Math.random()*.4+.1;}
+      const a=p.a*Math.sin(p.life*Math.PI);
+      ctx.beginPath();ctx.arc(p.x*W,p.y*H,p.r,0,Math.PI*2);
+      const hex=Math.round(a*255).toString(16).padStart(2,'0');
+      ctx.fillStyle=p.c+hex;ctx.fill();
     });
 
     // Scan line
-    scanY += 0.8; if(scanY>H+2) scanY=-2;
-    const sg=ctx.createLinearGradient(0,scanY-2,0,scanY+2);
-    sg.addColorStop(0,'rgba(62,207,178,0)');
-    sg.addColorStop(0.5,'rgba(62,207,178,0.15)');
-    sg.addColorStop(1,'rgba(62,207,178,0)');
-    ctx.fillStyle=sg; ctx.fillRect(0,scanY-2,W,4);
+    const sy=((t*.15)%1)*H;
+    const sg=ctx.createLinearGradient(0,sy-3,0,sy+3);
+    sg.addColorStop(0,'transparent');sg.addColorStop(.5,'rgba(62,207,178,0.12)');sg.addColorStop(1,'transparent');
+    ctx.fillStyle=sg;ctx.fillRect(0,sy-3,W,6);
 
-    // Corner brackets
-    const bCol='rgba(62,207,178,0.15)', bSize=30, bW=1.5;
+    // Corner decorations
+    const cd='rgba(62,207,178,0.2)',cl=35,cw=1.5;
     [[0,0,1,1],[W,0,-1,1],[0,H,1,-1],[W,H,-1,-1]].forEach(([x,y,sx,sy])=>{
-      ctx.strokeStyle=bCol; ctx.lineWidth=bW;
-      ctx.beginPath(); ctx.moveTo(x+sx*bSize,y); ctx.lineTo(x,y); ctx.lineTo(x,y+sy*bSize); ctx.stroke();
+      ctx.strokeStyle=cd;ctx.lineWidth=cw;
+      ctx.beginPath();ctx.moveTo(x+sx*cl,y);ctx.lineTo(x,y);ctx.lineTo(x,y+sy*cl);ctx.stroke();
     });
 
     requestAnimationFrame(draw);
@@ -329,7 +282,6 @@ nav{display:flex;align-items:center;justify-content:space-between;padding:1rem 1
   requestAnimationFrame(draw);
 })();
 </script>
-
 
 <nav>
   <div class="logo">🛣 RoadWatch</div>
@@ -381,8 +333,8 @@ nav{display:flex;align-items:center;justify-content:space-between;padding:1rem 1
 <div class="page" id="page-report">
   <div class="page-title">Report <span>Road Damage</span></div>
   <div class="ai-badge">🤖 AI-Powered Detection · Auto-classifies damage type & severity</div>
-  <!-- STEP 1: Choose Source -->
-  <div style="font-size:.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;font-weight:700;margin-bottom:.5rem">Step 1 — Choose Photo Source</div>
+  <!-- STEP 1 -->
+  <div style="font-size:.7rem;color:var(--muted);text-transform:uppercase;font-weight:700;letter-spacing:.08em;margin-bottom:.6rem">Step 1 — Choose Photo Source</div>
   <div class="photo-source-grid">
     <div class="source-card" id="src-camera" onclick="selectSource('camera')">
       <div class="src-icon">📷</div>
@@ -397,8 +349,6 @@ nav{display:flex;align-items:center;justify-content:space-between;padding:1rem 1
       <div class="src-badge">Manual location</div>
     </div>
   </div>
-
-  <!-- STEP 2: Capture Zone (shown after source selected) -->
   <div class="capture-zone" id="capture-zone" style="display:none">
     <div class="capture-placeholder" id="capture-placeholder">
       <div class="icon" id="capture-icon">📷</div>
@@ -411,10 +361,14 @@ nav{display:flex;align-items:center;justify-content:space-between;padding:1rem 1
     </div>
   </div>
   <input type="file" id="file-input" accept="image/*" onchange="handleFile(event)"/>
-
-  <!-- Nearby Area Panel -->
+  <!-- Nearby Panel -->
   <div class="nearby-panel" id="nearby-panel">
-    <div class="nearby-title">📍 Nearby Sensitive Locations</div>
+    <div class="nearby-title">⚡ Impact Priority Analysis</div>
+    <div class="impact-score" id="impact-score-row" style="margin-bottom:.6rem;display:none">
+      <div class="score-circle score-high" id="priority-circle"><span id="priority-num">0</span><span class="score-label">PTS</span></div>
+      <div class="impact-desc" id="priority-desc"></div>
+    </div>
+    <div class="nearby-title" style="margin-top:.4rem">📍 Nearby Sensitive Locations</div>
     <div id="nearby-list"></div>
   </div>
   <div class="gps-card">
@@ -583,64 +537,114 @@ function showAreaBadge(area){
 
 function initMiniMap(lat,lng){
   if(miniMap){miniMap.remove();}
-  document.getElementById('mini-map').innerHTML='';
-  miniMap=L.map('mini-map',{zoomControl:false,attributionControl:false}).setView([lat,lng],16);
+  const el=document.getElementById('mini-map');
+  el.innerHTML='';
+  miniMap=L.map('mini-map',{zoomControl:true,attributionControl:false}).setView([lat,lng],16);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(miniMap);
   miniMarker=L.circleMarker([lat,lng],{radius:10,fillColor:'#f5a623',color:'#fff',weight:2,fillOpacity:.9}).addTo(miniMap);
+  // Manual location: click map to repin
+  miniMap.on('click',async function(e){
+    const la=e.latlng.lat,ln=e.latlng.lng;
+    currentLat=la;currentLng=ln;
+    if(miniMarker)miniMarker.setLatLng([la,ln]);
+    document.getElementById('gps-text').textContent=la.toFixed(5)+', '+ln.toFixed(5);
+    document.getElementById('gps-status-text').textContent='Manual ✓';
+    document.getElementById('gps-dot').className='gps-dot active';
+    try{
+      const r=await reverseGeocode(la,ln);
+      currentAddr=r;
+      document.getElementById('gps-addr').textContent=r.substring(0,60);
+      const area=getAreaType(r);currentArea=area;
+      showAreaBadge(area);
+      detectNearby(la,ln);
+    }catch(e){}
+  });
+  // Tip
+  const tip=document.createElement('div');
+  tip.style='position:absolute;bottom:6px;right:6px;z-index:999;background:rgba(0,0,0,.75);color:#fff;font-size:.6rem;padding:3px 8px;border-radius:4px;pointer-events:none;backdrop-filter:blur(4px)';
+  tip.textContent='👆 Tap to set location';
+  el.style.position='relative';el.appendChild(tip);
+  setTimeout(()=>{try{tip.remove()}catch(e){}},4000);
 }
 
 
-let photoSource = null;
+let photoSource=null;
 
-function selectSource(src) {
-  photoSource = src;
-  document.getElementById('src-camera').className = 'source-card' + (src==='camera'?' sel-camera':'');
-  document.getElementById('src-gallery').className = 'source-card' + (src==='gallery'?' sel-gallery':'');
-  const cz = document.getElementById('capture-zone');
-  cz.style.display = 'block';
-  cz.onclick = src==='camera' ? triggerCapture : ()=>triggerGallery({stopPropagation:()=>{}});
-  document.getElementById('capture-icon').textContent = src==='camera' ? '📷' : '🖼️';
-  document.getElementById('capture-hint').textContent = src==='camera' ? 'Tap to take photo' : 'Tap to choose from gallery';
-  const fi = document.getElementById('file-input');
+function selectSource(src){
+  photoSource=src;
+  document.getElementById('src-camera').className='source-card'+(src==='camera'?' sel-camera':'');
+  document.getElementById('src-gallery').className='source-card'+(src==='gallery'?' sel-gallery':'');
+  const cz=document.getElementById('capture-zone');
+  cz.style.display='block';
+  document.getElementById('capture-icon').textContent=src==='camera'?'📷':'🖼️';
+  document.getElementById('capture-hint').textContent=src==='camera'?'Tap to take photo':'Tap to choose from gallery';
+  const fi=document.getElementById('file-input');
   if(src==='camera') fi.setAttribute('capture','environment');
   else fi.removeAttribute('capture');
-  fi.click();
+  setTimeout(()=>fi.click(),100);
 }
 
-function resetSource() {
-  photoSource = null;
-  selectedFile = null;
-  document.getElementById('src-camera').className = 'source-card';
-  document.getElementById('src-gallery').className = 'source-card';
-  document.getElementById('capture-zone').style.display = 'none';
-  document.getElementById('preview-img').style.display = 'none';
-  document.getElementById('capture-placeholder').style.display = 'flex';
-  document.getElementById('capture-overlay').style.display = 'none';
+function resetSource(){
+  photoSource=null;selectedFile=null;
+  document.getElementById('src-camera').className='source-card';
+  document.getElementById('src-gallery').className='source-card';
+  document.getElementById('capture-zone').style.display='none';
+  document.getElementById('preview-img').style.display='none';
+  document.getElementById('capture-placeholder').style.display='flex';
+  document.getElementById('capture-overlay').style.display='none';
   document.getElementById('result-card').classList.remove('show');
 }
 
-function detectNearbyAreas(lat, lng) {
-  // Use Overpass API to find nearby hospitals, schools, etc.
-  const r = 1000; // 1km radius
-  const query = `[out:json][timeout:10];(node["amenity"~"hospital|school|clinic|college|university"](around:${r},${lat},${lng}););out body 5;`;
-  fetch('https://overpass-api.de/api/interpreter?data=' + encodeURIComponent(query))
-    .then(r=>r.json())
-    .then(data=>{
-      const items = data.elements || [];
-      const panel = document.getElementById('nearby-panel');
-      const list = document.getElementById('nearby-list');
-      if(items.length === 0){ panel.classList.remove('show'); return; }
-      const icons = {hospital:'🏥',school:'🏫',clinic:'🏥',college:'🎓',university:'🎓'};
-      list.innerHTML = items.slice(0,4).map(el=>{
-        const name = el.tags?.name || el.tags?.amenity || 'Unknown';
-        const type = el.tags?.amenity || '';
-        const icon = icons[type] || '📍';
-        // Rough distance
-        const d = Math.round(Math.sqrt(Math.pow((el.lat-lat)*111000,2)+Math.pow((el.lon-lng)*111000*Math.cos(lat*Math.PI/180),2)));
-        return `<div class="nearby-item">${icon} ${name}<span class="nearby-dist">${d}m</span></div>`;
-      }).join('');
-      panel.classList.add('show');
-    }).catch(()=>{});
+async function detectNearby(lat,lng){
+  const panel=document.getElementById('nearby-panel');
+  const list=document.getElementById('nearby-list');
+  panel.classList.remove('show');
+  try{
+    // Overpass API - hospitals, schools, clinics within 1km
+    const q=`[out:json][timeout:15];(
+      node["amenity"~"hospital|school|clinic|college|university|pharmacy"](around:1000,${lat},${lng});
+      way["amenity"~"hospital|school|clinic|college|university"](around:1000,${lat},${lng});
+    );out center 8;`;
+    const res=await fetch('https://overpass-api.de/api/interpreter',{method:'POST',body:'data='+encodeURIComponent(q)});
+    const data=await res.json();
+    const items=data.elements||[];
+    if(!items.length){panel.classList.remove('show');return;}
+    const icons={hospital:'🏥',school:'🏫',clinic:'🏥',college:'🎓',university:'🎓',pharmacy:'💊'};
+    const priorities={hospital:'HIGH',school:'HIGH',clinic:'HIGH',college:'MED',university:'MED',pharmacy:'MED'};
+    // Calculate distances
+    const withDist=items.map(el=>{
+      const elat=el.lat||el.center?.lat||lat;
+      const elng=el.lon||el.center?.lon||lng;
+      const d=Math.round(Math.sqrt(Math.pow((elat-lat)*111000,2)+Math.pow((elng-lng)*111000*Math.cos(lat*Math.PI/180),2)));
+      return{...el,dist:d,elat,elng};
+    }).sort((a,b)=>a.dist-b.dist).slice(0,5);
+    // Priority score based on nearby sensitive locations
+    const highCount=withDist.filter(e=>priorities[e.tags?.amenity]==='HIGH').length;
+    const totalScore=Math.min(100,40+highCount*15+withDist.length*5);
+    // Show impact score
+    const scoreEl=document.getElementById('priority-circle');
+    document.getElementById('priority-num').textContent=totalScore;
+    document.getElementById('impact-score-row').style.display='flex';
+    const desc=document.getElementById('priority-desc');
+    if(totalScore>=70){
+      scoreEl.className='score-circle score-high';
+      desc.innerHTML=`<strong style="color:#ef4444">URGENT PRIORITY</strong> — ${withDist.length} sensitive locations within 1km.<br><small style="color:#ef4444">⚠ ${highCount} hospital/clinic nearby — immediate attention needed.</small>`;
+    } else if(totalScore>=45){
+      scoreEl.className='score-circle score-med';
+      desc.innerHTML=`<strong style="color:#f59e0b">HIGH PRIORITY</strong> — ${withDist.length} sensitive locations nearby.<br><small style="color:var(--muted)">School/medical facility proximity detected.</small>`;
+    } else {
+      scoreEl.className='score-circle score-low';
+      desc.innerHTML=`<strong style="color:#3ecfb2">STANDARD PRIORITY</strong> — ${withDist.length} locations within 1km.`;
+    }
+    list.innerHTML=withDist.map(el=>{
+      const name=el.tags?.name||el.tags?.amenity||'Facility';
+      const type=el.tags?.amenity||'';
+      const icon=icons[type]||'📍';
+      const pri=priorities[type]||'MED';
+      return`<div class="nearby-item">${icon} ${name}<span class="nearby-dist">${el.dist}m</span><span class="nearby-priority p-${pri.toLowerCase()}">${pri}</span></div>`;
+    }).join('');
+    panel.classList.add('show');
+  }catch(e){console.warn('Nearby detection failed:',e);}
 }
 
 function triggerCapture(){if(selectedFile)return;document.getElementById('file-input').setAttribute('capture','environment');document.getElementById('file-input').click();}
