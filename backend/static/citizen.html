@@ -157,9 +157,72 @@ nav{display:flex;align-items:center;justify-content:space-between;padding:1rem 1
 #file-input{display:none;}
 .empty-state{text-align:center;padding:3rem 1rem;color:var(--muted);}
 .empty-state .empty-icon{font-size:3rem;margin-bottom:.8rem;}
-</style>
+
+    /* Camera/Gallery */
+    .photo-source-grid{display:grid;grid-template-columns:1fr 1fr;gap:.8rem;margin-bottom:1rem;}
+    .source-card{background:rgba(255,255,255,.04);border:2px solid rgba(255,255,255,.08);border-radius:16px;padding:1.3rem 1rem;text-align:center;cursor:pointer;transition:all .25s;}
+    .source-card:hover{transform:translateY(-3px);border-color:rgba(255,255,255,.2);}
+    .source-card.sel-camera{border-color:#f5a623;background:rgba(245,166,35,.08);box-shadow:0 0 30px rgba(245,166,35,.2);}
+    .source-card.sel-gallery{border-color:#3ecfb2;background:rgba(62,207,178,.08);box-shadow:0 0 30px rgba(62,207,178,.2);}
+    .src-icon{font-size:2.2rem;margin-bottom:.5rem;}
+    .src-title{font-weight:700;font-size:1rem;}
+    .src-sub{font-size:.72rem;color:var(--muted);margin-top:.2rem;}
+    .src-badge{font-size:.62rem;font-weight:700;margin-top:.35rem;color:#3ecfb2;}
+    /* Impact/Nearby */
+    .impact-panel{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:1rem;margin-bottom:.8rem;display:none;}
+    .impact-panel.show{display:block;animation:fadeUp .3s ease;}
+    .impact-header{display:flex;align-items:center;gap:.5rem;font-size:.68rem;color:var(--muted);text-transform:uppercase;font-weight:700;letter-spacing:.08em;margin-bottom:.8rem;}
+    .impact-score-row{display:flex;align-items:center;gap:.8rem;margin-bottom:.8rem;padding-bottom:.8rem;border-bottom:1px solid rgba(255,255,255,.06);}
+    .score-circle{width:56px;height:56px;border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;font-weight:900;font-size:1.15rem;flex-shrink:0;}
+    .score-high{background:rgba(239,68,68,.12);border:2px solid #ef4444;color:#ef4444;}
+    .score-med{background:rgba(245,158,11,.12);border:2px solid #f59e0b;color:#f59e0b;}
+    .score-low{background:rgba(62,207,178,.12);border:2px solid #3ecfb2;color:#3ecfb2;}
+    .score-pts{font-size:.42rem;font-weight:600;opacity:.8;letter-spacing:.05em;}
+    .impact-desc{font-size:.78rem;line-height:1.5;flex:1;}
+    .nearby-title{font-size:.65rem;color:var(--muted);text-transform:uppercase;font-weight:700;letter-spacing:.08em;margin-bottom:.5rem;}
+    .nearby-item{display:flex;align-items:center;gap:.6rem;padding:.4rem .5rem;border-radius:8px;font-size:.78rem;background:rgba(255,255,255,.02);margin-bottom:.3rem;border:1px solid rgba(255,255,255,.04);}
+    .nearby-dist{font-size:.62rem;color:var(--muted);margin-left:auto;padding:.1rem .5rem;background:rgba(255,255,255,.06);border-radius:4px;}
+    .nbadge{font-size:.58rem;font-weight:700;padding:.1rem .5rem;border-radius:4px;margin-left:.3rem;}
+    .nbadge-high{background:rgba(239,68,68,.15);color:#ef4444;}
+    .nbadge-med{background:rgba(245,158,11,.15);color:#f59e0b;}
+    /* Bg canvas */
+    #bg-canvas{position:fixed;top:0;left:0;width:100%;height:100%;z-index:0;pointer-events:none;}
+    body>*:not(#bg-canvas){position:relative;z-index:1;}
+    @keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+
+    </style>
 </head>
 <body>
+<canvas id="bg-canvas"></canvas>
+<script>
+(function(){
+  const C=document.getElementById('bg-canvas'),ctx=C.getContext('2d');
+  let W,H,t=0;
+  function resize(){W=C.width=innerWidth;H=C.height=innerHeight;}
+  resize();addEventListener('resize',resize);
+  const orbs=[{x:.15,y:.2,r:.35,c:'#3ecfb2',s:.0003},{x:.85,y:.75,r:.3,c:'#a855f7',s:.0004},{x:.5,y:.9,r:.25,c:'#f5a623',s:.0005},{x:.7,y:.1,r:.2,c:'#3b82f6',s:.0003}];
+  const P=Array.from({length:55},()=>({x:Math.random(),y:Math.random()+.5,vx:(Math.random()-.5)*.0003,vy:-Math.random()*.0008-.0002,r:Math.random()*1.5+.3,a:Math.random()*.35+.08,c:['#3ecfb2','#a855f7','#f5a623','#60a5fa'][Math.floor(Math.random()*4)],life:Math.random()}));
+  let scanY=0,radarR=0;
+  function draw(ts){
+    t=ts*.001;ctx.clearRect(0,0,W,H);
+    ctx.fillStyle='#07070e';ctx.fillRect(0,0,W,H);
+    orbs.forEach((o,i)=>{const px=(o.x+Math.sin(t*o.s*7+i)*.04)*W,py=(o.y+Math.cos(t*o.s*5+i)*.04)*H,gr=ctx.createRadialGradient(px,py,0,px,py,Math.max(W,H)*o.r);gr.addColorStop(0,o.c+'16');gr.addColorStop(1,'transparent');ctx.fillStyle=gr;ctx.fillRect(0,0,W,H);});
+    ctx.strokeStyle='rgba(255,255,255,0.02)';ctx.lineWidth=.5;
+    const gx=45,gy=45,ox=(t*6)%gx,oy=(t*4)%gy;
+    for(let x=-gx+ox;x<W+gx;x+=gx){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
+    for(let y=-gy+oy;y<H+gy;y+=gy){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+    radarR=(radarR+.7)%(Math.max(W,H)*.75);
+    const ra=1-radarR/(Math.max(W,H)*.75);
+    ctx.beginPath();ctx.arc(W*.5,H,radarR,Math.PI,0);ctx.strokeStyle=`rgba(62,207,178,${ra*.07})`;ctx.lineWidth=1.5;ctx.stroke();
+    P.forEach(p=>{p.x+=p.vx;p.y+=p.vy;p.life+=.004;if(p.y<-.02||p.life>1){p.x=Math.random();p.y=1.05;p.life=0;}const a=p.a*Math.sin(p.life*Math.PI);ctx.beginPath();ctx.arc(p.x*W,p.y*H,p.r,0,Math.PI*2);ctx.fillStyle=p.c+Math.round(a*255).toString(16).padStart(2,'0');ctx.fill();});
+    scanY=(t*.12)%1;const sg=ctx.createLinearGradient(0,scanY*H-3,0,scanY*H+3);sg.addColorStop(0,'transparent');sg.addColorStop(.5,'rgba(62,207,178,0.1)');sg.addColorStop(1,'transparent');ctx.fillStyle=sg;ctx.fillRect(0,scanY*H-3,W,6);
+    const cd='rgba(62,207,178,0.18)',cl=32,cw=1.5;[[0,0,1,1],[W,0,-1,1],[0,H,1,-1],[W,H,-1,-1]].forEach(([x,y,sx,sy])=>{ctx.strokeStyle=cd;ctx.lineWidth=cw;ctx.beginPath();ctx.moveTo(x+sx*cl,y);ctx.lineTo(x,y);ctx.lineTo(x,y+sy*cl);ctx.stroke();});
+    requestAnimationFrame(draw);
+  }
+  requestAnimationFrame(draw);
+})();
+</script>
+
 <nav>
   <div class="logo">🛣 RoadWatch</div>
   <div class="nav-links" id="nav-links">
@@ -210,19 +273,40 @@ nav{display:flex;align-items:center;justify-content:space-between;padding:1rem 1
 <div class="page" id="page-report">
   <div class="page-title">Report <span>Road Damage</span></div>
   <div class="ai-badge">🤖 AI-Powered Detection · Auto-classifies damage type & severity</div>
-  <div class="capture-zone" id="capture-zone" onclick="triggerCapture()">
+  <div style="font-size:.7rem;color:var(--muted);text-transform:uppercase;font-weight:700;letter-spacing:.08em;margin-bottom:.6rem">Step 1 — Choose Photo Source</div>
+  <div class="photo-source-grid">
+    <div class="source-card" id="src-camera" onclick="selectSource('camera')">
+      <div class="src-icon">📷</div><div class="src-title">Camera</div>
+      <div class="src-sub">Take live photo</div><div class="src-badge">✓ Auto GPS geotag</div>
+    </div>
+    <div class="source-card" id="src-gallery" onclick="selectSource('gallery')">
+      <div class="src-icon">🖼️</div><div class="src-title">Gallery</div>
+      <div class="src-sub">Choose from files</div><div class="src-badge">Manual location</div>
+    </div>
+  </div>
+  <div class="capture-zone" id="capture-zone" style="display:none">
     <div class="capture-placeholder" id="capture-placeholder">
-      <div class="icon">📷</div>
-      <p>Tap to capture road damage photo</p>
-      <p style="font-size:.75rem;color:var(--muted)">Camera or Gallery</p>
+      <div class="icon" id="capture-icon">📷</div><p id="capture-hint">Tap to take photo</p>
     </div>
     <img id="preview-img" style="display:none"/>
     <div class="capture-overlay" id="capture-overlay" style="display:none">
       <button class="btn-capture" onclick="retakePhoto(event)">📷 Retake</button>
-      <button class="btn-capture secondary" onclick="triggerGallery(event)">🖼 Gallery</button>
+      <button class="btn-capture secondary" onclick="resetSource()">↩ Change</button>
     </div>
   </div>
-  <input type="file" id="file-input" accept="image/*" capture="environment" onchange="handleFile(event)"/>
+  <input type="file" id="file-input" accept="image/*" onchange="handleFile(event)"/>
+  <!-- Impact Priority Panel -->
+  <div class="impact-panel" id="impact-panel">
+    <div class="impact-header">⚡ Impact Priority Analysis</div>
+    <div class="impact-score-row" id="impact-score-row">
+      <div class="score-circle score-high" id="score-circle">
+        <span id="score-num">0</span><span class="score-pts">PTS</span>
+      </div>
+      <div class="impact-desc" id="impact-desc">Analysing nearby locations...</div>
+    </div>
+    <div class="nearby-title">📍 Nearby Sensitive Locations (within 1km)</div>
+    <div id="nearby-list"><div style="font-size:.75rem;color:var(--muted)">Scanning...</div></div>
+  </div>
   <div class="gps-card">
     <div class="gps-icon">📍</div>
     <div class="gps-info">
@@ -363,6 +447,7 @@ function getLocation(){
     showAreaBadge(currentArea);
     initMiniMap(currentLat,currentLng);
     detectNearby(currentLat,currentLng);
+    detectNearby(currentLat,currentLng);
   },err=>{
     document.getElementById('gps-text').textContent='Using default location';
     document.getElementById('gps-status-text').textContent='⚠ Manual';
@@ -370,6 +455,7 @@ function getLocation(){
     currentAddr='Coimbatore, Tamil Nadu';
     currentArea='residential';
     initMiniMap(currentLat,currentLng);
+    detectNearby(currentLat,currentLng);
     detectNearby(currentLat,currentLng);
   },{enableHighAccuracy:true,timeout:15000});
 }
@@ -391,10 +477,139 @@ function showAreaBadge(area){
 
 function initMiniMap(lat,lng){
   if(miniMap){miniMap.remove();}
-  document.getElementById('mini-map').innerHTML='';
-  miniMap=L.map('mini-map',{zoomControl:false,attributionControl:false}).setView([lat,lng],16);
+  const el=document.getElementById('mini-map');
+  el.innerHTML='';
+  miniMap=L.map('mini-map',{zoomControl:true,attributionControl:false}).setView([lat,lng],16);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(miniMap);
-  miniMarker=L.circleMarker([lat,lng],{radius:10,fillColor:'#f5a623',color:'#fff',weight:2,fillOpacity:.9}).addTo(miniMap);
+  // Draggable pin marker
+  miniMarker=L.marker([lat,lng],{
+    draggable:true,
+    icon:L.divIcon({
+      html:`<div style="width:22px;height:22px;background:#f5a623;border:3px solid #fff;border-radius:50% 50% 50% 0;transform:rotate(-45deg);box-shadow:0 2px 10px rgba(0,0,0,.5)"></div>`,
+      className:'',iconSize:[22,22],iconAnchor:[11,22]
+    })
+  }).addTo(miniMap);
+  // Drag to relocate
+  miniMarker.on('dragend',async function(e){
+    const {lat:la,lng:ln}=e.target.getLatLng();
+    await updateManualLocation(la,ln);
+  });
+  // Tap map to relocate
+  miniMap.on('click',async function(e){
+    const {lat:la,lng:ln}=e.latlng;
+    miniMarker.setLatLng([la,ln]);
+    miniMap.panTo([la,ln]);
+    await updateManualLocation(la,ln);
+  });
+  // Hint
+  const tip=document.createElement('div');
+  tip.style='position:absolute;bottom:7px;right:7px;z-index:999;background:rgba(0,0,0,.8);color:#fff;font-size:.58rem;padding:3px 9px;border-radius:5px;pointer-events:none;white-space:nowrap';
+  tip.textContent='📍 Drag pin or tap to set location';
+  el.style.position='relative';el.appendChild(tip);
+  setTimeout(()=>{try{tip.remove()}catch(e){}},5000);
+}
+
+
+let photoSource = null;
+
+function selectSource(src) {
+  photoSource = src;
+  document.getElementById('src-camera').className = 'source-card' + (src==='camera' ? ' sel-camera' : '');
+  document.getElementById('src-gallery').className = 'source-card' + (src==='gallery' ? ' sel-gallery' : '');
+  const fi = document.getElementById('file-input');
+  document.getElementById('capture-zone').style.display = 'block';
+  document.getElementById('capture-icon').textContent = src==='camera' ? '📷' : '🖼️';
+  document.getElementById('capture-hint').textContent = src==='camera' ? 'Tap to take photo' : 'Tap to choose from gallery';
+  if (src === 'camera') fi.setAttribute('capture', 'environment');
+  else fi.removeAttribute('capture');
+  setTimeout(() => fi.click(), 80);
+}
+
+function resetSource() {
+  photoSource = null; selectedFile = null;
+  document.getElementById('src-camera').className = 'source-card';
+  document.getElementById('src-gallery').className = 'source-card';
+  document.getElementById('capture-zone').style.display = 'none';
+  document.getElementById('preview-img').style.display = 'none';
+  document.getElementById('capture-placeholder').style.display = 'flex';
+  document.getElementById('capture-overlay').style.display = 'none';
+  document.getElementById('result-card').classList.remove('show');
+}
+
+async function updateManualLocation(la, ln) {
+  currentLat = la; currentLng = ln;
+  document.getElementById('gps-text').textContent = la.toFixed(5) + ', ' + ln.toFixed(5);
+  document.getElementById('gps-status-text').textContent = 'Manual ✓';
+  document.getElementById('gps-dot').className = 'gps-dot active';
+  try {
+    const addr = await reverseGeocode(la, ln);
+    currentAddr = addr;
+    document.getElementById('gps-addr').textContent = addr.substring(0, 60);
+    const area = getAreaType ? getAreaType(addr) : detectArea(addr);
+    currentArea = area; showAreaBadge(area);
+  } catch(e) {}
+  detectNearby(la, ln);
+}
+
+async function detectNearby(lat, lng) {
+  const panel = document.getElementById('impact-panel');
+  const list = document.getElementById('nearby-list');
+  const desc = document.getElementById('impact-desc');
+  const circle = document.getElementById('score-circle');
+  const scoreNum = document.getElementById('score-num');
+  panel.classList.add('show');
+  list.innerHTML = '<div style="font-size:.75rem;color:var(--muted)">🔍 Scanning nearby locations...</div>';
+  
+  try {
+    const q = `[out:json][timeout:15];(
+      node["amenity"~"hospital|school|clinic|college|university|pharmacy"](around:1000,${lat},${lng});
+      way["amenity"~"hospital|school|clinic|college|university|hospital"](around:1000,${lat},${lng});
+    );out center 10;`;
+    const res = await fetch('https://overpass-api.de/api/interpreter', {
+      method:'POST', body:'data='+encodeURIComponent(q)
+    });
+    const data = await res.json();
+    const items = (data.elements||[]).map(el => {
+      const elat = el.lat||el.center?.lat||lat;
+      const elng = el.lon||el.center?.lon||lng;
+      const dist = Math.round(Math.sqrt(
+        Math.pow((elat-lat)*111000,2) + Math.pow((elng-lng)*111000*Math.cos(lat*Math.PI/180),2)
+      ));
+      return {...el, dist, elat, elng};
+    }).sort((a,b) => a.dist-b.dist).slice(0,6);
+
+    const ICONS = {hospital:'🏥',school:'🏫',clinic:'🏥',college:'🎓',university:'🎓',pharmacy:'💊'};
+    const HIGH = ['hospital','clinic','pharmacy'];
+    const highCount = items.filter(e=>HIGH.includes(e.tags?.amenity)).length;
+    const totalScore = Math.min(100, 30 + highCount*18 + items.length*5);
+
+    // Score circle color
+    if(totalScore>=70){circle.className='score-circle score-high';desc.innerHTML=`<strong style="color:#ef4444">URGENT PRIORITY</strong> — ${items.length} sensitive location${items.length!==1?'s':''} within 1km.<br><small style="color:#ef4444">⚠ ${highCount} hospital/clinic nearby — immediate attention needed.</small>`;}
+    else if(totalScore>=45){circle.className='score-circle score-med';desc.innerHTML=`<strong style="color:#f59e0b">HIGH PRIORITY</strong> — ${items.length} sensitive locations nearby.<br><small style="color:var(--muted)">Medical/educational facility proximity detected.</small>`;}
+    else if(items.length>0){circle.className='score-circle score-low';desc.innerHTML=`<strong style="color:#3ecfb2">STANDARD PRIORITY</strong> — ${items.length} location${items.length!==1?'s':''} within 1km.`;}
+    else{circle.className='score-circle score-low';desc.innerHTML=`<strong style="color:#3ecfb2">STANDARD AREA</strong> — No sensitive locations detected nearby.`;}
+    scoreNum.textContent = totalScore;
+
+    if(!items.length){
+      list.innerHTML='<div style="font-size:.75rem;color:var(--muted);padding:.3rem 0">No hospitals/schools found within 1km of this location.</div>';
+    } else {
+      list.innerHTML = items.map(el => {
+        const name = el.tags?.name || (el.tags?.amenity?.charAt(0).toUpperCase()+el.tags?.amenity?.slice(1)) || 'Facility';
+        const type = el.tags?.amenity||'';
+        const icon = ICONS[type]||'📍';
+        const isHigh = HIGH.includes(type);
+        return `<div class="nearby-item">
+          <span style="font-size:1.1rem">${icon}</span>
+          <span style="flex:1;font-weight:500">${name}</span>
+          <span class="nearby-dist">${el.dist}m</span>
+          <span class="nbadge ${isHigh?'nbadge-high':'nbadge-med'}">${isHigh?'HIGH':'MED'}</span>
+        </div>`;
+      }).join('');
+    }
+  } catch(e) {
+    list.innerHTML = '<div style="font-size:.75rem;color:var(--muted)">⚠ Could not fetch nearby data. Check connection.</div>';
+    console.warn('detectNearby error:', e);
+  }
 }
 
 function triggerCapture(){if(selectedFile)return;document.getElementById('file-input').setAttribute('capture','environment');document.getElementById('file-input').click();}
