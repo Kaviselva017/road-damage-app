@@ -362,6 +362,7 @@ function getLocation(){
     currentArea=detectArea(currentAddr);
     showAreaBadge(currentArea);
     initMiniMap(currentLat,currentLng);
+    detectNearby(currentLat,currentLng);
   },err=>{
     document.getElementById('gps-text').textContent='Using default location';
     document.getElementById('gps-status-text').textContent='⚠ Manual';
@@ -369,6 +370,7 @@ function getLocation(){
     currentAddr='Coimbatore, Tamil Nadu';
     currentArea='residential';
     initMiniMap(currentLat,currentLng);
+    detectNearby(currentLat,currentLng);
   },{enableHighAccuracy:true,timeout:15000});
 }
 
@@ -387,61 +389,12 @@ function showAreaBadge(area){
   document.getElementById('area-badge-wrap').innerHTML=`<div class="area-badge area-${area}">${AREA_LABELS[area]||area} — Priority Zone Detected</div>`;
 }
 
-async function updateManualLocation(la, ln) {
-  currentLat = la; currentLng = ln;
-  document.getElementById('gps-text').textContent = la.toFixed(5) + ', ' + ln.toFixed(5);
-  document.getElementById('gps-status-text').textContent = 'Manual ✓';
-  document.getElementById('gps-dot').className = 'gps-dot active';
-  try {
-    const addr = await reverseGeocode(la, ln);
-    currentAddr = addr;
-    document.getElementById('gps-addr').textContent = addr.substring(0, 60);
-    const area = getAreaType(addr); currentArea = area;
-    showAreaBadge(area);
-  } catch(e) {}
-  if(typeof detectNearby === 'function') detectNearby(la, ln);
-}
-
-function initMiniMap(lat, lng){
-  if(miniMap){ miniMap.remove(); }
-  const el = document.getElementById('mini-map');
-  el.innerHTML = '';
-  miniMap = L.map('mini-map', {zoomControl:true, attributionControl:false}).setView([lat,lng], 16);
+function initMiniMap(lat,lng){
+  if(miniMap){miniMap.remove();}
+  document.getElementById('mini-map').innerHTML='';
+  miniMap=L.map('mini-map',{zoomControl:false,attributionControl:false}).setView([lat,lng],16);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(miniMap);
-
-  // Use draggable marker instead of circleMarker
-  miniMarker = L.marker([lat, lng], {
-    draggable: true,
-    icon: L.divIcon({
-      html: `<div style="width:24px;height:24px;background:#f5a623;border:3px solid #fff;border-radius:50% 50% 50% 0;transform:rotate(-45deg);box-shadow:0 2px 8px rgba(0,0,0,.4)"></div>`,
-      className: '', iconSize:[24,24], iconAnchor:[12,24]
-    })
-  }).addTo(miniMap);
-
-  // Drag to new location
-  miniMarker.on('dragend', async function(e){
-    const {lat:la, lng:ln} = e.target.getLatLng();
-    await updateManualLocation(la, ln);
-  });
-
-  // Click anywhere on map to move marker
-  miniMap.on('click', async function(e){
-    const {lat:la, lng:ln} = e.latlng;
-    miniMarker.setLatLng([la, ln]);
-    miniMap.panTo([la, ln]);
-    await updateManualLocation(la, ln);
-    // Flash marker
-    const el = miniMarker.getElement();
-    if(el){ el.style.transform += ' scale(1.3)'; setTimeout(()=>{ if(el) el.style.transform = el.style.transform.replace(' scale(1.3)',''); }, 200); }
-  });
-
-  // Tip overlay
-  const tip = document.createElement('div');
-  tip.style = 'position:absolute;bottom:8px;right:8px;z-index:999;background:rgba(0,0,0,.8);color:#fff;font-size:.6rem;padding:4px 10px;border-radius:6px;pointer-events:none;backdrop-filter:blur(4px);border:1px solid rgba(255,255,255,.1)';
-  tip.textContent = '📍 Drag pin or tap map to set exact location';
-  el.style.position = 'relative';
-  el.appendChild(tip);
-  setTimeout(() => { try{ tip.remove(); }catch(e){} }, 5000);
+  miniMarker=L.circleMarker([lat,lng],{radius:10,fillColor:'#f5a623',color:'#fff',weight:2,fillOpacity:.9}).addTo(miniMap);
 }
 
 function triggerCapture(){if(selectedFile)return;document.getElementById('file-input').setAttribute('capture','environment');document.getElementById('file-input').click();}
