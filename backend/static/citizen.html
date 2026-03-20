@@ -158,200 +158,87 @@ nav{display:flex;align-items:center;justify-content:space-between;padding:1rem 1
 .empty-state{text-align:center;padding:3rem 1rem;color:var(--muted);}
 .empty-state .empty-icon{font-size:3rem;margin-bottom:.8rem;}
 
-    /* ── ROAD ANIMATION BACKGROUND ── */
-    #road-bg{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden;background:var(--bg);}
-    .road-lane{position:absolute;bottom:0;left:0;right:0;}
+    /* Camera/Gallery Step */
+    .photo-source-grid{display:grid;grid-template-columns:1fr 1fr;gap:.8rem;margin-bottom:1rem;}
+    .source-card{background:var(--card);border:2px solid var(--border);border-radius:16px;padding:1.2rem 1rem;text-align:center;cursor:pointer;transition:all .2s;position:relative;}
+    .source-card:hover{border-color:var(--accent);transform:translateY(-2px);}
+    .source-card.sel-camera{border-color:#f5a623;background:rgba(245,166,35,.07);box-shadow:0 0 20px rgba(245,166,35,.15);}
+    .source-card.sel-gallery{border-color:var(--accent2);background:rgba(62,207,178,.07);box-shadow:0 0 20px rgba(62,207,178,.15);}
+    .src-icon{font-size:2rem;margin-bottom:.4rem;}
+    .src-title{font-weight:700;font-size:.95rem;margin-bottom:.2rem;}
+    .src-sub{font-size:.72rem;color:var(--muted);}
+    .src-badge{font-size:.62rem;font-weight:700;margin-top:.3rem;color:var(--accent2);}
+    /* Nearby area panel */
+    .nearby-panel{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:.8rem 1rem;margin-bottom:.8rem;display:none;}
+    .nearby-panel.show{display:block;}
+    .nearby-title{font-size:.7rem;color:var(--muted);text-transform:uppercase;font-weight:700;letter-spacing:.05em;margin-bottom:.5rem;}
+    .nearby-item{display:flex;align-items:center;gap:.5rem;padding:.3rem 0;border-bottom:1px solid rgba(255,255,255,.05);font-size:.78rem;}
+    .nearby-item:last-child{border-bottom:none;}
+    .nearby-dist{font-size:.65rem;color:var(--muted);margin-left:auto;}
+    /* Vehicles bg */
+    #road-bg{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden;}
     body>*:not(#road-bg){position:relative;z-index:1;}
-    @keyframes driveRight{from{transform:translateX(-200px)}to{transform:translateX(110vw)}}
-    @keyframes driveLeft{from{transform:translateX(110vw)}to{transform:translateX(-200px)}}
-    @keyframes floatParticle{0%{transform:translateY(0);opacity:.6}100%{transform:translateY(-100vh);opacity:0}}
 
     </style>
 </head>
 <body>
-<div id="road-bg">
-  <canvas id="road-canvas" style="width:100%;height:100%"></canvas>
-</div>
+<div id="road-bg"><canvas id="road-canvas" style="width:100%;height:100%"></canvas></div>
 <script>
 (function(){
-  const canvas = document.getElementById('road-canvas');
-  if(!canvas) return;
-  const ctx = canvas.getContext('2d');
-  let W, H;
-
-  function resize() {
-    W = canvas.width = window.innerWidth;
-    H = canvas.height = window.innerHeight;
+  const c=document.getElementById('road-canvas');
+  if(!c)return;
+  const ctx=c.getContext('2d');
+  let W,H;
+  function resize(){W=c.width=window.innerWidth;H=c.height=window.innerHeight;}
+  resize();window.addEventListener('resize',resize);
+  const LANES=[0.88,0.92,0.96];
+  const VCOLS=['#00f5c4','#f5a623','#a855f7','#3b82f6','#ef4444','#10b981','#f59e0b'];
+  function mkV(lane,dir){
+    const types=[{w:38,h:14},{w:65,h:16},{w:26,h:10},{w:50,h:15}];
+    const t=types[Math.floor(Math.random()*types.length)];
+    return{x:dir===1?-100:W+100,y:H*LANES[lane]-t.h/2,w:t.w,h:t.h,
+      speed:(Math.random()*1.2+0.6)*dir,col:VCOLS[Math.floor(Math.random()*VCOLS.length)],dir,lane};
   }
-  resize();
-  window.addEventListener('resize', resize);
-
-  // Road lanes
-  const LANE_Y = [0.65, 0.72, 0.79, 0.86]; // % of height
-  const COLORS = { bg: '#0a0a0f', road: '#111318', lane: 'rgba(255,200,0,0.15)', glow: 'rgba(0,245,196,0.08)' };
-
-  // Vehicle types
-  function mkVehicle(lane, dir) {
-    const colors = ['#00f5c4','#f5a623','#a855f7','#3b82f6','#ef4444','#10b981'];
-    const types = [
-      {w:40,h:16,name:'car'},
-      {w:70,h:18,name:'truck'},
-      {w:28,h:12,name:'bike'},
-      {w:55,h:17,name:'van'},
-    ];
-    const t = types[Math.floor(Math.random()*types.length)];
-    return {
-      x: dir===1 ? -100 : W+100,
-      y: H * LANE_Y[lane] - t.h/2,
-      w: t.w, h: t.h,
-      speed: (Math.random()*1.5+0.8) * dir,
-      color: colors[Math.floor(Math.random()*colors.length)],
-      type: t.name,
-      headlight: dir===1,
-      lane, dir,
-      active: true
-    };
-  }
-
-  let vehicles = [];
-  // Seed initial vehicles
-  LANE_Y.forEach((_, i) => {
-    for(let j=0;j<2;j++){
-      const v = mkVehicle(i, i%2===0?1:-1);
-      v.x = Math.random() * W;
-      vehicles.push(v);
-    }
-  });
-
-  // Particle dots
-  let particles = [];
-  for(let i=0;i<40;i++){
-    particles.push({x:Math.random()*W, y:Math.random()*H, r:Math.random()*1.5+0.3, speed:Math.random()*0.4+0.1, color:`hsla(${160+Math.random()*60},70%,60%,${Math.random()*0.3+0.05})`});
-  }
-
-  function drawVehicle(v) {
-    const r = 3;
-    ctx.save();
-    ctx.translate(v.x, v.y);
-    if(v.dir===-1) { ctx.scale(-1,1); ctx.translate(-v.w,0); }
-
-    // Body
-    ctx.beginPath();
-    ctx.roundRect(0, 2, v.w, v.h-4, r);
-    ctx.fillStyle = v.color + '22';
-    ctx.strokeStyle = v.color;
-    ctx.lineWidth = 1;
-    ctx.fill();
-    ctx.stroke();
-
-    // Roof (car/van)
-    if(v.type!=='bike'&&v.type!=='truck'){
-      ctx.beginPath();
-      ctx.roundRect(v.w*0.2, 0, v.w*0.5, v.h*0.5, 2);
-      ctx.fillStyle = v.color + '33';
-      ctx.fill();
-      ctx.strokeStyle = v.color + '88';
-      ctx.stroke();
-    }
-
-    // Windows
-    if(v.type==='car'||v.type==='van'){
-      ctx.fillStyle = 'rgba(150,220,255,0.25)';
-      ctx.fillRect(v.w*0.22, 1, v.w*0.2, v.h*0.4);
-      ctx.fillRect(v.w*0.46, 1, v.w*0.2, v.h*0.4);
-    }
-
-    // Headlights
-    const hx = v.type==='bike' ? v.w-5 : v.w-8;
-    ctx.beginPath();
-    ctx.arc(hx, v.h/2, 2.5, 0, Math.PI*2);
-    ctx.fillStyle = '#fffde7';
-    ctx.shadowColor = '#fff9c4';
-    ctx.shadowBlur = 8;
-    ctx.fill();
-    ctx.shadowBlur = 0;
-
-    // Taillights
-    ctx.beginPath();
-    ctx.arc(5, v.h/2, 2, 0, Math.PI*2);
-    ctx.fillStyle = '#ff1744';
-    ctx.shadowColor = '#ff1744';
-    ctx.shadowBlur = 6;
-    ctx.fill();
-    ctx.shadowBlur = 0;
-
-    // Wheels
-    [v.w*0.15, v.w*0.75].forEach(wx=>{
-      ctx.beginPath();
-      ctx.arc(wx, v.h, 3, 0, Math.PI*2);
-      ctx.fillStyle = '#333';
-      ctx.fill();
-      ctx.strokeStyle = '#666';
-      ctx.lineWidth = 0.5;
-      ctx.stroke();
-    });
-
-    ctx.restore();
-  }
-
-  let last = 0;
-  function animate(ts) {
-    const dt = Math.min((ts-last)/16, 3); last=ts;
+  let vehicles=[];
+  LANES.forEach((_,i)=>{for(let j=0;j<3;j++){const v=mkV(i,i%2===0?1:-1);v.x=Math.random()*W;vehicles.push(v);}});
+  let last=0;
+  function draw(ts){
+    const dt=Math.min((ts-last)/16,3);last=ts;
     ctx.clearRect(0,0,W,H);
-
-    // Background
-    ctx.fillStyle = COLORS.bg;
-    ctx.fillRect(0,0,W,H);
-
-    // Road surface
-    LANE_Y.forEach((ly,i)=>{
-      const y = H*ly;
-      ctx.fillStyle = 'rgba(20,22,30,0.4)';
-      ctx.fillRect(0, y-20, W, 45);
-      // Lane markings
-      ctx.setLineDash([20,15]);
-      ctx.strokeStyle = 'rgba(255,200,0,0.12)';
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(0, y+5); ctx.lineTo(W, y+5);
-      ctx.stroke();
-      ctx.setLineDash([]);
+    // Dark gradient bg
+    const g=ctx.createLinearGradient(0,0,0,H);
+    g.addColorStop(0,'rgba(8,8,15,0.95)');g.addColorStop(1,'rgba(12,12,20,0.95)');
+    ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
+    // Road lanes
+    LANES.forEach(ly=>{
+      const y=H*ly;
+      ctx.fillStyle='rgba(20,22,30,0.5)';ctx.fillRect(0,y-18,W,38);
+      ctx.setLineDash([18,12]);ctx.strokeStyle='rgba(255,200,0,0.1)';ctx.lineWidth=1;
+      ctx.beginPath();ctx.moveTo(0,y+5);ctx.lineTo(W,y+5);ctx.stroke();ctx.setLineDash([]);
     });
-
-    // Particles
-    particles.forEach(p=>{
-      p.y -= p.speed*dt;
-      if(p.y < -5){ p.y=H+5; p.x=Math.random()*W; }
-      ctx.beginPath();
-      ctx.arc(p.x,p.y,p.r,0,Math.PI*2);
-      ctx.fillStyle=p.color;
-      ctx.fill();
-    });
-
     // Vehicles
     vehicles.forEach(v=>{
-      v.x += v.speed * dt;
+      v.x+=v.speed*dt;
       // Glow trail
-      ctx.save();
-      ctx.globalAlpha = 0.15;
-      ctx.fillStyle = v.color;
-      ctx.fillRect(v.dir===1 ? v.x-20 : v.x+v.w, v.y+v.h/2-2, 20, 4);
+      ctx.save();ctx.globalAlpha=0.12;ctx.fillStyle=v.col;
+      ctx.fillRect(v.dir===1?v.x-15:v.x+v.w,v.y+v.h/2-2,15,4);ctx.restore();
+      // Body
+      ctx.save();if(v.dir===-1){ctx.translate(v.x+v.w/2,v.y+v.h/2);ctx.scale(-1,1);ctx.translate(-v.w/2,-v.h/2);}
+      else ctx.translate(v.x,v.y);
+      ctx.beginPath();ctx.roundRect(0,2,v.w,v.h-4,3);
+      ctx.fillStyle=v.col+'18';ctx.strokeStyle=v.col;ctx.lineWidth=1;ctx.fill();ctx.stroke();
+      // Headlight
+      ctx.beginPath();ctx.arc(v.w-5,v.h/2,2,0,Math.PI*2);ctx.fillStyle='#fffde7';ctx.shadowColor='#fff9c4';ctx.shadowBlur=8;ctx.fill();ctx.shadowBlur=0;
+      // Taillight
+      ctx.beginPath();ctx.arc(5,v.h/2,1.5,0,Math.PI*2);ctx.fillStyle='#ff1744';ctx.shadowColor='#ff1744';ctx.shadowBlur=5;ctx.fill();ctx.shadowBlur=0;
       ctx.restore();
-      drawVehicle(v);
-      // Reset when off screen
-      if(v.dir===1 && v.x > W+150) { Object.assign(v, mkVehicle(v.lane,1)); }
-      if(v.dir===-1 && v.x < -150) { Object.assign(v, mkVehicle(v.lane,-1)); }
+      if(v.dir===1&&v.x>W+120){Object.assign(v,mkV(v.lane,1));}
+      if(v.dir===-1&&v.x<-120){Object.assign(v,mkV(v.lane,-1));}
     });
-
-    // Spawn occasionally
-    if(Math.random()<0.002 && vehicles.length < 16){
-      const lane = Math.floor(Math.random()*LANE_Y.length);
-      vehicles.push(mkVehicle(lane, Math.random()<0.5?1:-1));
-    }
-
-    requestAnimationFrame(animate);
+    if(Math.random()<0.003&&vehicles.length<18){const l=Math.floor(Math.random()*LANES.length);vehicles.push(mkV(l,Math.random()<.5?1:-1));}
+    requestAnimationFrame(draw);
   }
-  requestAnimationFrame(animate);
+  requestAnimationFrame(draw);
 })();
 </script>
 
@@ -405,19 +292,42 @@ nav{display:flex;align-items:center;justify-content:space-between;padding:1rem 1
 <div class="page" id="page-report">
   <div class="page-title">Report <span>Road Damage</span></div>
   <div class="ai-badge">🤖 AI-Powered Detection · Auto-classifies damage type & severity</div>
-  <div class="capture-zone" id="capture-zone" onclick="triggerCapture()">
+  <!-- STEP 1: Choose Source -->
+  <div style="font-size:.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;font-weight:700;margin-bottom:.5rem">Step 1 — Choose Photo Source</div>
+  <div class="photo-source-grid">
+    <div class="source-card" id="src-camera" onclick="selectSource('camera')">
+      <div class="src-icon">📷</div>
+      <div class="src-title">Camera</div>
+      <div class="src-sub">Take live photo</div>
+      <div class="src-badge">✓ Auto GPS geotag</div>
+    </div>
+    <div class="source-card" id="src-gallery" onclick="selectSource('gallery')">
+      <div class="src-icon">🖼️</div>
+      <div class="src-title">Gallery</div>
+      <div class="src-sub">Choose from files</div>
+      <div class="src-badge">Manual location</div>
+    </div>
+  </div>
+
+  <!-- STEP 2: Capture Zone (shown after source selected) -->
+  <div class="capture-zone" id="capture-zone" style="display:none">
     <div class="capture-placeholder" id="capture-placeholder">
-      <div class="icon">📷</div>
-      <p>Tap to capture road damage photo</p>
-      <p style="font-size:.75rem;color:var(--muted)">Camera or Gallery</p>
+      <div class="icon" id="capture-icon">📷</div>
+      <p id="capture-hint">Tap to take photo</p>
     </div>
     <img id="preview-img" style="display:none"/>
     <div class="capture-overlay" id="capture-overlay" style="display:none">
       <button class="btn-capture" onclick="retakePhoto(event)">📷 Retake</button>
-      <button class="btn-capture secondary" onclick="triggerGallery(event)">🖼 Gallery</button>
+      <button class="btn-capture secondary" onclick="resetSource()">↩ Change</button>
     </div>
   </div>
-  <input type="file" id="file-input" accept="image/*" capture="environment" onchange="handleFile(event)"/>
+  <input type="file" id="file-input" accept="image/*" onchange="handleFile(event)"/>
+
+  <!-- Nearby Area Panel -->
+  <div class="nearby-panel" id="nearby-panel">
+    <div class="nearby-title">📍 Nearby Sensitive Locations</div>
+    <div id="nearby-list"></div>
+  </div>
   <div class="gps-card">
     <div class="gps-icon">📍</div>
     <div class="gps-info">
@@ -588,31 +498,60 @@ function initMiniMap(lat,lng){
   miniMap=L.map('mini-map',{zoomControl:false,attributionControl:false}).setView([lat,lng],16);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(miniMap);
   miniMarker=L.circleMarker([lat,lng],{radius:10,fillColor:'#f5a623',color:'#fff',weight:2,fillOpacity:.9}).addTo(miniMap);
-  // Click to set manual location
-  miniMap.off('click');
-  miniMap.on('click',function(e){
-    const la=e.latlng.lat,ln=e.latlng.lng;
-    if(miniMarker)miniMarker.setLatLng([la,ln]);
-    currentLat=la;currentLng=ln;
-    document.getElementById('gps-text').textContent=la.toFixed(6)+', '+ln.toFixed(6);
-    document.getElementById('gps-status-text').textContent='Manual ✓';
-    document.getElementById('gps-dot').className='gps-dot active';
-    fetch('https://nominatim.openstreetmap.org/reverse?lat='+la+'&lon='+ln+'&format=json')
-      .then(r=>r.json()).then(d=>{
-        document.getElementById('gps-addr').textContent=(d.display_name||'').substring(0,60);
-        showAreaBadge(getAreaType(d.display_name||''));
-      }).catch(()=>{});
-  });
-  // Add tip overlay
-  setTimeout(()=>{
-    const tip=document.createElement('div');
-    tip.style='position:absolute;bottom:8px;right:8px;z-index:999;background:rgba(0,0,0,.75);color:#fff;font-size:.62rem;padding:3px 8px;border-radius:4px;pointer-events:none';
-    tip.textContent='👆 Tap to pin location';
-    const mapEl=document.getElementById('mini-map');
-    mapEl.style.position='relative';
-    mapEl.appendChild(tip);
-    setTimeout(()=>{try{tip.remove()}catch(e){}},4000);
-  },500);
+}
+
+
+let photoSource = null;
+
+function selectSource(src) {
+  photoSource = src;
+  document.getElementById('src-camera').className = 'source-card' + (src==='camera'?' sel-camera':'');
+  document.getElementById('src-gallery').className = 'source-card' + (src==='gallery'?' sel-gallery':'');
+  const cz = document.getElementById('capture-zone');
+  cz.style.display = 'block';
+  cz.onclick = src==='camera' ? triggerCapture : ()=>triggerGallery({stopPropagation:()=>{}});
+  document.getElementById('capture-icon').textContent = src==='camera' ? '📷' : '🖼️';
+  document.getElementById('capture-hint').textContent = src==='camera' ? 'Tap to take photo' : 'Tap to choose from gallery';
+  const fi = document.getElementById('file-input');
+  if(src==='camera') fi.setAttribute('capture','environment');
+  else fi.removeAttribute('capture');
+  fi.click();
+}
+
+function resetSource() {
+  photoSource = null;
+  selectedFile = null;
+  document.getElementById('src-camera').className = 'source-card';
+  document.getElementById('src-gallery').className = 'source-card';
+  document.getElementById('capture-zone').style.display = 'none';
+  document.getElementById('preview-img').style.display = 'none';
+  document.getElementById('capture-placeholder').style.display = 'flex';
+  document.getElementById('capture-overlay').style.display = 'none';
+  document.getElementById('result-card').classList.remove('show');
+}
+
+function detectNearbyAreas(lat, lng) {
+  // Use Overpass API to find nearby hospitals, schools, etc.
+  const r = 1000; // 1km radius
+  const query = `[out:json][timeout:10];(node["amenity"~"hospital|school|clinic|college|university"](around:${r},${lat},${lng}););out body 5;`;
+  fetch('https://overpass-api.de/api/interpreter?data=' + encodeURIComponent(query))
+    .then(r=>r.json())
+    .then(data=>{
+      const items = data.elements || [];
+      const panel = document.getElementById('nearby-panel');
+      const list = document.getElementById('nearby-list');
+      if(items.length === 0){ panel.classList.remove('show'); return; }
+      const icons = {hospital:'🏥',school:'🏫',clinic:'🏥',college:'🎓',university:'🎓'};
+      list.innerHTML = items.slice(0,4).map(el=>{
+        const name = el.tags?.name || el.tags?.amenity || 'Unknown';
+        const type = el.tags?.amenity || '';
+        const icon = icons[type] || '📍';
+        // Rough distance
+        const d = Math.round(Math.sqrt(Math.pow((el.lat-lat)*111000,2)+Math.pow((el.lon-lng)*111000*Math.cos(lat*Math.PI/180),2)));
+        return `<div class="nearby-item">${icon} ${name}<span class="nearby-dist">${d}m</span></div>`;
+      }).join('');
+      panel.classList.add('show');
+    }).catch(()=>{});
 }
 
 function triggerCapture(){if(selectedFile)return;document.getElementById('file-input').setAttribute('capture','environment');document.getElementById('file-input').click();}
