@@ -122,36 +122,43 @@ async def submit_complaint(
         db.refresh(complaint)
 
         # ── FULL EMERGENCY NOTIFICATION FLOW ─────────────────
-        try:
-            from app.services.notification_service import (
-                notify_admin_emergency,
-                notify_officer_assigned,
-                notify_citizen_submitted
-            )
-            sev_val = complaint.severity.value if hasattr(complaint.severity,'value') else str(complaint.severity)
-            priority_val = getattr(complaint, 'priority_score', 0) or 0
-            
-            # 1. Send submission confirmation to CITIZEN
-            notify_citizen_submitted(
-                citizen_email=current_user.email,
-                citizen_name=current_user.name,
-                complaint_id=complaint.complaint_id,
-                severity=sev_val,
-                address=complaint.address or "",
-                priority=priority_val
-            )
-            
-            # 2. If HIGH severity → send EMERGENCY alert to ADMIN
-            if sev_val == "high":
-                notify_admin_emergency(complaint, current_user.name)
-            
-            # 3. Send assignment email to OFFICER
-            if officer:
-                notify_officer_assigned(officer, complaint)
-                
-        except Exception as e:
-            import logging
-            logging.getLogger(__name__).warning(f"Notification error: {e}")
+        import logging as _logging, traceback as _tb, threading as _threading
+        _log = _logging.getLogger(__name__)
+
+        def _send_notifications():
+            try:
+                from app.services.notification_service import (
+                    notify_admin_emergency,
+                    notify_officer_assigned,
+                    notify_citizen_submitted
+                )
+                sev_val = complaint.severity.value if hasattr(complaint.severity,'value') else str(complaint.severity)
+                priority_val = getattr(complaint, 'priority_score', 0) or 0
+
+                _log.info(f"Sending notifications for {complaint.complaint_id} sev={sev_val} to={current_user.email}")
+
+                ok1 = notify_citizen_submitted(
+                    citizen_email=current_user.email,
+                    citizen_name=current_user.name,
+                    complaint_id=complaint.complaint_id,
+                    severity=sev_val,
+                    address=complaint.address or "",
+                    priority=priority_val
+                )
+                _log.info(f"Citizen email: {'sent' if ok1 else 'FAILED'}")
+
+                if sev_val == "high":
+                    ok2 = notify_admin_emergency(complaint, current_user.name)
+                    _log.info(f"Admin emergency: {'sent' if ok2 else 'FAILED'}")
+
+                if officer:
+                    ok3 = notify_officer_assigned(officer, complaint)
+                    _log.info(f"Officer email: {'sent' if ok3 else 'FAILED'}")
+
+            except Exception as e:
+                _log.error(f"Notification error: {e}\n{_tb.format_exc()}")
+
+        _threading.Thread(target=_send_notifications, daemon=True).start()
 
         # WebSocket broadcast
         try:
