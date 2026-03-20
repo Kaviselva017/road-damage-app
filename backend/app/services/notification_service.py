@@ -16,44 +16,44 @@ EMAIL_FROM = os.getenv("EMAIL_FROM", SMTP_USER)
 ADMIN_EMAIL = os.getenv("ADMIN_EMAIL", SMTP_USER)
 
 # Dynamic base URL - works on both local and Render
-BASE_URL = os.getenv("BASE_URL", "https://road-damage-appsystem.onrender.com")
-
-# Log config status at import time so you can see it in Render logs
-if SMTP_USER and SMTP_PASS:
-    logger.info(f"✅ Email configured: {SMTP_USER} → admin: {ADMIN_EMAIL}")
-else:
-    logger.warning("⚠️  Email NOT configured — set SMTP_USER, SMTP_PASS, ADMIN_EMAIL, BASE_URL on Render")
+BASE_URL = os.getenv("BASE_URL", "https://road-damage-system.onrender.com")
 
 def _send_email(to_email: str, subject: str, html_body: str) -> bool:
     if not SMTP_USER or not SMTP_PASS:
         logger.warning("Email not configured - set SMTP_USER and SMTP_PASS env vars")
         return False
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = subject
+    msg["From"] = EMAIL_FROM
+    msg["To"] = to_email
+    msg.attach(MIMEText(html_body, "html"))
+
+    # Try port 465 (SSL) first - works on Render
+    # Fall back to port 587 (TLS) for local dev
+    errors = []
     try:
-        msg = MIMEMultipart("alternative")
-        msg["Subject"] = subject
-        msg["From"] = EMAIL_FROM
-        msg["To"] = to_email
-        msg.attach(MIMEText(html_body, "html"))
-        with smtplib.SMTP(SMTP_SERVER, SMTP_PORT, timeout=10) as s:
+        import ssl
+        ctx = ssl.create_default_context()
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465, context=ctx, timeout=15) as s:
+            s.login(SMTP_USER, SMTP_PASS)
+            s.sendmail(EMAIL_FROM, to_email, msg.as_string())
+        logger.info(f"Email sent (465/SSL) to {to_email}: {subject}")
+        return True
+    except Exception as e:
+        errors.append(f"465/SSL: {e}")
+
+    try:
+        with smtplib.SMTP("smtp.gmail.com", 587, timeout=15) as s:
             s.starttls()
             s.login(SMTP_USER, SMTP_PASS)
             s.sendmail(EMAIL_FROM, to_email, msg.as_string())
-        logger.info(f"✅ Email sent to {to_email}: {subject}")
+        logger.info(f"Email sent (587/TLS) to {to_email}: {subject}")
         return True
     except Exception as e:
-        logger.warning(f"❌ Email failed to {to_email}: {e}")
-        return False
+        errors.append(f"587/TLS: {e}")
 
-
-def test_email_config() -> dict:
-    """Call this endpoint to verify email config is working on Render."""
-    return {
-        "smtp_configured": bool(SMTP_USER and SMTP_PASS),
-        "smtp_user": SMTP_USER or "NOT SET",
-        "admin_email": ADMIN_EMAIL or "NOT SET",
-        "base_url": BASE_URL,
-    }
-
+    logger.error(f"Email failed to {to_email} - tried both ports: {errors}")
+    return False
 
 def _sev_color(sev):
     return {"high":"#ef4444","medium":"#f59e0b","low":"#10b981"}.get(str(sev).lower(),"#6b7280")
