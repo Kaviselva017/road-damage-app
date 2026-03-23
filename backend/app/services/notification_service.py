@@ -1,59 +1,90 @@
 """
-Emergency Notification Service
+Emergency Notification Service - Uses Resend API (HTTPS, works on Render)
+Fallback: Gmail SMTP port 465
 """
-import os, smtplib, logging
+import os, smtplib, ssl, logging, json
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
-SMTP_SERVER = os.getenv("SMTP_SERVER", "smtp.gmail.com")
-SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
+# Resend API (primary - works on Render free tier)
+RESEND_API_KEY = os.getenv("RESEND_API_KEY", "")
+
+# Gmail SMTP fallback
 SMTP_USER = os.getenv("SMTP_USER", "")
 SMTP_PASS = os.getenv("SMTP_PASS", "")
-EMAIL_FROM = os.getenv("EMAIL_FROM", SMTP_USER)
+EMAIL_FROM = os.getenv("EMAIL_FROM", SMTP_USER or "noreply@roadwatch.app")
 ADMIN_EMAIL = os.getenv("ADMIN_EMAIL", SMTP_USER)
+BASE_URL = os.getenv("BASE_URL", "https://road-damage-appsystem.onrender.com")
 
-# Dynamic base URL - works on both local and Render
-BASE_URL = os.getenv("BASE_URL", "https://road-damage-system.onrender.com")
+if RESEND_API_KEY:
+    logger.info(f"Email: Resend API configured")
+elif SMTP_USER and SMTP_PASS:
+    logger.info(f"Email: Gmail SMTP configured ({SMTP_USER})")
+else:
+    logger.warning("Email: NOT configured - set RESEND_API_KEY or SMTP_USER+SMTP_PASS")
 
-def _send_email(to_email: str, subject: str, html_body: str) -> bool:
+def _send_via_resend(to_email: str, subject: str, html_body: str) -> bool:
+    """Send via Resend API - works on Render (uses HTTPS port 443)"""
+    try:
+        import urllib.request
+        payload = json.dumps({
+            "from": "RoadWatch <onboarding@resend.dev>",
+            "to": [to_email],
+            "subject": subject,
+            "html": html_body
+        }).encode()
+        req = urllib.request.Request(
+            "https://api.resend.com/emails",
+            data=payload,
+            headers={
+                "Authorization": f"Bearer {RESEND_API_KEY}",
+                "Content-Type": "application/json"
+            }
+        )
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            result = json.loads(resp.read())
+            logger.info(f"Resend OK to {to_email}: {result.get('id','')}")
+            return True
+    except Exception as e:
+        logger.error(f"Resend failed: {e}")
+        return False
+
+
+def _send_via_smtp(to_email: str, subject: str, html_body: str) -> bool:
+    """Send via Gmail SMTP - fallback for local dev"""
     if not SMTP_USER or not SMTP_PASS:
-        logger.warning("Email not configured - set SMTP_USER and SMTP_PASS env vars")
         return False
     msg = MIMEMultipart("alternative")
     msg["Subject"] = subject
-    msg["From"] = EMAIL_FROM
+    msg["From"] = SMTP_USER
     msg["To"] = to_email
     msg.attach(MIMEText(html_body, "html"))
-
-    # Try port 465 (SSL) first - works on Render
-    # Fall back to port 587 (TLS) for local dev
-    errors = []
-    try:
-        import ssl
-        ctx = ssl.create_default_context()
-        with smtplib.SMTP_SSL("smtp.gmail.com", 465, context=ctx, timeout=15) as s:
-            s.login(SMTP_USER, SMTP_PASS)
-            s.sendmail(EMAIL_FROM, to_email, msg.as_string())
-        logger.info(f"Email sent (465/SSL) to {to_email}: {subject}")
-        return True
-    except Exception as e:
-        errors.append(f"465/SSL: {e}")
-
-    try:
-        with smtplib.SMTP("smtp.gmail.com", 587, timeout=15) as s:
-            s.starttls()
-            s.login(SMTP_USER, SMTP_PASS)
-            s.sendmail(EMAIL_FROM, to_email, msg.as_string())
-        logger.info(f"Email sent (587/TLS) to {to_email}: {subject}")
-        return True
-    except Exception as e:
-        errors.append(f"587/TLS: {e}")
-
-    logger.error(f"Email failed to {to_email} - tried both ports: {errors}")
+    # Try port 465 SSL first, then 587 TLS
+    for attempt in [("SSL", lambda: smtplib.SMTP_SSL("smtp.gmail.com", 465, context=ssl.create_default_context(), timeout=15)),
+                    ("TLS", lambda: smtplib.SMTP("smtp.gmail.com", 587, timeout=15))]:
+        try:
+            with attempt[1]() as s:
+                if attempt[0] == "TLS":
+                    s.starttls()
+                s.login(SMTP_USER, SMTP_PASS)
+                s.sendmail(SMTP_USER, to_email, msg.as_string())
+            logger.info(f"SMTP {attempt[0]} OK to {to_email}")
+            return True
+        except Exception as e:
+            logger.warning(f"SMTP {attempt[0]} failed: {e}")
     return False
+
+
+def _send_email(to_email: str, subject: str, html_body: str) -> bool:
+    if not to_email:
+        return False
+    # Try Resend first (works on Render), fallback to SMTP (works locally)
+    if RESEND_API_KEY:
+        return _send_via_resend(to_email, subject, html_body)
+    return _send_via_smtp(to_email, subject, html_body)
 
 def _sev_color(sev):
     return {"high":"#ef4444","medium":"#f59e0b","low":"#10b981"}.get(str(sev).lower(),"#6b7280")
