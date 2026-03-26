@@ -64,6 +64,9 @@ nav{display:flex;align-items:center;justify-content:space-between;padding:1rem 1
 .gps-label{font-size:.75rem;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.06em;}
 .gps-value{font-size:.9rem;margin-top:2px;}
 .gps-addr{font-size:.72rem;color:var(--muted);margin-top:2px;}
+.gps-actions{display:flex;gap:.45rem;margin-top:.55rem;flex-wrap:wrap;}
+.gps-btn{background:rgba(255,255,255,.06);border:1px solid var(--border);color:var(--text);padding:.38rem .7rem;border-radius:999px;font-family:inherit;font-size:.72rem;font-weight:700;cursor:pointer;transition:all .2s;}
+.gps-btn:hover{border-color:var(--accent);color:var(--accent);}
 .gps-dot{width:8px;height:8px;border-radius:50%;background:var(--muted);}
 .gps-dot.active{background:var(--accent2);box-shadow:0 0 6px var(--accent2);animation:pulse 1.5s infinite;}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
@@ -171,7 +174,9 @@ nav{display:flex;align-items:center;justify-content:space-between;padding:1rem 1
     /* Impact/Nearby */
     .impact-panel{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:1rem;margin-bottom:.8rem;display:none;}
     .impact-panel.show{display:block;animation:fadeUp .3s ease;}
-    .impact-header{display:flex;align-items:center;gap:.5rem;font-size:.68rem;color:var(--muted);text-transform:uppercase;font-weight:700;letter-spacing:.08em;margin-bottom:.8rem;}
+    .impact-header{display:flex;align-items:center;justify-content:space-between;gap:.5rem;font-size:.68rem;color:var(--muted);text-transform:uppercase;font-weight:700;letter-spacing:.08em;margin-bottom:.6rem;}
+    .impact-sync{font-size:.6rem;font-weight:700;padding:.18rem .5rem;border-radius:999px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08);color:var(--muted);}
+    .impact-meta{font-size:.72rem;color:var(--muted);line-height:1.45;margin-bottom:.7rem;}
     .impact-score-row{display:flex;align-items:center;gap:.8rem;margin-bottom:.8rem;padding-bottom:.8rem;border-bottom:1px solid rgba(255,255,255,.06);}
     .score-circle{width:56px;height:56px;border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;font-weight:900;font-size:1.15rem;flex-shrink:0;}
     .score-high{background:rgba(239,68,68,.12);border:2px solid #ef4444;color:#ef4444;}
@@ -297,7 +302,11 @@ nav{display:flex;align-items:center;justify-content:space-between;padding:1rem 1
   <input type="file" id="file-input" accept="image/*" onchange="handleFile(event)"/>
   <!-- Impact Priority Panel -->
   <div class="impact-panel" id="impact-panel">
-    <div class="impact-header">⚡ Impact Priority Analysis</div>
+    <div class="impact-header">
+      <span>⚡ Impact Priority Analysis</span>
+      <span class="impact-sync" id="impact-sync">Waiting for location</span>
+    </div>
+    <div class="impact-meta" id="impact-meta">Location, nearby facilities, and duplicate reports sync automatically when GPS locks or you move the map pin.</div>
     <div class="impact-score-row" id="impact-score-row">
       <div class="score-circle score-high" id="score-circle">
         <span id="score-num">0</span><span class="score-pts">PTS</span>
@@ -313,6 +322,9 @@ nav{display:flex;align-items:center;justify-content:space-between;padding:1rem 1
       <div class="gps-label">GPS Location</div>
       <div class="gps-value" id="gps-text">Detecting location...</div>
       <div class="gps-addr" id="gps-addr"></div>
+      <div class="gps-actions">
+        <button class="gps-btn" type="button" onclick="getLocation(true)">Use My GPS</button>
+      </div>
     </div>
     <div style="display:flex;flex-direction:column;align-items:center;gap:.2rem">
       <div class="gps-dot" id="gps-dot"></div>
@@ -374,7 +386,84 @@ const API=(window.location.hostname==='localhost'?'http://localhost:8000':window
 let token=localStorage.getItem('citizen_token');
 let userName=localStorage.getItem('citizen_name');
 let currentLat=null,currentLng=null,currentAddr='',currentArea='residential';
+let currentImpactScore=0,currentSensitiveCount=0,currentEstimatedPriority=0,impactSyncSerial=0;
 let selectedFile=null,miniMap=null,miniMarker=null,detailMap=null;
+
+function setImpactSyncState(message,tone='default'){
+  const el=document.getElementById('impact-sync');
+  if(!el)return;
+  el.textContent=message;
+  el.style.color=tone==='good'?'var(--accent2)':tone==='warn'?'var(--accent)':'var(--muted)';
+  el.style.borderColor=tone==='good'?'rgba(62,207,178,.3)':tone==='warn'?'rgba(245,166,35,.28)':'rgba(255,255,255,.08)';
+}
+
+function setImpactMeta(message){
+  const el=document.getElementById('impact-meta');
+  if(el)el.textContent=message;
+}
+
+function syncMiniMap(lat,lng){
+  if(!miniMap){initMiniMap(lat,lng);return;}
+  if(miniMarker)miniMarker.setLatLng([lat,lng]);
+  miniMap.setView([lat,lng],16);
+}
+
+async function syncPriorityPreview(syncId){
+  if(!token||currentLat==null||currentLng==null)return;
+  try{
+    const params=new URLSearchParams({
+      latitude:currentLat.toFixed(6),
+      longitude:currentLng.toFixed(6),
+      address:currentAddr||'',
+      area_type:currentArea||'residential',
+      impact_score:String(currentImpactScore||0),
+      sensitive_location_count:String(currentSensitiveCount||0)
+    });
+    const res=await fetch(`${API}/complaints/priority/preview?${params.toString()}`,{
+      headers:{Authorization:`Bearer ${token}`}
+    });
+    if(!res.ok)throw new Error('Priority preview unavailable');
+    const data=await res.json();
+    if(syncId!==impactSyncSerial)return;
+    currentArea=data.area_type||currentArea;
+    currentImpactScore=data.impact_score??currentImpactScore;
+    currentSensitiveCount=data.sensitive_location_count??currentSensitiveCount;
+    currentEstimatedPriority=data.estimated_priority_score||0;
+    showAreaBadge(currentArea);
+    const reportLabel=(data.nearby_report_count||1)===1?'report':'reports';
+    setImpactMeta(`Estimated live system priority: P${currentEstimatedPriority}. ${data.nearby_report_count||1} ${reportLabel} in this zone. ${AREA_LABELS[currentArea]||currentArea}.`);
+    setImpactSyncState(data.duplicate_detected?'Synced with nearby reports':'Synced','good');
+  }catch(e){
+    if(syncId!==impactSyncSerial)return;
+    setImpactMeta(`Local impact analysis ready. Submit now, or move the pin again to refresh. Estimated local score: ${currentImpactScore||0}.`);
+    setImpactSyncState('Local sync only','warn');
+  }
+}
+
+async function syncLocationAnalysis(lat,lng,statusLabel){
+  const syncId=++impactSyncSerial;
+  currentLat=lat;currentLng=lng;
+  document.getElementById('gps-text').textContent=`${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+  document.getElementById('gps-dot').className='gps-dot active';
+  document.getElementById('gps-status-text').textContent=statusLabel;
+  syncMiniMap(lat,lng);
+  setImpactSyncState('Syncing analysis...','warn');
+  setImpactMeta('Refreshing address, nearby sensitive locations, and live system priority...');
+  try{
+    currentAddr=await reverseGeocode(lat,lng);
+    if(syncId!==impactSyncSerial)return;
+  }catch(e){
+    currentAddr=`${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+  }
+  document.getElementById('gps-addr').textContent=(currentAddr||'').substring(0,60);
+  currentArea=detectArea(currentAddr||'');
+  showAreaBadge(currentArea);
+  const nearbyResult=await detectNearby(lat,lng,syncId);
+  if(syncId!==impactSyncSerial)return;
+  currentImpactScore=nearbyResult.impactScore;
+  currentSensitiveCount=nearbyResult.sensitiveCount;
+  await syncPriorityPreview(syncId);
+}
 
 function init(){
   const p=new URLSearchParams(window.location.search);
@@ -431,33 +520,31 @@ function logout(){
   showPage('login');
 }
 
-function getLocation(){
+function getLocation(forceRefresh=false){
   if(!navigator.geolocation){document.getElementById('gps-text').textContent='GPS not supported';return;}
   document.getElementById('gps-status-text').textContent='Searching...';
+  setImpactSyncState('Waiting for GPS','warn');
   navigator.geolocation.getCurrentPosition(async pos=>{
-    currentLat=pos.coords.latitude;currentLng=pos.coords.longitude;
-    document.getElementById('gps-text').textContent=`${currentLat.toFixed(5)}, ${currentLng.toFixed(5)}`;
-    document.getElementById('gps-dot').classList.add('active');
-    document.getElementById('gps-status-text').textContent='Locked ✓';
-    // Reverse geocode
-    currentAddr=await reverseGeocode(currentLat,currentLng);
-    document.getElementById('gps-addr').textContent=currentAddr.substring(0,60)+'...';
-    // Detect area type
-    currentArea=detectArea(currentAddr);
-    showAreaBadge(currentArea);
-    initMiniMap(currentLat,currentLng);
-    detectNearby(currentLat,currentLng);
-    detectNearby(currentLat,currentLng);
+    await syncLocationAnalysis(pos.coords.latitude,pos.coords.longitude,'Locked');
   },err=>{
     document.getElementById('gps-text').textContent='Using default location';
-    document.getElementById('gps-status-text').textContent='⚠ Manual';
+    document.getElementById('gps-status-text').textContent='Manual';
     currentLat=11.0168;currentLng=76.9558;
     currentAddr='Coimbatore, Tamil Nadu';
     currentArea='residential';
-    initMiniMap(currentLat,currentLng);
-    detectNearby(currentLat,currentLng);
-    detectNearby(currentLat,currentLng);
-  },{enableHighAccuracy:true,timeout:15000});
+    document.getElementById('gps-addr').textContent=currentAddr;
+    showAreaBadge(currentArea);
+    syncMiniMap(currentLat,currentLng);
+    const syncId=++impactSyncSerial;
+    detectNearby(currentLat,currentLng,syncId).then(async result=>{
+      if(syncId!==impactSyncSerial)return;
+      currentImpactScore=result.impactScore;
+      currentSensitiveCount=result.sensitiveCount;
+      await syncPriorityPreview(syncId);
+    });
+    setImpactSyncState('Manual fallback','warn');
+    setImpactMeta('GPS permission was unavailable, so the map switched to a manual fallback. You can still drag the pin to sync priority quickly.');
+  },{enableHighAccuracy:true,timeout:15000,maximumAge:forceRefresh?0:30000});
 }
 
 function detectArea(addr){
@@ -537,21 +624,10 @@ function resetSource() {
 }
 
 async function updateManualLocation(la, ln) {
-  currentLat = la; currentLng = ln;
-  document.getElementById('gps-text').textContent = la.toFixed(5) + ', ' + ln.toFixed(5);
-  document.getElementById('gps-status-text').textContent = 'Manual ✓';
-  document.getElementById('gps-dot').className = 'gps-dot active';
-  try {
-    const addr = await reverseGeocode(la, ln);
-    currentAddr = addr;
-    document.getElementById('gps-addr').textContent = addr.substring(0, 60);
-    const area = getAreaType ? getAreaType(addr) : detectArea(addr);
-    currentArea = area; showAreaBadge(area);
-  } catch(e) {}
-  detectNearby(la, ln);
+  await syncLocationAnalysis(la,ln,'Manual pin');
 }
 
-async function detectNearby(lat, lng) {
+async function detectNearby(lat, lng, syncId = impactSyncSerial) {
   const panel = document.getElementById('impact-panel');
   const list = document.getElementById('nearby-list');
   const desc = document.getElementById('impact-desc');
@@ -561,7 +637,7 @@ async function detectNearby(lat, lng) {
   list.innerHTML = '<div style="font-size:.75rem;color:var(--muted)">🔍 Scanning nearby locations...</div>';
   
   try {
-    const q = `[out:json][timeout:15];(
+    const q = `[out:json][timeout:10];(
       node["amenity"~"hospital|school|clinic|college|university|pharmacy"](around:1000,${lat},${lng});
       way["amenity"~"hospital|school|clinic|college|university|hospital"](around:1000,${lat},${lng});
     );out center 10;`;
@@ -569,6 +645,7 @@ async function detectNearby(lat, lng) {
       method:'POST', body:'data='+encodeURIComponent(q)
     });
     const data = await res.json();
+    if(syncId!==impactSyncSerial)return {impactScore:0,sensitiveCount:0};
     const items = (data.elements||[]).map(el => {
       const elat = el.lat||el.center?.lat||lat;
       const elng = el.lon||el.center?.lon||lng;
@@ -606,9 +683,11 @@ async function detectNearby(lat, lng) {
         </div>`;
       }).join('');
     }
+    return {impactScore:totalScore,sensitiveCount:items.length};
   } catch(e) {
     list.innerHTML = '<div style="font-size:.75rem;color:var(--muted)">⚠ Could not fetch nearby data. Check connection.</div>';
     console.warn('detectNearby error:', e);
+    return {impactScore:0,sensitiveCount:0};
   }
 }
 
@@ -639,13 +718,16 @@ async function submitComplaint(){
   if(!token){showPage('login');return;}
   if(!selectedFile){showErrMsg('Please capture a road damage photo first.');return;}
   const btn=document.getElementById('submit-btn');
-  btn.innerHTML='<span class="spinner"></span>AI analyzing damage...';btn.disabled=true;
+  btn.innerHTML='<span class="spinner"></span>AI analyzing damage and syncing priority...';btn.disabled=true;
   document.getElementById('submit-error').style.display='none';
   try{
     const form=new FormData();
     form.append('latitude',currentLat||11.0168);
     form.append('longitude',currentLng||76.9558);
     form.append('address',currentAddr||`${currentLat},${currentLng}`);
+    form.append('area_type',currentArea||'residential');
+    form.append('impact_score',currentImpactScore||0);
+    form.append('sensitive_location_count',currentSensitiveCount||0);
     form.append('image',selectedFile);
     const res=await fetch(`${API}/complaints/submit`,{method:'POST',headers:{Authorization:`Bearer ${token}`},body:form});
     const data=await res.json();
@@ -664,6 +746,7 @@ async function submitComplaint(){
     sevEl.className=`result-severity sev-${data.severity||'medium'}`;
     
     const ps=data.priority_score||0;
+    currentEstimatedPriority=ps;
     const psEl=document.getElementById('result-priority');
     psEl.textContent=`P${ps}`;
     psEl.className=`priority-score ${ps>=60?'ps-high':ps>=35?'ps-medium':'ps-low'}`;

@@ -98,6 +98,7 @@ tr:hover td { background:rgba(255,255,255,0.02); }
 .badge-assigned { background:rgba(245,158,11,0.12); color:var(--yellow); }
 .badge-in_progress { background:rgba(59,130,246,0.12); color:#60a5fa; }
 .badge-completed { background:rgba(16,185,129,0.12); color:var(--green); }
+.badge-rejected { background:rgba(239,68,68,0.12); color:var(--red); }
 .badge-active { background:rgba(16,185,129,0.12); color:var(--green); }
 .badge-inactive { background:rgba(239,68,68,0.12); color:var(--red); }
 
@@ -149,6 +150,48 @@ tr:hover td { background:rgba(255,255,255,0.02); }
 .zone-option:hover { border-color:var(--accent); color:var(--accent); }
 .zone-option.selected { border-color:var(--accent); background:rgba(0,212,255,0.1); color:var(--accent); font-weight:700; }
 
+/* MAP */
+.admin-map-toolbar { display:flex; gap:0.6rem; margin-bottom:1rem; align-items:center; flex-wrap:wrap; }
+.admin-map-stats { display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)); gap:0.8rem; margin-bottom:1rem; }
+.admin-map-stat { background:var(--s2); border:1px solid var(--border); border-radius:10px; padding:0.9rem 1rem; }
+.admin-map-num { font-family:'Clash Display',sans-serif; font-size:1.6rem; font-weight:700; }
+.admin-map-label { font-size:0.72rem; color:var(--muted); text-transform:uppercase; letter-spacing:0.06em; margin-top:0.2rem; }
+.map-shell { display:grid; grid-template-columns:minmax(0, 1.8fr) minmax(320px, 1fr); gap:1rem; align-items:start; }
+.admin-map-card { background:var(--s2); border:1px solid var(--border); border-radius:12px; overflow:hidden; }
+.admin-map-stage { position:relative; min-height:560px; }
+#admin-map { width:100%; height:560px; background:var(--s3); }
+.admin-map-overlay { position:absolute; top:1rem; left:1rem; z-index:500; background:rgba(13,17,23,0.92); border:1px solid var(--border); border-radius:10px; padding:0.75rem 0.9rem; backdrop-filter:blur(8px); max-width:220px; }
+.admin-map-overlay h3 { font-size:0.76rem; color:var(--muted); text-transform:uppercase; letter-spacing:0.08em; margin-bottom:0.45rem; }
+.admin-map-legend { display:grid; gap:0.35rem; }
+.admin-map-legend-item { display:flex; align-items:center; gap:0.45rem; font-size:0.78rem; color:var(--text); }
+.admin-map-legend-dot { width:10px; height:10px; border-radius:50%; }
+.map-side { padding:1rem; }
+.map-detail { background:var(--s3); border:1px solid var(--border); border-radius:10px; padding:0.9rem; margin-bottom:1rem; }
+.map-detail-empty { text-align:center; color:var(--muted); padding:1.5rem 1rem; }
+.map-detail-header { display:flex; justify-content:space-between; gap:0.75rem; align-items:flex-start; margin-bottom:0.75rem; }
+.map-detail-id { font-family:'Clash Display',sans-serif; font-size:1rem; color:var(--accent); }
+.map-detail-address { font-size:0.8rem; color:var(--muted); margin-top:0.25rem; line-height:1.4; }
+.map-detail-photo-shell { margin:0.8rem 0 0.4rem; background:#0d1117; border:1px solid var(--border); border-radius:10px; overflow:hidden; }
+.map-detail-photo { display:block; width:100%; max-height:220px; object-fit:cover; background:#060810; }
+.map-detail-photo-empty { padding:1rem; font-size:0.78rem; color:var(--muted); text-align:center; }
+.map-detail-grid { display:grid; gap:0.45rem; }
+.map-detail-row { display:flex; justify-content:space-between; gap:0.75rem; font-size:0.8rem; padding:0.45rem 0; border-bottom:1px solid rgba(30,45,69,0.55); }
+.map-detail-row:last-child { border-bottom:none; }
+.map-detail-label { color:var(--muted); }
+.map-detail-value { color:var(--text); text-align:right; max-width:60%; }
+.map-detail-actions { display:flex; gap:0.5rem; flex-wrap:wrap; margin-top:0.9rem; }
+.map-queue { display:grid; gap:0.6rem; max-height:340px; overflow-y:auto; }
+.map-queue-item { background:var(--s3); border:1px solid var(--border); border-radius:10px; padding:0.8rem 0.9rem; cursor:pointer; transition:all 0.15s; }
+.map-queue-item:hover { border-color:var(--accent); transform:translateY(-1px); }
+.map-queue-item.active { border-color:var(--accent); box-shadow:0 0 0 1px rgba(0,212,255,0.2); }
+.map-queue-top { display:flex; justify-content:space-between; gap:0.5rem; align-items:center; margin-bottom:0.35rem; }
+.map-queue-title { font-weight:700; color:var(--accent); font-size:0.82rem; }
+.map-queue-copy { font-size:0.76rem; color:var(--muted); line-height:1.45; }
+
+.leaflet-popup-content-wrapper { background:#141820!important; color:#e8eaf0!important; border:1px solid #1e2535!important; border-radius:10px!important; box-shadow:0 4px 20px rgba(0,0,0,0.5)!important; }
+.leaflet-popup-tip { background:#141820!important; }
+.leaflet-popup-content { margin:10px 14px!important; font-family:'Cabinet Grotesk',sans-serif!important; }
+
 /* Modal */
 .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.7); display:none; align-items:center; justify-content:center; z-index:500; }
 .modal-overlay.open { display:flex; }
@@ -159,6 +202,21 @@ tr:hover td { background:rgba(255,255,255,0.02); }
 .btn-modal { padding:0.5rem 1rem; border-radius:8px; font-family:inherit; font-size:0.85rem; cursor:pointer; border:1px solid var(--border); }
 .btn-modal.primary { background:var(--accent); color:#000; border-color:var(--accent); font-weight:700; }
 .btn-modal.secondary { background:none; color:var(--muted); }
+
+@media (max-width: 1200px) {
+  .stats-grid { grid-template-columns:repeat(2, 1fr); }
+  .admin-map-stats { grid-template-columns:repeat(2, 1fr); }
+  .map-shell { grid-template-columns:1fr; }
+}
+
+@media (max-width: 900px) {
+  body { display:block; }
+  .sidebar { position:sticky; top:0; width:100%; height:auto; }
+  .main { margin-left:0; }
+  .content { padding:1rem; }
+  .row, .row.triple { grid-template-columns:1fr; }
+  #admin-map, .admin-map-stage { height:420px; min-height:420px; }
+}
 </style>
 </head>
 <body>
@@ -170,7 +228,7 @@ tr:hover td { background:rgba(255,255,255,0.02); }
     <h2>Admin Panel</h2>
     <p>RoadWatch System Administration</p>
     <div class="login-err" id="login-err"></div>
-    <div class="lf"><label>Email</label><input type="email" id="lo-email" placeholder="admin@road.com" value="maran@road.com"/></div>
+    <div class="lf"><label>Email</label><input type="email" id="lo-email" placeholder="admin@road.com"/></div>
     <div class="lf"><label>Password</label><input type="password" id="lo-pass" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()"/></div>
     <button class="btn-login" id="login-btn" onclick="doLogin()">Access Admin Panel</button>
   </div>
@@ -198,11 +256,12 @@ tr:hover td { background:rgba(255,255,255,0.02); }
     <p>Admin Control Panel</p>
   </div>
   <nav class="sidebar-nav">
-    <div class="nav-item active" onclick="showSection('overview')"><span class="nav-icon">📊</span> Overview</div>
-    <div class="nav-item" onclick="showSection('complaints')"><span class="nav-icon">🗂</span> All Complaints</div>
-    <div class="nav-item" onclick="showSection('officers')"><span class="nav-icon">👮</span> Officers</div>
-    <div class="nav-item" onclick="showSection('citizens')"><span class="nav-icon">👥</span> Citizens</div>
-    <div class="nav-item" onclick="showSection('analytics')"><span class="nav-icon">📈</span> Analytics</div>
+    <div class="nav-item active" data-section="overview" onclick="showSection('overview')"><span class="nav-icon">📊</span> Overview</div>
+    <div class="nav-item" data-section="map" onclick="showSection('map')"><span class="nav-icon">🗺</span> Map View</div>
+    <div class="nav-item" data-section="complaints" onclick="showSection('complaints')"><span class="nav-icon">🗂</span> All Complaints</div>
+    <div class="nav-item" data-section="officers" onclick="showSection('officers')"><span class="nav-icon">👮</span> Officers</div>
+    <div class="nav-item" data-section="citizens" onclick="showSection('citizens')"><span class="nav-icon">👥</span> Citizens</div>
+    <div class="nav-item" data-section="analytics" onclick="showSection('analytics')"><span class="nav-icon">📈</span> Analytics</div>
   </nav>
   <div class="sidebar-footer">
     <div class="admin-badge">👑 ADMIN</div>
@@ -263,6 +322,82 @@ tr:hover td { background:rgba(255,255,255,0.02); }
           <div class="card-title"><span class="ct-icon">✅</span> Resolution Rate</div>
           <div style="font-family:'Clash Display',sans-serif;font-size:2.5rem;color:var(--green)" id="s-resolution">—</div>
           <div style="font-size:0.78rem;color:var(--muted);margin-top:4px">% complaints fixed</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MAP -->
+    <div class="section" id="section-map">
+      <div class="admin-map-toolbar">
+        <select class="filter-select" id="map-filter-status" onchange="renderAdminMap()">
+          <option value="">All Statuses</option>
+          <option value="pending">Pending</option>
+          <option value="assigned">Assigned</option>
+          <option value="in_progress">In Progress</option>
+          <option value="completed">Completed</option>
+          <option value="rejected">Rejected</option>
+        </select>
+        <select class="filter-select" id="map-filter-severity" onchange="renderAdminMap()">
+          <option value="">All Severities</option>
+          <option value="high">High</option>
+          <option value="medium">Medium</option>
+          <option value="low">Low</option>
+        </select>
+        <select class="filter-select" id="map-filter-zone" onchange="renderAdminMap()">
+          <option value="">All Zones</option>
+          <option value="Zone A">Zone A</option>
+          <option value="Zone B">Zone B</option>
+          <option value="Zone C">Zone C</option>
+          <option value="Zone D">Zone D</option>
+          <option value="Unassigned">Unassigned</option>
+        </select>
+        <input class="search-input" id="map-search" placeholder="Search ID, address, citizen, officer..." oninput="renderAdminMap()"/>
+        <button class="act-btn" style="margin-right:0" onclick="fitAdminMap()">Fit Map</button>
+        <button class="act-btn" style="margin-right:0" onclick="resetAdminMapFilters()">Reset Filters</button>
+        <span class="count-badge" id="map-count">— mapped complaints</span>
+      </div>
+
+      <div class="admin-map-stats">
+        <div class="admin-map-stat">
+          <div class="admin-map-num" style="color:var(--accent)" id="map-stat-total">—</div>
+          <div class="admin-map-label">Visible Complaints</div>
+        </div>
+        <div class="admin-map-stat">
+          <div class="admin-map-num" style="color:var(--red)" id="map-stat-high">—</div>
+          <div class="admin-map-label">High Severity</div>
+        </div>
+        <div class="admin-map-stat">
+          <div class="admin-map-num" style="color:var(--yellow)" id="map-stat-unassigned">—</div>
+          <div class="admin-map-label">Unassigned</div>
+        </div>
+        <div class="admin-map-stat">
+          <div class="admin-map-num" style="color:var(--accent2)" id="map-stat-priority">—</div>
+          <div class="admin-map-label">Avg Priority</div>
+        </div>
+      </div>
+
+      <div class="map-shell">
+        <div class="admin-map-card">
+          <div class="admin-map-stage">
+            <div id="admin-map"></div>
+            <div class="admin-map-overlay">
+              <h3>Map Legend</h3>
+              <div class="admin-map-legend">
+                <div class="admin-map-legend-item"><span class="admin-map-legend-dot" style="background:var(--red)"></span>High severity</div>
+                <div class="admin-map-legend-item"><span class="admin-map-legend-dot" style="background:var(--yellow)"></span>Medium severity</div>
+                <div class="admin-map-legend-item"><span class="admin-map-legend-dot" style="background:var(--green)"></span>Low severity</div>
+                <div class="admin-map-legend-item"><span class="admin-map-legend-dot" style="background:#3b82f6"></span>In progress</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="admin-map-card map-side">
+          <div class="card-title"><span class="ct-icon">📍</span> Selected Complaint</div>
+          <div id="map-detail" class="map-detail map-detail-empty">Select a complaint to inspect its location, photo preview, and routing actions.</div>
+
+          <div class="card-title"><span class="ct-icon">⚡</span> Priority Queue</div>
+          <div id="map-queue" class="map-queue"></div>
         </div>
       </div>
     </div>
@@ -472,13 +607,38 @@ tr:hover td { background:rgba(255,255,255,0.02); }
 </div>
 
 <script>
-const API = (window.location.hostname === 'localhost' ? 'http://localhost:8000' : window.location.origin) + '/api';
+const BASE = window.location.hostname === 'localhost' ? 'http://localhost:8000' : window.location.origin;
+const API = BASE + '/api';
 let token = localStorage.getItem('admin_token');
 let adminName = localStorage.getItem('admin_name');
 let allComplaints = [], allOfficers = [], allCitizens = [], stats = {};
 let currentSection = 'overview';
 let reassignComplaintId = null;
 let charts = {};
+let adminMap = null;
+let adminMapMarkers = [];
+let selectedMapComplaintId = null;
+
+const MAP_SEVERITY_COLORS = { high:'#ef4444', medium:'#f59e0b', low:'#10b981' };
+const MAP_STATUS_COLORS = {
+  pending:'#64748b',
+  assigned:'#f59e0b',
+  in_progress:'#3b82f6',
+  completed:'#10b981',
+  rejected:'#ef4444'
+};
+
+function resolveComplaintImageUrl(imageUrl) {
+  if (!imageUrl) return '';
+  if (/^https?:\/\//i.test(imageUrl)) return imageUrl;
+  return imageUrl.startsWith('/') ? `${BASE}${imageUrl}` : `${BASE}/${imageUrl}`;
+}
+
+function openComplaintPhoto(imageUrl) {
+  const resolved = resolveComplaintImageUrl(imageUrl);
+  if (!resolved) return;
+  window.open(resolved, '_blank', 'noopener');
+}
 
 function init() {
   if (token) {
@@ -521,6 +681,11 @@ function logout() {
 async function loadAll() {
   await Promise.all([loadStats(), loadComplaints(), loadOfficers(), loadCitizens(), loadChartData()]);
   document.getElementById('last-updated').textContent = 'Updated ' + new Date().toLocaleTimeString();
+  if (currentSection === 'map') {
+    initAdminMap();
+    renderAdminMap();
+    setTimeout(() => adminMap && adminMap.invalidateSize(), 60);
+  }
 }
 
 async function refreshAll() { await loadAll(); showToast('✅ Data refreshed!'); }
@@ -570,6 +735,7 @@ async function loadComplaints() {
     const res = await fetch(`${API}/admin/complaints`, {headers:{Authorization:`Bearer ${token}`}});
     allComplaints = await res.json();
     filterComplaints();
+    if (currentSection === 'map' || adminMap) renderAdminMap();
   } catch(e) {}
 }
 
@@ -596,7 +762,7 @@ function filterComplaints() {
       <td style="font-size:0.75rem;color:var(--muted)">${c.created_at?new Date(c.created_at).toLocaleDateString():'—'}</td>
       <td>
         <button class="act-btn" onclick="openReassign('${c.complaint_id}')">Reassign</button>
-        ${c.image_url?`<button class="act-btn" onclick="window.open(BASE+'${c.image_url}','_blank')">Photo</button>`:''}
+        ${c.image_url ? `<button class="act-btn" onclick='openComplaintPhoto(${JSON.stringify(c.image_url)})'>Photo</button>` : ''}
       </td>
     </tr>`).join('');
 }
@@ -610,7 +776,15 @@ async function loadOfficers() {
     renderOfficerChart();
   populateOfficerFilter();
   if (currentSection==='analytics') updateAllCharts();
+  if (currentSection === 'map' || adminMap) renderAdminMap();
   } catch(e) {}
+}
+
+function officerResolutionRate(officer) {
+  const raw = officer?.resolution_rate ?? officer?.performance ?? 0;
+  const num = Number(raw);
+  if (!Number.isFinite(num) || num < 0) return 0;
+  return Math.min(100, Math.round(num * 10) / 10);
 }
 
 function filterOfficers() {
@@ -633,8 +807,8 @@ function filterOfficers() {
       <td style="color:var(--green)">${o.completed}</td>
       <td style="color:var(--yellow)">${o.pending}</td>
       <td style="min-width:100px">
-        <div style="font-size:0.72rem;color:var(--muted);margin-bottom:3px">${o.resolution_rate}%</div>
-        <div class="perf-bar"><div class="perf-fill" style="width:${o.resolution_rate}%"></div></div>
+        <div style="font-size:0.72rem;color:var(--muted);margin-bottom:3px">${officerResolutionRate(o)}%</div>
+        <div class="perf-bar"><div class="perf-fill" style="width:${officerResolutionRate(o)}%"></div></div>
       </td>
       <td><span class="badge ${o.is_active?'badge-active':'badge-inactive'}">${o.is_active?'Active':'Inactive'}</span></td>
       <td>
@@ -927,6 +1101,245 @@ function renderTrendChart(data) {
   });
 }
 
+function complaintZone(complaint) {
+  if (!complaint?.officer_name) return 'Unassigned';
+  const officer = allOfficers.find(o => o.name === complaint.officer_name);
+  return officer?.zone || 'Unassigned';
+}
+
+function complaintHasCoordinates(complaint) {
+  return Number.isFinite(Number(complaint?.latitude)) && Number.isFinite(Number(complaint?.longitude));
+}
+
+function formatComplaintValue(value, fallback = '—') {
+  if (value === null || value === undefined || value === '') return fallback;
+  return String(value).replace(/_/g, ' ');
+}
+
+function complaintPriority(complaint) {
+  const score = Number(complaint?.priority_score || 0);
+  return Number.isFinite(score) ? Math.round(score * 10) / 10 : 0;
+}
+
+function getMapFilteredComplaints() {
+  const status = document.getElementById('map-filter-status')?.value || '';
+  const severity = document.getElementById('map-filter-severity')?.value || '';
+  const zone = document.getElementById('map-filter-zone')?.value || '';
+  const query = (document.getElementById('map-search')?.value || '').trim().toLowerCase();
+
+  let filtered = allComplaints.filter(complaintHasCoordinates);
+  if (status) filtered = filtered.filter(c => c.status === status);
+  if (severity) filtered = filtered.filter(c => c.severity === severity);
+  if (zone) filtered = filtered.filter(c => complaintZone(c) === zone);
+  if (query) {
+    filtered = filtered.filter(c =>
+      [
+        c.complaint_id,
+        c.address,
+        c.citizen_name,
+        c.officer_name,
+        complaintZone(c),
+        c.damage_type,
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase()
+        .includes(query)
+    );
+  }
+
+  return filtered.sort((left, right) => {
+    const priorityDelta = complaintPriority(right) - complaintPriority(left);
+    if (priorityDelta !== 0) return priorityDelta;
+    return new Date(right.created_at || 0) - new Date(left.created_at || 0);
+  });
+}
+
+function initAdminMap() {
+  if (adminMap || !document.getElementById('admin-map')) return;
+  adminMap = L.map('admin-map', {zoomControl:true}).setView([11.0168, 76.9558], 12);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution:'© OpenStreetMap',
+    maxZoom:19,
+  }).addTo(adminMap);
+  document.getElementById('admin-map').style.filter = 'invert(1) hue-rotate(180deg) brightness(0.88) contrast(1.08)';
+}
+
+function makeAdminMapIcon(complaint, active = false, rank = null) {
+  const severityColor = complaint.status === 'completed'
+    ? MAP_STATUS_COLORS.completed
+    : (MAP_SEVERITY_COLORS[complaint.severity] || '#94a3b8');
+  const ringColor = active ? '#ffffff' : (MAP_STATUS_COLORS[complaint.status] || '#1f2937');
+  const size = complaint.severity === 'high' ? 26 : complaint.severity === 'medium' ? 22 : 18;
+  const label = rank ? `<span style="font-size:10px;font-weight:800;color:#fff;line-height:1">${rank}</span>` : '';
+  return L.divIcon({
+    className:'',
+    iconSize:[size, size],
+    iconAnchor:[size / 2, size / 2],
+    popupAnchor:[0, -size / 2],
+    html:`<div style="width:${size}px;height:${size}px;border-radius:999px;background:${severityColor};border:3px solid ${ringColor};display:flex;align-items:center;justify-content:center;box-shadow:${active ? `0 0 0 5px ${severityColor}33` : '0 10px 24px rgba(0,0,0,0.26)'}">${label}</div>`,
+  });
+}
+
+function updateAdminMapStats(items) {
+  const total = items.length;
+  const high = items.filter(c => c.severity === 'high').length;
+  const unassigned = items.filter(c => !c.officer_name).length;
+  const avgPriority = total
+    ? Math.round((items.reduce((sum, complaint) => sum + complaintPriority(complaint), 0) / total) * 10) / 10
+    : 0;
+
+  document.getElementById('map-count').textContent = `${total} mapped complaints`;
+  document.getElementById('map-stat-total').textContent = total;
+  document.getElementById('map-stat-high').textContent = high;
+  document.getElementById('map-stat-unassigned').textContent = unassigned;
+  document.getElementById('map-stat-priority').textContent = avgPriority;
+}
+
+function renderMapQueue(items) {
+  const el = document.getElementById('map-queue');
+  if (!el) return;
+  if (!items.length) {
+    el.innerHTML = '<div class="map-detail map-detail-empty" style="margin-bottom:0">No complaints match the current map filters.</div>';
+    return;
+  }
+
+  el.innerHTML = items.slice(0, 10).map((complaint, index) => `
+    <div class="map-queue-item ${complaint.complaint_id === selectedMapComplaintId ? 'active' : ''}" onclick="selectMapComplaint('${complaint.complaint_id}')">
+      <div class="map-queue-top">
+        <div class="map-queue-title">#${index + 1} ${complaint.complaint_id}</div>
+        <span class="badge badge-${complaint.severity || 'low'}">${formatComplaintValue(complaint.severity)}</span>
+      </div>
+      <div class="map-queue-copy">${formatComplaintValue(complaint.address, `${Number(complaint.latitude).toFixed(4)}, ${Number(complaint.longitude).toFixed(4)}`)}</div>
+      <div class="map-queue-copy">Priority ${complaintPriority(complaint)} · ${complaintZone(complaint)} · ${formatComplaintValue(complaint.officer_name, 'Unassigned')}</div>
+    </div>
+  `).join('');
+}
+
+function renderMapDetail(complaint) {
+  const el = document.getElementById('map-detail');
+  if (!el) return;
+  if (!complaint) {
+    el.className = 'map-detail map-detail-empty';
+    el.innerHTML = 'Select a complaint to inspect its location, photo preview, and routing actions.';
+    return;
+  }
+
+  const address = complaint.address || `${Number(complaint.latitude).toFixed(5)}, ${Number(complaint.longitude).toFixed(5)}`;
+  const photoUrl = resolveComplaintImageUrl(complaint.image_url);
+  const photoPanel = photoUrl
+    ? `
+      <div class="map-detail-photo-shell">
+        <img class="map-detail-photo" src="${photoUrl}" alt="Complaint photo for ${complaint.complaint_id}" onerror="this.closest('.map-detail-photo-shell').innerHTML='<div class=&quot;map-detail-photo-empty&quot;>Complaint photo could not be loaded.</div>'">
+      </div>
+    `
+    : '<div class="map-detail-photo-shell"><div class="map-detail-photo-empty">No complaint photo uploaded for this report.</div></div>';
+  const photoButton = photoUrl
+    ? `<button class="act-btn" style="margin-right:0" onclick='openComplaintPhoto(${JSON.stringify(complaint.image_url)})'>Open Photo</button>`
+    : '';
+
+  el.className = 'map-detail';
+  el.innerHTML = `
+    <div class="map-detail-header">
+      <div>
+        <div class="map-detail-id">${complaint.complaint_id}</div>
+        <div class="map-detail-address">${address}</div>
+      </div>
+      <span class="badge badge-${complaint.status || 'pending'}">${formatComplaintValue(complaint.status)}</span>
+    </div>
+    ${photoPanel}
+    <div class="map-detail-grid">
+      <div class="map-detail-row"><span class="map-detail-label">Severity</span><span class="map-detail-value">${formatComplaintValue(complaint.severity)}</span></div>
+      <div class="map-detail-row"><span class="map-detail-label">Damage</span><span class="map-detail-value">${formatComplaintValue(complaint.damage_type)}</span></div>
+      <div class="map-detail-row"><span class="map-detail-label">Priority</span><span class="map-detail-value">${complaintPriority(complaint)}</span></div>
+      <div class="map-detail-row"><span class="map-detail-label">Zone</span><span class="map-detail-value">${complaintZone(complaint)}</span></div>
+      <div class="map-detail-row"><span class="map-detail-label">Officer</span><span class="map-detail-value">${formatComplaintValue(complaint.officer_name, 'Unassigned')}</span></div>
+      <div class="map-detail-row"><span class="map-detail-label">Citizen</span><span class="map-detail-value">${formatComplaintValue(complaint.citizen_name)}</span></div>
+      <div class="map-detail-row"><span class="map-detail-label">Reported</span><span class="map-detail-value">${complaint.created_at ? new Date(complaint.created_at).toLocaleString() : '—'}</span></div>
+      <div class="map-detail-row"><span class="map-detail-label">Coordinates</span><span class="map-detail-value">${Number(complaint.latitude).toFixed(5)}, ${Number(complaint.longitude).toFixed(5)}</span></div>
+    </div>
+    <div class="map-detail-actions">
+      <button class="act-btn" style="margin-right:0" onclick="openReassign('${complaint.complaint_id}')">Reassign</button>
+      ${photoButton}
+      <button class="act-btn" style="margin-right:0" onclick="window.open('https://maps.google.com/?q=${complaint.latitude},${complaint.longitude}','_blank')">Open in Maps</button>
+    </div>
+  `;
+}
+
+function renderAdminMap() {
+  if (!token) return;
+  initAdminMap();
+  if (!adminMap) return;
+
+  const items = getMapFilteredComplaints();
+  const shouldFit = !selectedMapComplaintId || !items.some(c => c.complaint_id === selectedMapComplaintId);
+  updateAdminMapStats(items);
+
+  adminMapMarkers.forEach(marker => adminMap.removeLayer(marker));
+  adminMapMarkers = [];
+
+  if (!items.length) {
+    selectedMapComplaintId = null;
+    renderMapQueue(items);
+    renderMapDetail(null);
+    return;
+  }
+
+  if (!selectedMapComplaintId || !items.some(c => c.complaint_id === selectedMapComplaintId)) {
+    selectedMapComplaintId = items[0].complaint_id;
+  }
+
+  items.forEach((complaint, index) => {
+    const marker = L.marker(
+      [Number(complaint.latitude), Number(complaint.longitude)],
+      {icon: makeAdminMapIcon(complaint, complaint.complaint_id === selectedMapComplaintId, index < 9 ? index + 1 : null)}
+    ).addTo(adminMap);
+
+    marker.complaintId = complaint.complaint_id;
+    marker.bindPopup(`
+      <div style="min-width:180px">
+        <div style="font-weight:700;color:#f5a623;font-size:13px;margin-bottom:4px">${complaint.complaint_id}</div>
+        <div style="font-size:12px;margin-bottom:2px">${formatComplaintValue(complaint.damage_type)} · <span style="color:${MAP_SEVERITY_COLORS[complaint.severity] || '#94a3b8'}">${formatComplaintValue(complaint.severity)}</span></div>
+        <div style="font-size:11px;color:#64748b;margin-bottom:8px">${formatComplaintValue(complaint.address, `${Number(complaint.latitude).toFixed(4)}, ${Number(complaint.longitude).toFixed(4)}`)}</div>
+        <button onclick="selectMapComplaint('${complaint.complaint_id}')" style="background:#f5a623;color:#000;border:none;border-radius:6px;padding:6px 10px;width:100%;font-size:11px;font-weight:700;cursor:pointer">Inspect complaint</button>
+      </div>
+    `);
+    marker.on('click', () => selectMapComplaint(complaint.complaint_id));
+    adminMapMarkers.push(marker);
+  });
+
+  renderMapQueue(items);
+  renderMapDetail(items.find(c => c.complaint_id === selectedMapComplaintId));
+  if (shouldFit) fitAdminMap();
+  setTimeout(() => adminMap.invalidateSize(), 50);
+}
+
+function selectMapComplaint(complaintId) {
+  selectedMapComplaintId = complaintId;
+  renderAdminMap();
+  const complaint = allComplaints.find(c => c.complaint_id === complaintId);
+  if (!complaint || !adminMap) return;
+  adminMap.setView([Number(complaint.latitude), Number(complaint.longitude)], 16);
+  const marker = adminMapMarkers.find(entry => entry.complaintId === complaintId);
+  if (marker) marker.openPopup();
+}
+
+function fitAdminMap() {
+  if (!adminMap || !adminMapMarkers.length) return;
+  const group = L.featureGroup(adminMapMarkers);
+  adminMap.fitBounds(group.getBounds().pad(0.15));
+}
+
+function resetAdminMapFilters() {
+  ['map-filter-status', 'map-filter-severity', 'map-filter-zone', 'map-search'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  selectedMapComplaintId = null;
+  renderAdminMap();
+  fitAdminMap();
+}
+
 // ACTIONS
 function openReassign(complaintId) {
   reassignComplaintId = complaintId;
@@ -973,8 +1386,8 @@ function showSection(section) {
   document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
   document.getElementById(`section-${section}`).classList.add('active');
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
-  document.querySelectorAll('.nav-item').forEach(n=>{ if(n.textContent.toLowerCase().includes(section.substring(0,4))) n.classList.add('active'); });
-  const titles = {overview:'Overview',complaints:'All Complaints',officers:'Officer Management',citizens:'Citizen Management',analytics:'Analytics'};
+  document.querySelectorAll('.nav-item').forEach(n=>{ if (n.dataset.section === section) n.classList.add('active'); });
+  const titles = {overview:'Overview',map:'Complaint Map',complaints:'All Complaints',officers:'Officer Management',citizens:'Citizen Management',analytics:'Analytics'};
   document.getElementById('section-title').textContent = titles[section]||section;
   if (section==='analytics') { populateOfficerFilter(); updateAllCharts(); loadChartData(); }
 }
@@ -982,6 +1395,76 @@ function showSection(section) {
 function showToast(msg) {
   const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show');
   setTimeout(()=>t.classList.remove('show'),3000);
+}
+
+function toggleOfficer(id) {
+  const officer = allOfficers.find(o => o.id === id);
+  if (!officer) return;
+  const nextIsActive = !Boolean(officer.is_active);
+  fetch(`${API}/admin/officers/${id}`, {
+    method:'PATCH',
+    headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},
+    body:JSON.stringify({
+      name: officer.name,
+      phone: officer.phone || '',
+      zone: officer.zone || '',
+      is_active: nextIsActive
+    })
+  })
+    .then(async res => {
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || 'Officer update failed');
+      await loadOfficers();
+      showToast(nextIsActive ? 'âœ… Officer activated' : 'â›” Officer deactivated');
+    })
+    .catch(() => showToast('âŒ Officer update failed'));
+}
+
+function toggleCitizen(id) {
+  const citizen = allCitizens.find(c => c.id === id);
+  if (!citizen) return;
+  const nextIsActive = citizen.is_active === false;
+  fetch(`${API}/admin/citizens/${id}/block`, {
+    method:'PATCH',
+    headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},
+    body:JSON.stringify({is_active: nextIsActive})
+  })
+    .then(async res => {
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || 'Citizen update failed');
+      await loadCitizens();
+      showToast(nextIsActive ? 'âœ… Citizen unblocked' : 'â›” Citizen blocked');
+    })
+    .catch(() => showToast('âŒ Citizen update failed'));
+}
+
+function showSection(section) {
+  currentSection = section;
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.getElementById(`section-${section}`).classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => {
+    if (n.dataset.section === section) n.classList.add('active');
+  });
+  const titles = {
+    overview:'Overview',
+    map:'Complaint Map',
+    complaints:'All Complaints',
+    officers:'Officer Management',
+    citizens:'Citizen Management',
+    analytics:'Analytics'
+  };
+  document.getElementById('section-title').textContent = titles[section] || section;
+  if (section === 'analytics') {
+    populateOfficerFilter();
+    updateAllCharts();
+    loadChartData();
+  }
+  if (section === 'map') {
+    initAdminMap();
+    renderAdminMap();
+    setTimeout(() => adminMap && adminMap.invalidateSize(), 60);
+  }
 }
 
 init();
