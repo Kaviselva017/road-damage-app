@@ -139,6 +139,113 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;hei
 .leaflet-popup-content-wrapper{background:#141820!important;color:#e8eaf0!important;border:1px solid #1e2535!important;border-radius:10px!important;box-shadow:0 4px 20px rgba(0,0,0,0.5)!important;}
 .leaflet-popup-tip{background:#141820!important;}
 .leaflet-popup-content{margin:10px 14px!important;font-family:'DM Sans',sans-serif!important;}
+
+/* Gradient theme override */
+:root{
+  --bg:#05070d;--surface:#0f1523;--card:#131d2e;--border:#27395a;
+  --accent:#ff9a3d;--accent2:#ff4f7b;--danger:#ff6464;--blue:#7dd3fc;
+  --text:#f4f7fb;--muted:#8ea3be;--glow:#ffd18c;
+  --grad-main:linear-gradient(135deg,#ff9a3d 0%,#ff4f7b 52%,#7dd3fc 100%);
+  --grad-soft:linear-gradient(160deg,rgba(255,154,61,.16),rgba(255,79,123,.08) 42%,rgba(125,211,252,.12));
+}
+body{
+  background:
+    radial-gradient(circle at 10% 15%, rgba(255,154,61,.12), transparent 28%),
+    radial-gradient(circle at 86% 10%, rgba(255,79,123,.14), transparent 26%),
+    radial-gradient(circle at 78% 82%, rgba(125,211,252,.12), transparent 30%),
+    linear-gradient(180deg, #05070d 0%, #09111c 52%, #05070d 100%);
+}
+#bg-canvas{opacity:.42;}
+.topbar{
+  background:rgba(10,15,26,.9);
+  border-bottom-color:rgba(125,211,252,.16);
+  box-shadow:0 16px 36px rgba(0,0,0,.24);
+}
+.logo{letter-spacing:.04em;}
+.logo span{
+  color:var(--glow);
+  text-shadow:0 0 18px rgba(255,154,61,.28);
+}
+.live-badge{
+  background:rgba(125,211,252,.1);
+  border-color:rgba(125,211,252,.26);
+  color:var(--blue);
+}
+.live-dot{background:var(--blue);}
+.btn-sm,.map-btn,.upload-after-btn{
+  border-color:rgba(125,211,252,.16);
+  background:rgba(14,22,37,.72);
+}
+.btn-sm:hover,.map-btn:hover,.upload-after-btn:hover{
+  border-color:rgba(255,154,61,.48);
+  color:var(--accent);
+}
+.btn-sm.active,.btn-login,.btn-update,.btn-fund{
+  background:var(--grad-main);
+  border:none;
+  color:#14060c;
+  box-shadow:0 12px 28px rgba(255,79,123,.2);
+}
+.sidebar{
+  background:linear-gradient(180deg, rgba(10,14,24,.92), rgba(8,14,23,.84));
+  border-right-color:rgba(125,211,252,.12);
+}
+.sidebar-header,.tabs,.sidebar{backdrop-filter:blur(12px);}
+.stat-mini,.c-card,.status-form,.fund-form,.login-box,.map-legend,.detail-panel,.toast{
+  background:
+    linear-gradient(180deg, rgba(18,28,44,.95), rgba(13,22,36,.92));
+  border-color:rgba(125,211,252,.14);
+  box-shadow:0 18px 36px rgba(0,0,0,.18);
+}
+.filter-chip.active,.map-btn.pri-active{
+  background:var(--grad-main);
+  border:none;
+  color:#14060c;
+}
+.tab.active{
+  color:var(--glow);
+  border-bottom-color:var(--glow);
+}
+.c-card:hover{
+  border-color:rgba(255,154,61,.46);
+  box-shadow:0 18px 36px rgba(255,154,61,.1);
+}
+.c-card.selected{
+  border-color:rgba(255,154,61,.62);
+  background:linear-gradient(180deg, rgba(31,23,39,.96), rgba(18,26,43,.94));
+  box-shadow:0 0 0 1px rgba(255,154,61,.14), 0 20px 36px rgba(255,79,123,.1);
+}
+.stat-mini .num,.c-id,#dp-title{color:var(--glow);}
+.pri-badge{
+  background:rgba(255,79,123,.14);
+  color:#ff93b5;
+}
+.map-area::after{
+  content:'';
+  position:absolute;
+  inset:0;
+  pointer-events:none;
+  background:linear-gradient(180deg, rgba(255,154,61,.04), transparent 18%, transparent 82%, rgba(125,211,252,.05));
+  z-index:2;
+}
+.map-controls,.map-legend{z-index:1001;}
+.detail-panel{
+  background:linear-gradient(180deg, rgba(10,14,24,.97), rgba(15,22,35,.96));
+  border-left-color:rgba(125,211,252,.16);
+}
+.dp-header{
+  background:rgba(10,14,24,.96);
+  border-bottom-color:rgba(125,211,252,.12);
+}
+.status-form select:focus,.status-form textarea:focus,.fund-form input:focus,.login-field input:focus{
+  border-color:rgba(255,154,61,.44);
+  box-shadow:0 0 0 3px rgba(255,154,61,.08);
+}
+.leaflet-popup-content-wrapper{
+  background:#171d2d!important;
+  border-color:rgba(125,211,252,.16)!important;
+}
+.leaflet-popup-tip{background:#171d2d!important;}
 </style>
 </head>
 <body>
@@ -213,8 +320,8 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;hei
     <div class="map-legend">
       <div class="map-legend-title">Map Legend</div>
       <div class="legend-item"><div class="legend-dot" style="background:#e05c5c"></div>High Severity</div>
-      <div class="legend-item"><div class="legend-dot" style="background:#f5a623"></div>Medium</div>
-      <div class="legend-item"><div class="legend-dot" style="background:#3ecfb2"></div>Low</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#ff9a3d"></div>Medium</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#7dd3fc"></div>Low</div>
       <div class="legend-item"><div class="legend-dot" style="background:#4ade80"></div>Completed</div>
     </div>
     <!-- DETAIL PANEL -->
@@ -352,7 +459,17 @@ function renderTab() {
 
 function renderList(items) {
   const el = document.getElementById('complaints-scroll');
-  if (!items.length) { el.innerHTML='<div class="no-complaints">No complaints found</div>'; return; }
+  if (!items.length) {
+    el.innerHTML = `
+      <div class="no-complaints">
+        <div style="font-size:1rem;font-weight:600;margin-bottom:0.35rem">No complaints assigned yet</div>
+        <div style="font-size:0.78rem;line-height:1.5">
+          This officer does not have any assigned complaints right now.
+          Use the admin panel to reassign one, or run <code>backend\\seed.py</code> to add demo data.
+        </div>
+      </div>`;
+    return;
+  }
   el.innerHTML = items.map(c => `
     <div class="c-card ${c.severity} ${selectedId===c.complaint_id?'selected':''}"
          onclick="selectComplaint('${c.complaint_id}')">
@@ -429,10 +546,10 @@ function initMap() {
 }
 
 function markerColor(c) {
-  if (c.status==='completed') return '#4ade80';
-  if (c.severity==='high') return '#e05c5c';
-  if (c.severity==='medium') return '#f5a623';
-  return '#3ecfb2';
+  if (c.status==='completed') return '#5eead4';
+  if (c.severity==='high') return '#ff6464';
+  if (c.severity==='medium') return '#ff9a3d';
+  return '#7dd3fc';
 }
 
 function makeIcon(color, size=14, label='') {
@@ -459,7 +576,7 @@ function renderMapMarkers() {
     const m = L.marker([c.latitude, c.longitude], {icon}).addTo(map);
     const popup = L.popup({className:''}).setContent(`
       <div style="min-width:160px">
-        <div style="color:#f5a623;font-weight:700;font-size:13px;margin-bottom:4px">${c.complaint_id}</div>
+        <div style="color:#ffb86b;font-weight:700;font-size:13px;margin-bottom:4px">${c.complaint_id}</div>
         <div style="font-size:12px;margin-bottom:2px">${c.damage_type.replace('_',' ')} · <span style="color:${color}">${c.severity.toUpperCase()}</span></div>
         <div style="font-size:11px;color:#5a6480;margin-bottom:8px">${c.address ? c.address.substring(0,45) : 'No address'}</div>
         <button onclick="selectComplaint('${c.complaint_id}')" style="background:#f5a623;color:#000;border:none;border-radius:5px;padding:5px 10px;cursor:pointer;font-size:11px;font-weight:700;width:100%">View Details →</button>
@@ -533,7 +650,7 @@ async function selectComplaint(id) {
 function renderDetail(c) {
   const imgSrc = c.image_url ? `${BASE}${c.image_url}` : '';
   const hasAfter = afterPhotos[c.complaint_id];
-  const sevColor = c.severity==='high'?'#e05c5c':c.severity==='medium'?'#f5a623':'#3ecfb2';
+  const sevColor = c.severity==='high'?'#ff6464':c.severity==='medium'?'#ff9a3d':'#7dd3fc';
   const priScore = c.priority_score || 0;
   const areaType = c.area_type || 'Residential';
 
@@ -725,7 +842,7 @@ function initBg() {
     x:Math.random()*1920,y:Math.random()*1080,
     vx:(Math.random()-0.5)*0.3,vy:(Math.random()-0.5)*0.3,
     r:Math.random()*1.8+0.8,
-    color:Math.random()>0.6?'#3ecfb2':Math.random()>0.5?'#f5a623':'#3b82f6'
+    color:Math.random()>0.6?'#7dd3fc':Math.random()>0.5?'#ff9a3d':'#ff4f7b'
   });
   function draw(){
     ctx.clearRect(0,0,W,H);
@@ -733,7 +850,7 @@ function initBg() {
       for(let j=i+1;j<nodes.length;j++){
         const dx=nodes[i].x-nodes[j].x,dy=nodes[i].y-nodes[j].y;
         const d=Math.sqrt(dx*dx+dy*dy);
-        if(d<150){ctx.beginPath();ctx.strokeStyle=`rgba(62,207,178,${0.1*(1-d/150)})`;ctx.lineWidth=0.5;ctx.moveTo(nodes[i].x,nodes[i].y);ctx.lineTo(nodes[j].x,nodes[j].y);ctx.stroke();}
+        if(d<150){ctx.beginPath();ctx.strokeStyle=`rgba(125,211,252,${0.1*(1-d/150)})`;ctx.lineWidth=0.5;ctx.moveTo(nodes[i].x,nodes[i].y);ctx.lineTo(nodes[j].x,nodes[j].y);ctx.stroke();}
       }
     }
     nodes.forEach(n=>{
