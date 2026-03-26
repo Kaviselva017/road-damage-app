@@ -4,7 +4,7 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>RoadWatch — Citizen</title>
-<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Orbitron:wght@500;700;800&display=swap" rel="stylesheet"/>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <style>
 :root{--bg:#0a0c10;--surface:#12151c;--card:#181d27;--border:#232a38;--accent:#f5a623;--accent2:#3ecfb2;--danger:#e05c5c;--blue:#3b82f6;--text:#e8eaf0;--muted:#6b7694;}
@@ -64,6 +64,9 @@ nav{display:flex;align-items:center;justify-content:space-between;padding:1rem 1
 .gps-label{font-size:.75rem;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.06em;}
 .gps-value{font-size:.9rem;margin-top:2px;}
 .gps-addr{font-size:.72rem;color:var(--muted);margin-top:2px;}
+.gps-actions{display:flex;gap:.45rem;margin-top:.55rem;flex-wrap:wrap;}
+.gps-btn{background:rgba(255,255,255,.06);border:1px solid var(--border);color:var(--text);padding:.38rem .7rem;border-radius:999px;font-family:inherit;font-size:.72rem;font-weight:700;cursor:pointer;transition:all .2s;}
+.gps-btn:hover{border-color:var(--accent);color:var(--accent);}
 .gps-dot{width:8px;height:8px;border-radius:50%;background:var(--muted);}
 .gps-dot.active{background:var(--accent2);box-shadow:0 0 6px var(--accent2);animation:pulse 1.5s infinite;}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
@@ -171,7 +174,9 @@ nav{display:flex;align-items:center;justify-content:space-between;padding:1rem 1
     /* Impact/Nearby */
     .impact-panel{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:1rem;margin-bottom:.8rem;display:none;}
     .impact-panel.show{display:block;animation:fadeUp .3s ease;}
-    .impact-header{display:flex;align-items:center;gap:.5rem;font-size:.68rem;color:var(--muted);text-transform:uppercase;font-weight:700;letter-spacing:.08em;margin-bottom:.8rem;}
+    .impact-header{display:flex;align-items:center;justify-content:space-between;gap:.5rem;font-size:.68rem;color:var(--muted);text-transform:uppercase;font-weight:700;letter-spacing:.08em;margin-bottom:.6rem;}
+    .impact-sync{font-size:.6rem;font-weight:700;padding:.18rem .5rem;border-radius:999px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08);color:var(--muted);}
+    .impact-meta{font-size:.72rem;color:var(--muted);line-height:1.45;margin-bottom:.7rem;}
     .impact-score-row{display:flex;align-items:center;gap:.8rem;margin-bottom:.8rem;padding-bottom:.8rem;border-bottom:1px solid rgba(255,255,255,.06);}
     .score-circle{width:56px;height:56px;border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;font-weight:900;font-size:1.15rem;flex-shrink:0;}
     .score-high{background:rgba(239,68,68,.12);border:2px solid #ef4444;color:#ef4444;}
@@ -190,6 +195,369 @@ nav{display:flex;align-items:center;justify-content:space-between;padding:1rem 1
     body>*:not(#bg-canvas){position:relative;z-index:1;}
     @keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
 
+    /* Hacker theme overrides */
+    :root{
+      --bg:#02060c;
+      --surface:rgba(6,15,24,.88);
+      --card:rgba(8,19,29,.86);
+      --card-strong:rgba(9,24,38,.95);
+      --border:rgba(0,247,255,.14);
+      --border-strong:rgba(123,255,0,.34);
+      --accent:#7bff00;
+      --accent2:#00f7ff;
+      --accent3:#ff4fd8;
+      --danger:#ff6577;
+      --blue:#73a7ff;
+      --text:#eefef7;
+      --muted:#7ca1a8;
+      --mono:'IBM Plex Mono',monospace;
+      --display:'Orbitron',sans-serif;
+    }
+    body{
+      background:
+        radial-gradient(circle at 12% 18%, rgba(0,247,255,.12), transparent 28%),
+        radial-gradient(circle at 86% 12%, rgba(123,255,0,.12), transparent 26%),
+        radial-gradient(circle at 68% 76%, rgba(255,79,216,.11), transparent 25%),
+        linear-gradient(180deg, #02060c 0%, #041018 55%, #02060c 100%);
+      color:var(--text);
+      overflow-x:hidden;
+    }
+    nav{
+      padding:1rem 1.2rem;
+      background:linear-gradient(180deg, rgba(5,14,22,.96), rgba(5,14,22,.84));
+      backdrop-filter:blur(18px);
+      border-bottom:1px solid var(--border);
+      box-shadow:0 10px 30px rgba(0,0,0,.28);
+    }
+    .logo{
+      font-family:var(--display);
+      font-size:1rem;
+      letter-spacing:.18em;
+      text-transform:uppercase;
+      color:var(--accent2);
+      text-shadow:0 0 18px rgba(0,247,255,.28);
+    }
+    .nav-links{gap:.55rem;flex-wrap:wrap;justify-content:flex-end;}
+    .nav-btn{
+      font-family:var(--mono);
+      font-size:.73rem;
+      letter-spacing:.04em;
+      color:var(--muted);
+      border:1px solid rgba(0,247,255,.12);
+      background:rgba(10,24,38,.55);
+      border-radius:999px;
+      padding:.5rem .95rem;
+    }
+    .nav-btn:hover,.nav-btn.active{
+      color:var(--accent);
+      border-color:var(--border-strong);
+      background:linear-gradient(135deg, rgba(123,255,0,.12), rgba(0,247,255,.12));
+      box-shadow:0 0 0 1px rgba(123,255,0,.15), 0 10px 24px rgba(0,247,255,.08);
+    }
+    .notif-badge{
+      background:linear-gradient(135deg, var(--danger), #ff9f4f);
+      color:#fff;
+      box-shadow:0 0 12px rgba(255,101,119,.45);
+    }
+    .page{
+      max-width:1180px;
+      padding:1.35rem 1.2rem 2rem;
+    }
+    .user-bar{
+      background:rgba(4,11,18,.82);
+      border-bottom:1px solid var(--border);
+      padding:.7rem 1.2rem;
+      backdrop-filter:blur(14px);
+    }
+    .user-name,.gps-label,.form-group label,.msg-box-title,.nearby-title,.impact-header,.impact-sync,.section-kicker,.hero-kicker{
+      font-family:var(--mono);
+      letter-spacing:.06em;
+    }
+    .user-name span{color:var(--accent);}
+    .pts-badge{
+      background:rgba(123,255,0,.09);
+      border:1px solid rgba(123,255,0,.22);
+      color:var(--accent);
+    }
+    .logout-btn:hover{color:var(--accent3);}
+    .auth-header h1,.page-title,.result-id{
+      font-family:var(--display);
+      text-transform:uppercase;
+      letter-spacing:.1em;
+    }
+    .page-title{font-size:2rem;margin-bottom:0;}
+    .page-title span{
+      color:var(--accent2);
+      text-shadow:0 0 16px rgba(0,247,255,.2);
+    }
+    .form-card,.complaint-card,.notif-card,.msg-box,.detail-cell,.result-card,.impact-panel{
+      background:
+        linear-gradient(180deg, rgba(7,19,30,.92), rgba(5,14,23,.96));
+      border:1px solid var(--border);
+      box-shadow:0 20px 45px rgba(0,0,0,.24);
+    }
+    .form-card::before,.complaint-card::after,.result-card::before,.terminal-card::before{
+      content:'';
+      position:absolute;
+      inset:0;
+      pointer-events:none;
+      background:linear-gradient(135deg, rgba(0,247,255,.06), transparent 38%, rgba(123,255,0,.04) 75%, transparent 100%);
+      opacity:.8;
+    }
+    .form-card,.complaint-card,.result-card,.terminal-card{position:relative;overflow:hidden;}
+    .form-group input,.msg-input{
+      background:rgba(2,8,14,.92);
+      border-color:rgba(0,247,255,.14);
+      color:var(--text);
+    }
+    .form-group input:focus,.msg-input:focus{
+      border-color:var(--accent2);
+      box-shadow:0 0 0 3px rgba(0,247,255,.08);
+    }
+    .btn-primary,.msg-send-btn,.btn-capture{
+      background:linear-gradient(135deg, var(--accent), var(--accent2));
+      color:#04110a;
+      font-family:var(--mono);
+      letter-spacing:.04em;
+      box-shadow:0 12px 28px rgba(0,247,255,.18);
+    }
+    .btn-primary:hover,.msg-send-btn:hover,.btn-capture:hover{opacity:.94;transform:translateY(-1px);}
+    .btn-capture.secondary{
+      background:rgba(5,17,27,.68);
+      color:var(--text);
+      border:1px solid var(--border);
+    }
+    .ai-badge{
+      background:rgba(255,79,216,.08);
+      color:#ff9af0;
+      border-color:rgba(255,79,216,.24);
+      font-family:var(--mono);
+      letter-spacing:.03em;
+      margin:0;
+    }
+    .portal-hero{
+      margin-bottom:1.1rem;
+      padding:1.2rem;
+      border:1px solid var(--border);
+      border-radius:24px;
+      background:
+        linear-gradient(140deg, rgba(5,18,26,.96), rgba(6,14,22,.88)),
+        radial-gradient(circle at top right, rgba(123,255,0,.16), transparent 28%);
+      box-shadow:0 24px 60px rgba(0,0,0,.28);
+    }
+    .hero-grid{
+      display:grid;
+      grid-template-columns:minmax(0, 1.4fr) minmax(260px, .9fr);
+      gap:1rem;
+      align-items:stretch;
+    }
+    .hero-copy-text{
+      margin-top:.75rem;
+      max-width:680px;
+      color:#c6dde2;
+      line-height:1.65;
+      font-size:.95rem;
+    }
+    .hero-kicker{
+      display:inline-flex;
+      align-items:center;
+      gap:.45rem;
+      margin-bottom:.75rem;
+      padding:.35rem .7rem;
+      border-radius:999px;
+      background:rgba(0,247,255,.08);
+      border:1px solid rgba(0,247,255,.18);
+      color:var(--accent2);
+      font-size:.68rem;
+      text-transform:uppercase;
+    }
+    .hero-stats{
+      display:grid;
+      grid-template-columns:repeat(2, minmax(0, 1fr));
+      gap:.8rem;
+    }
+    .hero-stat{
+      padding:1rem;
+      border-radius:18px;
+      border:1px solid rgba(123,255,0,.18);
+      background:linear-gradient(180deg, rgba(7,23,33,.92), rgba(7,15,24,.88));
+      box-shadow:inset 0 1px 0 rgba(255,255,255,.03);
+    }
+    .hero-stat-value{
+      font-family:var(--display);
+      font-size:1.45rem;
+      letter-spacing:.08em;
+      color:var(--accent);
+      text-shadow:0 0 16px rgba(123,255,0,.2);
+    }
+    .hero-stat-label{
+      margin-top:.4rem;
+      font-size:.73rem;
+      color:var(--muted);
+      text-transform:uppercase;
+      letter-spacing:.06em;
+      font-family:var(--mono);
+    }
+    #page-report{
+      display:grid;
+      grid-template-columns:minmax(0, 1.18fr) minmax(320px, .82fr);
+      gap:1rem;
+      align-items:start;
+    }
+    #page-report > .portal-hero{grid-column:1 / -1;}
+    #page-report > .terminal-card:first-of-type,
+    #page-report > #impact-panel,
+    #page-report > #submit-error,
+    #page-report > #submit-btn,
+    #page-report > #result-card{grid-column:1;}
+    #page-report > .location-card{
+      grid-column:2;
+      grid-row:2 / span 3;
+      position:sticky;
+      top:106px;
+      align-self:start;
+    }
+    .report-grid{
+      display:grid;
+      grid-template-columns:minmax(0, 1.18fr) minmax(320px, .82fr);
+      gap:1rem;
+      align-items:start;
+    }
+    .report-main,.report-side{display:grid;gap:1rem;}
+    .terminal-card{
+      padding:1.1rem;
+      border-radius:22px;
+      border:1px solid var(--border);
+      background:linear-gradient(180deg, rgba(7,19,29,.92), rgba(6,15,24,.95));
+      box-shadow:0 20px 45px rgba(0,0,0,.24);
+    }
+    .section-card{padding:1.15rem;}
+    .section-kicker{
+      color:var(--accent2);
+      font-size:.66rem;
+      text-transform:uppercase;
+      margin-bottom:.7rem;
+    }
+    .section-title{
+      font-family:var(--display);
+      font-size:1.08rem;
+      letter-spacing:.08em;
+      text-transform:uppercase;
+      margin-bottom:.8rem;
+      color:var(--text);
+    }
+    .location-card .gps-card{
+      margin:0 0 .95rem;
+      padding:0;
+      background:transparent;
+      border:none;
+    }
+    #mini-map{
+      height:290px;
+      border-radius:18px;
+      border:1px solid rgba(0,247,255,.18);
+      box-shadow:inset 0 0 0 1px rgba(255,255,255,.02);
+      overflow:hidden;
+      margin-bottom:0;
+    }
+    .map-caption{
+      margin-top:.7rem;
+      color:var(--muted);
+      font-size:.78rem;
+      line-height:1.5;
+    }
+    .impact-panel{
+      display:block;
+      padding:1.05rem;
+      border-radius:20px;
+      margin:0;
+    }
+    .impact-meta,.impact-desc,.nearby-item,.complaint-meta,.notif-msg,.notif-time,.notif-title,.gps-addr{color:#bfd7dd;}
+    .impact-sync{
+      border-color:rgba(0,247,255,.18);
+      color:var(--accent2);
+      background:rgba(0,247,255,.06);
+    }
+    .nearby-item{
+      background:rgba(4,14,23,.74);
+      border-color:rgba(0,247,255,.08);
+    }
+    .gps-btn{
+      background:rgba(4,14,23,.72);
+      border-color:rgba(0,247,255,.14);
+      color:var(--text);
+      font-family:var(--mono);
+    }
+    .gps-btn:hover{border-color:var(--accent);color:var(--accent);}
+    .area-badge{
+      background:rgba(123,255,0,.09);
+      border:1px solid rgba(123,255,0,.18);
+      color:var(--accent);
+      margin-bottom:.95rem;
+    }
+    .result-card{
+      border-color:rgba(123,255,0,.28);
+      border-radius:22px;
+      margin-top:0;
+    }
+    .result-card.show{display:block;}
+    .complaint-card:hover,.notif-card:hover{border-color:var(--border-strong);}
+    .notif-card{
+      border-radius:18px;
+      border-color:rgba(0,247,255,.16);
+    }
+    .notif-card.unread{
+      border-color:rgba(123,255,0,.32);
+      box-shadow:0 0 0 1px rgba(123,255,0,.08);
+    }
+    .notif-title{
+      font-family:var(--display);
+      font-size:.95rem;
+      letter-spacing:.05em;
+      color:var(--text);
+      margin-bottom:.35rem;
+      text-transform:uppercase;
+    }
+    .notif-msg{
+      background:rgba(0,247,255,.05);
+      border-left:2px solid var(--accent2);
+    }
+    .empty-state{padding:3.4rem 1rem;color:var(--muted);}
+    .empty-state .empty-icon{opacity:.88;}
+    .leaflet-control-zoom a{
+      background:#061521!important;
+      color:var(--accent2)!important;
+      border-color:rgba(0,247,255,.12)!important;
+    }
+    .leaflet-control-attribution{display:none;}
+    .leaflet-popup-content-wrapper{
+      background:#081520!important;
+      color:var(--text)!important;
+      border:1px solid rgba(0,247,255,.16)!important;
+      border-radius:12px!important;
+    }
+    .leaflet-popup-tip{background:#081520!important;}
+    @media (max-width: 980px){
+      .hero-grid,.report-grid{grid-template-columns:1fr;}
+      .hero-stats{grid-template-columns:repeat(2, minmax(0, 1fr));}
+      #page-report{grid-template-columns:1fr;}
+      #page-report > .location-card{
+        grid-column:1;
+        grid-row:auto;
+        position:relative;
+        top:auto;
+      }
+    }
+    @media (max-width: 720px){
+      nav{padding:.9rem .9rem;align-items:flex-start;gap:.75rem;flex-direction:column;}
+      .user-bar{padding:.7rem .9rem;gap:.5rem;flex-wrap:wrap;}
+      .page{padding:1rem .9rem 1.6rem;}
+      .portal-hero,.terminal-card,.section-card{padding:1rem;}
+      .hero-stats{grid-template-columns:1fr;}
+      .page-title{font-size:1.55rem;}
+      #mini-map{height:240px;}
+    }
+
     </style>
 </head>
 <body>
@@ -200,8 +568,8 @@ nav{display:flex;align-items:center;justify-content:space-between;padding:1rem 1
   let W,H,t=0;
   function resize(){W=C.width=innerWidth;H=C.height=innerHeight;}
   resize();addEventListener('resize',resize);
-  const orbs=[{x:.15,y:.2,r:.35,c:'#3ecfb2',s:.0003},{x:.85,y:.75,r:.3,c:'#a855f7',s:.0004},{x:.5,y:.9,r:.25,c:'#f5a623',s:.0005},{x:.7,y:.1,r:.2,c:'#3b82f6',s:.0003}];
-  const P=Array.from({length:55},()=>({x:Math.random(),y:Math.random()+.5,vx:(Math.random()-.5)*.0003,vy:-Math.random()*.0008-.0002,r:Math.random()*1.5+.3,a:Math.random()*.35+.08,c:['#3ecfb2','#a855f7','#f5a623','#60a5fa'][Math.floor(Math.random()*4)],life:Math.random()}));
+  const orbs=[{x:.15,y:.2,r:.35,c:'#00f7ff',s:.0003},{x:.85,y:.75,r:.3,c:'#ff4fd8',s:.0004},{x:.5,y:.9,r:.25,c:'#7bff00',s:.0005},{x:.7,y:.1,r:.2,c:'#73a7ff',s:.0003}];
+  const P=Array.from({length:55},()=>({x:Math.random(),y:Math.random()+.5,vx:(Math.random()-.5)*.0003,vy:-Math.random()*.0008-.0002,r:Math.random()*1.5+.3,a:Math.random()*.35+.08,c:['#00f7ff','#ff4fd8','#7bff00','#73a7ff'][Math.floor(Math.random()*4)],life:Math.random()}));
   let scanY=0,radarR=0;
   function draw(ts){
     t=ts*.001;ctx.clearRect(0,0,W,H);
@@ -213,10 +581,10 @@ nav{display:flex;align-items:center;justify-content:space-between;padding:1rem 1
     for(let y=-gy+oy;y<H+gy;y+=gy){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
     radarR=(radarR+.7)%(Math.max(W,H)*.75);
     const ra=1-radarR/(Math.max(W,H)*.75);
-    ctx.beginPath();ctx.arc(W*.5,H,radarR,Math.PI,0);ctx.strokeStyle=`rgba(62,207,178,${ra*.07})`;ctx.lineWidth=1.5;ctx.stroke();
+    ctx.beginPath();ctx.arc(W*.5,H,radarR,Math.PI,0);ctx.strokeStyle=`rgba(0,247,255,${ra*.07})`;ctx.lineWidth=1.5;ctx.stroke();
     P.forEach(p=>{p.x+=p.vx;p.y+=p.vy;p.life+=.004;if(p.y<-.02||p.life>1){p.x=Math.random();p.y=1.05;p.life=0;}const a=p.a*Math.sin(p.life*Math.PI);ctx.beginPath();ctx.arc(p.x*W,p.y*H,p.r,0,Math.PI*2);ctx.fillStyle=p.c+Math.round(a*255).toString(16).padStart(2,'0');ctx.fill();});
-    scanY=(t*.12)%1;const sg=ctx.createLinearGradient(0,scanY*H-3,0,scanY*H+3);sg.addColorStop(0,'transparent');sg.addColorStop(.5,'rgba(62,207,178,0.1)');sg.addColorStop(1,'transparent');ctx.fillStyle=sg;ctx.fillRect(0,scanY*H-3,W,6);
-    const cd='rgba(62,207,178,0.18)',cl=32,cw=1.5;[[0,0,1,1],[W,0,-1,1],[0,H,1,-1],[W,H,-1,-1]].forEach(([x,y,sx,sy])=>{ctx.strokeStyle=cd;ctx.lineWidth=cw;ctx.beginPath();ctx.moveTo(x+sx*cl,y);ctx.lineTo(x,y);ctx.lineTo(x,y+sy*cl);ctx.stroke();});
+    scanY=(t*.12)%1;const sg=ctx.createLinearGradient(0,scanY*H-3,0,scanY*H+3);sg.addColorStop(0,'transparent');sg.addColorStop(.5,'rgba(123,255,0,0.1)');sg.addColorStop(1,'transparent');ctx.fillStyle=sg;ctx.fillRect(0,scanY*H-3,W,6);
+    const cd='rgba(0,247,255,0.18)',cl=32,cw=1.5;[[0,0,1,1],[W,0,-1,1],[0,H,1,-1],[W,H,-1,-1]].forEach(([x,y,sx,sy])=>{ctx.strokeStyle=cd;ctx.lineWidth=cw;ctx.beginPath();ctx.moveTo(x+sx*cl,y);ctx.lineTo(x,y);ctx.lineTo(x,y+sy*cl);ctx.stroke();});
     requestAnimationFrame(draw);
   }
   requestAnimationFrame(draw);
@@ -271,7 +639,28 @@ nav{display:flex;align-items:center;justify-content:space-between;padding:1rem 1
 
 <!-- REPORT -->
 <div class="page" id="page-report">
-  <div class="page-title">Report <span>Road Damage</span></div>
+  <div class="portal-hero">
+    <div class="hero-grid">
+      <div>
+        <div class="hero-kicker">citizen_portal.priority_link</div>
+        <div class="page-title">Report <span>Road Damage</span></div>
+        <div class="hero-copy-text">Lock the location on the live Leaflet map, upload road evidence, and get a fast priority estimate before the complaint is pushed into the repair queue.</div>
+      </div>
+      <div class="hero-stats">
+        <div class="hero-stat">
+          <div class="hero-stat-value" id="hero-priority-score">P0</div>
+          <div class="hero-stat-label">Live priority estimate</div>
+        </div>
+        <div class="hero-stat">
+          <div class="hero-stat-value" id="hero-location-state">GPS</div>
+          <div class="hero-stat-label">Tracking mode</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="terminal-card section-card">
+    <div class="section-kicker">step_01.capture_input</div>
+    <div class="section-title">Upload Damage Evidence</div>
   <div class="ai-badge">🤖 AI-Powered Detection · Auto-classifies damage type & severity</div>
   <div style="font-size:.7rem;color:var(--muted);text-transform:uppercase;font-weight:700;letter-spacing:.08em;margin-bottom:.6rem">Step 1 — Choose Photo Source</div>
   <div class="photo-source-grid">
@@ -295,9 +684,14 @@ nav{display:flex;align-items:center;justify-content:space-between;padding:1rem 1
     </div>
   </div>
   <input type="file" id="file-input" accept="image/*" onchange="handleFile(event)"/>
+  </div>
   <!-- Impact Priority Panel -->
   <div class="impact-panel" id="impact-panel">
-    <div class="impact-header">⚡ Impact Priority Analysis</div>
+    <div class="impact-header">
+      <span>⚡ Impact Priority Analysis</span>
+      <span class="impact-sync" id="impact-sync">Waiting for location</span>
+    </div>
+    <div class="impact-meta" id="impact-meta">Location, nearby facilities, and duplicate reports sync automatically when GPS locks or you move the map pin.</div>
     <div class="impact-score-row" id="impact-score-row">
       <div class="score-circle score-high" id="score-circle">
         <span id="score-num">0</span><span class="score-pts">PTS</span>
@@ -307,12 +701,18 @@ nav{display:flex;align-items:center;justify-content:space-between;padding:1rem 1
     <div class="nearby-title">📍 Nearby Sensitive Locations (within 1km)</div>
     <div id="nearby-list"><div style="font-size:.75rem;color:var(--muted)">Scanning...</div></div>
   </div>
+  <div class="terminal-card section-card location-card">
+    <div class="section-kicker">step_02.location_lock</div>
+    <div class="section-title">Pin Priority Zone</div>
   <div class="gps-card">
     <div class="gps-icon">📍</div>
     <div class="gps-info">
       <div class="gps-label">GPS Location</div>
       <div class="gps-value" id="gps-text">Detecting location...</div>
       <div class="gps-addr" id="gps-addr"></div>
+      <div class="gps-actions">
+        <button class="gps-btn" type="button" onclick="getLocation(true)">Use My GPS</button>
+      </div>
     </div>
     <div style="display:flex;flex-direction:column;align-items:center;gap:.2rem">
       <div class="gps-dot" id="gps-dot"></div>
@@ -321,6 +721,8 @@ nav{display:flex;align-items:center;justify-content:space-between;padding:1rem 1
   </div>
   <div id="area-badge-wrap"></div>
   <div id="mini-map"></div>
+  <div class="map-caption">Drag the Leaflet pin or tap the map to refresh the fast local estimate, then let the server refine the final priority in the background.</div>
+  </div>
   <div id="submit-error" style="display:none;margin-bottom:.8rem"></div>
   <button class="btn-primary" id="submit-btn" onclick="submitComplaint()">🚨 Submit Complaint</button>
   <div class="result-card" id="result-card">
@@ -329,6 +731,7 @@ nav{display:flex;align-items:center;justify-content:space-between;padding:1rem 1
     <div class="result-id" id="result-id">—</div>
     <div id="result-severity" class="result-severity">—</div>
     <div class="priority-row"><span style="font-size:.75rem;color:var(--muted)">Priority Score:</span><span class="priority-score" id="result-priority">—</span></div>
+    <div style="font-size:.8rem;color:var(--muted);margin:.25rem 0" id="result-registered-at"></div>
     <div style="font-size:.82rem;color:var(--muted);margin:.3rem 0" id="result-area"></div>
     <div style="font-size:.85rem;color:var(--muted);margin:.5rem 0" id="result-desc">—</div>
     <div style="font-size:.8rem;color:var(--accent2);margin-top:.5rem">Field officer notified ✓</div>
@@ -374,7 +777,211 @@ const API=(window.location.hostname==='localhost'?'http://localhost:8000':window
 let token=localStorage.getItem('citizen_token');
 let userName=localStorage.getItem('citizen_name');
 let currentLat=null,currentLng=null,currentAddr='',currentArea='residential';
+let currentImpactScore=0,currentSensitiveCount=0,currentEstimatedPriority=0,impactSyncSerial=0;
 let selectedFile=null,miniMap=null,miniMarker=null,detailMap=null;
+const analysisCache=new Map();
+const priorityPreviewCache=new Map();
+
+function parseDateValue(value){
+  if(!value)return null;
+  const parsed=new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function formatDateTime(value){
+  const parsed=parseDateValue(value);
+  return parsed ? parsed.toLocaleString([], {dateStyle:'medium', timeStyle:'short'}) : '—';
+}
+
+function updateHeroTelemetry(priority=currentEstimatedPriority, modeLabel='GPS'){
+  const scoreEl=document.getElementById('hero-priority-score');
+  const modeEl=document.getElementById('hero-location-state');
+  if(scoreEl){
+    const safePriority=Math.max(0, Math.round(Number(priority)||0));
+    scoreEl.textContent=`P${safePriority}`;
+  }
+  if(modeEl&&modeLabel){
+    modeEl.textContent=String(modeLabel).toUpperCase().replace(/\s+/g,' ');
+  }
+}
+
+function makeLocationKey(lat,lng){
+  return `${Number(lat).toFixed(3)}:${Number(lng).toFixed(3)}`;
+}
+
+function makePriorityKey(){
+  if(currentLat==null||currentLng==null)return '';
+  return [
+    makeLocationKey(currentLat,currentLng),
+    currentArea||'residential',
+    Math.round(Number(currentImpactScore||0)),
+    Math.round(Number(currentSensitiveCount||0))
+  ].join('|');
+}
+
+function estimateFastPriority(area=currentArea, impact=currentImpactScore, sensitive=currentSensitiveCount){
+  const base={hospital:58,school:50,highway:46,market:40,residential:28,general:34}[area] ?? 30;
+  return Math.max(12,Math.min(98,Math.round(base + Number(sensitive||0)*6 + Number(impact||0)*0.22)));
+}
+
+function describeFastPriority(area=currentArea){
+  const label=AREA_LABELS[area]||'Priority zone';
+  return `<strong style="color:var(--accent2)">FAST MAP ESTIMATE</strong> - ${label} locked. Nearby facilities and duplicate reports are syncing in parallel.`;
+}
+
+function setScoreVisual(score,descriptionHtml){
+  const circle=document.getElementById('score-circle');
+  const scoreNum=document.getElementById('score-num');
+  const desc=document.getElementById('impact-desc');
+  const safeScore=Math.max(0,Math.round(Number(score)||0));
+  if(circle)circle.className=`score-circle ${safeScore>=70?'score-high':safeScore>=45?'score-med':'score-low'}`;
+  if(scoreNum)scoreNum.textContent=safeScore;
+  if(desc&&descriptionHtml)desc.innerHTML=descriptionHtml;
+}
+
+function applyFastEstimate(message='Leaflet pin locked. Building a fast local estimate while live data syncs...'){
+  currentEstimatedPriority=estimateFastPriority(currentArea,currentImpactScore,currentSensitiveCount);
+  setScoreVisual(currentEstimatedPriority,describeFastPriority(currentArea));
+  setImpactMeta(message);
+  updateHeroTelemetry(currentEstimatedPriority,document.getElementById('gps-status-text')?.textContent||'GPS');
+}
+
+function applyCachedAnalysis(cacheEntry){
+  if(!cacheEntry)return;
+  currentAddr=cacheEntry.address||currentAddr;
+  currentArea=cacheEntry.area||currentArea;
+  currentImpactScore=cacheEntry.impactScore??currentImpactScore;
+  currentSensitiveCount=cacheEntry.sensitiveCount??currentSensitiveCount;
+  currentEstimatedPriority=cacheEntry.estimatedPriority||estimateFastPriority(currentArea,currentImpactScore,currentSensitiveCount);
+  document.getElementById('gps-addr').textContent=(currentAddr||'').substring(0,60);
+  showAreaBadge(currentArea);
+  setScoreVisual(cacheEntry.impactScore??currentEstimatedPriority,cacheEntry.descHtml||describeFastPriority(currentArea));
+  const list=document.getElementById('nearby-list');
+  if(list&&cacheEntry.nearbyHtml)list.innerHTML=cacheEntry.nearbyHtml;
+  updateHeroTelemetry(currentEstimatedPriority,document.getElementById('gps-status-text')?.textContent||'GPS');
+}
+
+function setImpactSyncState(message,tone='default'){
+  const el=document.getElementById('impact-sync');
+  if(!el)return;
+  el.textContent=message;
+  el.style.color=tone==='good'?'var(--accent2)':tone==='warn'?'var(--accent)':'var(--muted)';
+  el.style.borderColor=tone==='good'?'rgba(62,207,178,.3)':tone==='warn'?'rgba(245,166,35,.28)':'rgba(255,255,255,.08)';
+}
+
+function setImpactMeta(message){
+  const el=document.getElementById('impact-meta');
+  if(el)el.textContent=message;
+}
+
+function syncMiniMap(lat,lng){
+  if(!miniMap){initMiniMap(lat,lng);return;}
+  if(miniMarker)miniMarker.setLatLng([lat,lng]);
+  miniMap.setView([lat,lng],16);
+}
+
+async function syncPriorityPreview(syncId){
+  if(!token||currentLat==null||currentLng==null)return;
+  const previewKey=makePriorityKey();
+  if(previewKey&&priorityPreviewCache.has(previewKey)){
+    const cached=priorityPreviewCache.get(previewKey);
+    if(syncId!==impactSyncSerial)return;
+    currentArea=cached.area_type||currentArea;
+    currentImpactScore=cached.impact_score??currentImpactScore;
+    currentSensitiveCount=cached.sensitive_location_count??currentSensitiveCount;
+    currentEstimatedPriority=cached.estimated_priority_score||currentEstimatedPriority||estimateFastPriority();
+    showAreaBadge(currentArea);
+    const cachedLabel=(cached.nearby_report_count||1)===1?'report':'reports';
+    setImpactMeta(`Estimated live system priority: P${currentEstimatedPriority}. ${cached.nearby_report_count||1} ${cachedLabel} in this zone. ${AREA_LABELS[currentArea]||currentArea}.`);
+    setImpactSyncState('Priority cache hit','good');
+    updateHeroTelemetry(currentEstimatedPriority,document.getElementById('gps-status-text')?.textContent||'GPS');
+    const cachedLocation=analysisCache.get(makeLocationKey(currentLat,currentLng));
+    if(cachedLocation)cachedLocation.estimatedPriority=currentEstimatedPriority;
+    return;
+  }
+  try{
+    const params=new URLSearchParams({
+      latitude:currentLat.toFixed(6),
+      longitude:currentLng.toFixed(6),
+      address:currentAddr||'',
+      area_type:currentArea||'residential',
+      impact_score:String(currentImpactScore||0),
+      sensitive_location_count:String(currentSensitiveCount||0)
+    });
+    const res=await fetch(`${API}/complaints/priority/preview?${params.toString()}`,{
+      headers:{Authorization:`Bearer ${token}`}
+    });
+    if(!res.ok)throw new Error('Priority preview unavailable');
+    const data=await res.json();
+    if(syncId!==impactSyncSerial)return;
+    if(previewKey)priorityPreviewCache.set(previewKey,data);
+    currentArea=data.area_type||currentArea;
+    currentImpactScore=data.impact_score??currentImpactScore;
+    currentSensitiveCount=data.sensitive_location_count??currentSensitiveCount;
+    currentEstimatedPriority=data.estimated_priority_score||0;
+    showAreaBadge(currentArea);
+    const reportLabel=(data.nearby_report_count||1)===1?'report':'reports';
+    setImpactMeta(`Estimated live system priority: P${currentEstimatedPriority}. ${data.nearby_report_count||1} ${reportLabel} in this zone. ${AREA_LABELS[currentArea]||currentArea}.`);
+    setImpactSyncState(data.duplicate_detected?'Synced with nearby reports':'Synced','good');
+    updateHeroTelemetry(currentEstimatedPriority,document.getElementById('gps-status-text')?.textContent||'GPS');
+    const cachedLocation=analysisCache.get(makeLocationKey(currentLat,currentLng));
+    if(cachedLocation)cachedLocation.estimatedPriority=currentEstimatedPriority;
+  }catch(e){
+    if(syncId!==impactSyncSerial)return;
+    setImpactMeta(`Local impact analysis ready. Submit now, or move the pin again to refresh. Estimated local score: ${currentImpactScore||0}.`);
+    setImpactSyncState('Local sync only','warn');
+    updateHeroTelemetry(currentEstimatedPriority||estimateFastPriority(),document.getElementById('gps-status-text')?.textContent||'GPS');
+  }
+}
+
+async function syncLocationAnalysis(lat,lng,statusLabel){
+  const syncId=++impactSyncSerial;
+  currentLat=lat;currentLng=lng;
+  document.getElementById('gps-text').textContent=`${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+  document.getElementById('gps-dot').className='gps-dot active';
+  document.getElementById('gps-status-text').textContent=statusLabel;
+  syncMiniMap(lat,lng);
+  updateHeroTelemetry(currentEstimatedPriority||0,statusLabel);
+  const cacheKey=makeLocationKey(lat,lng);
+  if(analysisCache.has(cacheKey)){
+    applyCachedAnalysis(analysisCache.get(cacheKey));
+    setImpactSyncState('Map cache hit','good');
+    setImpactMeta('Cached Leaflet analysis restored instantly. Live priority sync is being refreshed in the background.');
+    await syncPriorityPreview(syncId);
+    return;
+  }
+
+  currentArea='general';
+  currentImpactScore=0;
+  currentSensitiveCount=0;
+  applyFastEstimate('Leaflet pin locked. Building a fast local estimate while address lookup and nearby facilities sync in parallel...');
+  setImpactSyncState('Fast local estimate','warn');
+
+  const addressPromise=reverseGeocode(lat,lng).catch(()=>`${lat.toFixed(5)}, ${lng.toFixed(5)}`);
+  const nearbyPromise=detectNearby(lat,lng,syncId);
+
+  currentAddr=await addressPromise;
+  if(syncId!==impactSyncSerial)return;
+  document.getElementById('gps-addr').textContent=(currentAddr||'').substring(0,60);
+  currentArea=detectArea(currentAddr||'');
+  showAreaBadge(currentArea);
+  applyFastEstimate('Location confirmed. Nearby facilities and duplicate reports are still syncing...');
+
+  const nearbyResult=await nearbyPromise;
+  if(syncId!==impactSyncSerial)return;
+  currentImpactScore=nearbyResult.impactScore;
+  currentSensitiveCount=nearbyResult.sensitiveCount;
+  analysisCache.set(cacheKey,{
+    address:currentAddr,
+    area:currentArea,
+    impactScore:currentImpactScore,
+    sensitiveCount:currentSensitiveCount,
+    estimatedPriority:estimateFastPriority(currentArea,currentImpactScore,currentSensitiveCount),
+    descHtml:document.getElementById('impact-desc')?.innerHTML||'',
+    nearbyHtml:document.getElementById('nearby-list')?.innerHTML||''
+  });
+  await syncPriorityPreview(syncId);
+}
 
 function init(){
   const p=new URLSearchParams(window.location.search);
@@ -389,6 +996,7 @@ function init(){
 function showLoggedIn(){
   document.getElementById('user-bar').classList.add('show');
   document.getElementById('user-name-display').textContent=userName||'Citizen';
+  updateHeroTelemetry(currentEstimatedPriority||0,'GPS');
 }
 
 async function doLogin(){
@@ -431,33 +1039,21 @@ function logout(){
   showPage('login');
 }
 
-function getLocation(){
+function getLocation(forceRefresh=false){
   if(!navigator.geolocation){document.getElementById('gps-text').textContent='GPS not supported';return;}
   document.getElementById('gps-status-text').textContent='Searching...';
+  setImpactSyncState('Waiting for GPS','warn');
   navigator.geolocation.getCurrentPosition(async pos=>{
-    currentLat=pos.coords.latitude;currentLng=pos.coords.longitude;
-    document.getElementById('gps-text').textContent=`${currentLat.toFixed(5)}, ${currentLng.toFixed(5)}`;
-    document.getElementById('gps-dot').classList.add('active');
-    document.getElementById('gps-status-text').textContent='Locked ✓';
-    // Reverse geocode
-    currentAddr=await reverseGeocode(currentLat,currentLng);
-    document.getElementById('gps-addr').textContent=currentAddr.substring(0,60)+'...';
-    // Detect area type
-    currentArea=detectArea(currentAddr);
-    showAreaBadge(currentArea);
-    initMiniMap(currentLat,currentLng);
-    detectNearby(currentLat,currentLng);
-    detectNearby(currentLat,currentLng);
+    await syncLocationAnalysis(pos.coords.latitude,pos.coords.longitude,'Locked');
   },err=>{
     document.getElementById('gps-text').textContent='Using default location';
-    document.getElementById('gps-status-text').textContent='⚠ Manual';
-    currentLat=11.0168;currentLng=76.9558;
+    updateHeroTelemetry(currentEstimatedPriority||0,'Manual');
     currentAddr='Coimbatore, Tamil Nadu';
-    currentArea='residential';
-    initMiniMap(currentLat,currentLng);
-    detectNearby(currentLat,currentLng);
-    detectNearby(currentLat,currentLng);
-  },{enableHighAccuracy:true,timeout:15000});
+    document.getElementById('gps-addr').textContent=currentAddr;
+    syncLocationAnalysis(11.0168,76.9558,'Manual');
+    setImpactSyncState('Manual fallback','warn');
+    setImpactMeta('GPS permission was unavailable, so the map switched to a manual fallback. You can still drag the pin to sync priority quickly.');
+  },{enableHighAccuracy:true,timeout:15000,maximumAge:forceRefresh?0:30000});
 }
 
 function detectArea(addr){
@@ -485,7 +1081,7 @@ function initMiniMap(lat,lng){
   miniMarker=L.marker([lat,lng],{
     draggable:true,
     icon:L.divIcon({
-      html:`<div style="width:22px;height:22px;background:#f5a623;border:3px solid #fff;border-radius:50% 50% 50% 0;transform:rotate(-45deg);box-shadow:0 2px 10px rgba(0,0,0,.5)"></div>`,
+      html:`<div style="width:22px;height:22px;background:var(--accent);border:3px solid #fff;border-radius:50% 50% 50% 0;transform:rotate(-45deg);box-shadow:0 2px 10px rgba(0,0,0,.5)"></div>`,
       className:'',iconSize:[22,22],iconAnchor:[11,22]
     })
   }).addTo(miniMap);
@@ -537,21 +1133,10 @@ function resetSource() {
 }
 
 async function updateManualLocation(la, ln) {
-  currentLat = la; currentLng = ln;
-  document.getElementById('gps-text').textContent = la.toFixed(5) + ', ' + ln.toFixed(5);
-  document.getElementById('gps-status-text').textContent = 'Manual ✓';
-  document.getElementById('gps-dot').className = 'gps-dot active';
-  try {
-    const addr = await reverseGeocode(la, ln);
-    currentAddr = addr;
-    document.getElementById('gps-addr').textContent = addr.substring(0, 60);
-    const area = getAreaType ? getAreaType(addr) : detectArea(addr);
-    currentArea = area; showAreaBadge(area);
-  } catch(e) {}
-  detectNearby(la, ln);
+  await syncLocationAnalysis(la,ln,'Manual pin');
 }
 
-async function detectNearby(lat, lng) {
+async function detectNearby(lat, lng, syncId = impactSyncSerial) {
   const panel = document.getElementById('impact-panel');
   const list = document.getElementById('nearby-list');
   const desc = document.getElementById('impact-desc');
@@ -561,7 +1146,7 @@ async function detectNearby(lat, lng) {
   list.innerHTML = '<div style="font-size:.75rem;color:var(--muted)">🔍 Scanning nearby locations...</div>';
   
   try {
-    const q = `[out:json][timeout:15];(
+    const q = `[out:json][timeout:10];(
       node["amenity"~"hospital|school|clinic|college|university|pharmacy"](around:1000,${lat},${lng});
       way["amenity"~"hospital|school|clinic|college|university|hospital"](around:1000,${lat},${lng});
     );out center 10;`;
@@ -569,6 +1154,7 @@ async function detectNearby(lat, lng) {
       method:'POST', body:'data='+encodeURIComponent(q)
     });
     const data = await res.json();
+    if(syncId!==impactSyncSerial)return {impactScore:0,sensitiveCount:0};
     const items = (data.elements||[]).map(el => {
       const elat = el.lat||el.center?.lat||lat;
       const elng = el.lon||el.center?.lon||lng;
@@ -606,9 +1192,11 @@ async function detectNearby(lat, lng) {
         </div>`;
       }).join('');
     }
+    return {impactScore:totalScore,sensitiveCount:items.length};
   } catch(e) {
     list.innerHTML = '<div style="font-size:.75rem;color:var(--muted)">⚠ Could not fetch nearby data. Check connection.</div>';
     console.warn('detectNearby error:', e);
+    return {impactScore:0,sensitiveCount:0};
   }
 }
 
@@ -639,13 +1227,16 @@ async function submitComplaint(){
   if(!token){showPage('login');return;}
   if(!selectedFile){showErrMsg('Please capture a road damage photo first.');return;}
   const btn=document.getElementById('submit-btn');
-  btn.innerHTML='<span class="spinner"></span>AI analyzing damage...';btn.disabled=true;
+  btn.innerHTML='<span class="spinner"></span>AI analyzing damage and syncing priority...';btn.disabled=true;
   document.getElementById('submit-error').style.display='none';
   try{
     const form=new FormData();
     form.append('latitude',currentLat||11.0168);
     form.append('longitude',currentLng||76.9558);
     form.append('address',currentAddr||`${currentLat},${currentLng}`);
+    form.append('area_type',currentArea||'residential');
+    form.append('impact_score',currentImpactScore||0);
+    form.append('sensitive_location_count',currentSensitiveCount||0);
     form.append('image',selectedFile);
     const res=await fetch(`${API}/complaints/submit`,{method:'POST',headers:{Authorization:`Bearer ${token}`},body:form});
     const data=await res.json();
@@ -664,12 +1255,16 @@ async function submitComplaint(){
     sevEl.className=`result-severity sev-${data.severity||'medium'}`;
     
     const ps=data.priority_score||0;
+    currentEstimatedPriority=ps;
     const psEl=document.getElementById('result-priority');
     psEl.textContent=`P${ps}`;
     psEl.className=`priority-score ${ps>=60?'ps-high':ps>=35?'ps-medium':'ps-low'}`;
     
+    document.getElementById('result-registered-at').textContent=`Registered ${formatDateTime(data.created_at)}`;
     document.getElementById('result-area').textContent=AREA_LABELS[data.area_type||'residential']||'';
     document.getElementById('result-desc').textContent=data.description||'Road damage detected.';
+    const notifyStatus=document.querySelector('#result-card div[style*="color:var(--accent2)"]');
+    if(notifyStatus)notifyStatus.textContent='Complaint saved and notifications queued';
     document.getElementById('result-card').classList.add('show');
     btn.style.display='none';
     checkNotifications();
@@ -714,6 +1309,7 @@ async function loadComplaints(){
         <div class="complaint-meta">${(c.damage_type||'').replace('_',' ')} · ${(c.severity||'').toUpperCase()} · ${new Date(c.created_at).toLocaleDateString()}</div>
         ${c.area_type?`<div class="complaint-meta" style="margin-top:2px">${AREA_ICONS[c.area_type]||'📍'} ${c.area_type}</div>`:''}
         ${c.address?`<div class="complaint-meta" style="margin-top:3px;font-size:.72rem">${c.address.substring(0,55)}...</div>`:''}
+        <div class="complaint-meta" style="margin-top:3px;font-size:.72rem">Registered ${formatDateTime(c.created_at)}</div>
         ${buildProgressSteps(c.status)}
       </div>`;
     }).join('');
@@ -754,6 +1350,7 @@ async function showDetail(complaintId){
         <div class="detail-cell"><div class="dlabel">Priority Score</div><div class="dvalue"><span class="priority-score ${psCls}">P${ps}</span></div></div>
         <div class="detail-cell"><div class="dlabel">Area Type</div><div class="dvalue">${AREA_LABELS[c.area_type]||c.area_type||'—'}</div></div>
         <div class="detail-cell"><div class="dlabel">Status</div><div class="dvalue"><span class="status-badge status-${c.status}">${(c.status||'').replace('_',' ')}</span></div></div>
+        <div class="detail-cell"><div class="dlabel">Reported</div><div class="dvalue">${formatDateTime(c.created_at)}</div></div>
         ${c.allocated_fund>0?`<div class="detail-cell"><div class="dlabel">Budget Allocated</div><div class="dvalue" style="color:#4ade80">₹${(c.allocated_fund||0).toLocaleString()}</div></div>`:''}
         ${c.officer_name?`<div class="detail-cell"><div class="dlabel">Assigned Officer</div><div class="dvalue">${c.officer_name}</div></div>`:''}
       </div>
@@ -836,6 +1433,7 @@ async function loadNotifications(){
           <div><span class="notif-type-badge notif-${n.type}">${n.type?.replace('_',' ')}</span></div>
           <div class="notif-time">${new Date(n.created_at).toLocaleString()}</div>
         </div>
+        <div class="notif-title">${n.title||'System Update'}</div>
         ${n.complaint_id?`<div class="notif-id">${n.complaint_id}</div>`:''}
         <div class="notif-msg">${n.message}</div>
         ${n.complaint_id?`<button onclick="showDetail('${n.complaint_id}')" style="margin-top:.5rem;background:none;border:1px solid var(--border);color:var(--muted);padding:.25rem .6rem;border-radius:6px;font-family:inherit;font-size:.72rem;cursor:pointer">View Complaint →</button>`:''}

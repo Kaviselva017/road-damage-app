@@ -171,6 +171,9 @@ tr:hover td { background:rgba(255,255,255,0.02); }
 .map-detail-header { display:flex; justify-content:space-between; gap:0.75rem; align-items:flex-start; margin-bottom:0.75rem; }
 .map-detail-id { font-family:'Clash Display',sans-serif; font-size:1rem; color:var(--accent); }
 .map-detail-address { font-size:0.8rem; color:var(--muted); margin-top:0.25rem; line-height:1.4; }
+.map-detail-photo-shell { margin:0.8rem 0 0.4rem; background:#0d1117; border:1px solid var(--border); border-radius:10px; overflow:hidden; }
+.map-detail-photo { display:block; width:100%; max-height:220px; object-fit:cover; background:#060810; }
+.map-detail-photo-empty { padding:1rem; font-size:0.78rem; color:var(--muted); text-align:center; }
 .map-detail-grid { display:grid; gap:0.45rem; }
 .map-detail-row { display:flex; justify-content:space-between; gap:0.75rem; font-size:0.8rem; padding:0.45rem 0; border-bottom:1px solid rgba(30,45,69,0.55); }
 .map-detail-row:last-child { border-bottom:none; }
@@ -253,12 +256,12 @@ tr:hover td { background:rgba(255,255,255,0.02); }
     <p>Admin Control Panel</p>
   </div>
   <nav class="sidebar-nav">
-    <div class="nav-item" onclick="showSection('map')"><span class="nav-icon">MAP</span> Complaint Map</div>
-    <div class="nav-item active" onclick="showSection('overview')"><span class="nav-icon">📊</span> Overview</div>
-    <div class="nav-item" onclick="showSection('complaints')"><span class="nav-icon">🗂</span> All Complaints</div>
-    <div class="nav-item" onclick="showSection('officers')"><span class="nav-icon">👮</span> Officers</div>
-    <div class="nav-item" onclick="showSection('citizens')"><span class="nav-icon">👥</span> Citizens</div>
-    <div class="nav-item" onclick="showSection('analytics')"><span class="nav-icon">📈</span> Analytics</div>
+    <div class="nav-item active" data-section="overview" onclick="showSection('overview')"><span class="nav-icon">📊</span> Overview</div>
+    <div class="nav-item" data-section="map" onclick="showSection('map')"><span class="nav-icon">🗺</span> Map View</div>
+    <div class="nav-item" data-section="complaints" onclick="showSection('complaints')"><span class="nav-icon">🗂</span> All Complaints</div>
+    <div class="nav-item" data-section="officers" onclick="showSection('officers')"><span class="nav-icon">👮</span> Officers</div>
+    <div class="nav-item" data-section="citizens" onclick="showSection('citizens')"><span class="nav-icon">👥</span> Citizens</div>
+    <div class="nav-item" data-section="analytics" onclick="showSection('analytics')"><span class="nav-icon">📈</span> Analytics</div>
   </nav>
   <div class="sidebar-footer">
     <div class="admin-badge">👑 ADMIN</div>
@@ -349,8 +352,8 @@ tr:hover td { background:rgba(255,255,255,0.02); }
           <option value="Unassigned">Unassigned</option>
         </select>
         <input class="search-input" id="map-search" placeholder="Search ID, address, citizen, officer..." oninput="renderAdminMap()"/>
-        <button class="act-btn" style="margin-right:0" onclick="fitAdminMap()">Fit All</button>
-        <button class="act-btn" style="margin-right:0" onclick="resetAdminMapFilters()">Reset</button>
+        <button class="act-btn" style="margin-right:0" onclick="fitAdminMap()">Fit Map</button>
+        <button class="act-btn" style="margin-right:0" onclick="resetAdminMapFilters()">Reset Filters</button>
         <span class="count-badge" id="map-count">— mapped complaints</span>
       </div>
 
@@ -391,7 +394,7 @@ tr:hover td { background:rgba(255,255,255,0.02); }
 
         <div class="admin-map-card map-side">
           <div class="card-title"><span class="ct-icon">📍</span> Selected Complaint</div>
-          <div id="map-detail" class="map-detail map-detail-empty">Select a complaint marker to inspect its location, owner, officer, and photo links.</div>
+          <div id="map-detail" class="map-detail map-detail-empty">Select a complaint to inspect its location, photo preview, and routing actions.</div>
 
           <div class="card-title"><span class="ct-icon">⚡</span> Priority Queue</div>
           <div id="map-queue" class="map-queue"></div>
@@ -625,6 +628,18 @@ const MAP_STATUS_COLORS = {
   rejected:'#ef4444'
 };
 
+function resolveComplaintImageUrl(imageUrl) {
+  if (!imageUrl) return '';
+  if (/^https?:\/\//i.test(imageUrl)) return imageUrl;
+  return imageUrl.startsWith('/') ? `${BASE}${imageUrl}` : `${BASE}/${imageUrl}`;
+}
+
+function openComplaintPhoto(imageUrl) {
+  const resolved = resolveComplaintImageUrl(imageUrl);
+  if (!resolved) return;
+  window.open(resolved, '_blank', 'noopener');
+}
+
 function init() {
   if (token) {
     document.getElementById('login-overlay').style.display = 'none';
@@ -747,7 +762,7 @@ function filterComplaints() {
       <td style="font-size:0.75rem;color:var(--muted)">${c.created_at?new Date(c.created_at).toLocaleDateString():'—'}</td>
       <td>
         <button class="act-btn" onclick="openReassign('${c.complaint_id}')">Reassign</button>
-        ${c.image_url?`<button class="act-btn" onclick="window.open(BASE+'${c.image_url}','_blank')">Photo</button>`:''}
+        ${c.image_url ? `<button class="act-btn" onclick='openComplaintPhoto(${JSON.stringify(c.image_url)})'>Photo</button>` : ''}
       </td>
     </tr>`).join('');
 }
@@ -1206,13 +1221,21 @@ function renderMapDetail(complaint) {
   if (!el) return;
   if (!complaint) {
     el.className = 'map-detail map-detail-empty';
-    el.innerHTML = 'Select a complaint marker to inspect its location, owner, officer, and photo links.';
+    el.innerHTML = 'Select a complaint to inspect its location, photo preview, and routing actions.';
     return;
   }
 
   const address = complaint.address || `${Number(complaint.latitude).toFixed(5)}, ${Number(complaint.longitude).toFixed(5)}`;
-  const photoButton = complaint.image_url
-    ? `<button class="act-btn" style="margin-right:0" onclick="window.open(BASE + '${complaint.image_url}','_blank')">Photo</button>`
+  const photoUrl = resolveComplaintImageUrl(complaint.image_url);
+  const photoPanel = photoUrl
+    ? `
+      <div class="map-detail-photo-shell">
+        <img class="map-detail-photo" src="${photoUrl}" alt="Complaint photo for ${complaint.complaint_id}" onerror="this.closest('.map-detail-photo-shell').innerHTML='<div class=&quot;map-detail-photo-empty&quot;>Complaint photo could not be loaded.</div>'">
+      </div>
+    `
+    : '<div class="map-detail-photo-shell"><div class="map-detail-photo-empty">No complaint photo uploaded for this report.</div></div>';
+  const photoButton = photoUrl
+    ? `<button class="act-btn" style="margin-right:0" onclick='openComplaintPhoto(${JSON.stringify(complaint.image_url)})'>Open Photo</button>`
     : '';
 
   el.className = 'map-detail';
@@ -1224,6 +1247,7 @@ function renderMapDetail(complaint) {
       </div>
       <span class="badge badge-${complaint.status || 'pending'}">${formatComplaintValue(complaint.status)}</span>
     </div>
+    ${photoPanel}
     <div class="map-detail-grid">
       <div class="map-detail-row"><span class="map-detail-label">Severity</span><span class="map-detail-value">${formatComplaintValue(complaint.severity)}</span></div>
       <div class="map-detail-row"><span class="map-detail-label">Damage</span><span class="map-detail-value">${formatComplaintValue(complaint.damage_type)}</span></div>
@@ -1237,7 +1261,7 @@ function renderMapDetail(complaint) {
     <div class="map-detail-actions">
       <button class="act-btn" style="margin-right:0" onclick="openReassign('${complaint.complaint_id}')">Reassign</button>
       ${photoButton}
-      <button class="act-btn" style="margin-right:0" onclick="window.open('https://maps.google.com/?q=${complaint.latitude},${complaint.longitude}','_blank')">Open Map</button>
+      <button class="act-btn" style="margin-right:0" onclick="window.open('https://maps.google.com/?q=${complaint.latitude},${complaint.longitude}','_blank')">Open in Maps</button>
     </div>
   `;
 }
@@ -1357,17 +1381,6 @@ async function toggleCitizen(id) {
   } catch(e) {}
 }
 
-function showSection(section) {
-  currentSection = section;
-  document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
-  document.getElementById(`section-${section}`).classList.add('active');
-  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
-  document.querySelectorAll('.nav-item').forEach(n=>{ if(n.textContent.toLowerCase().includes(section.substring(0,4))) n.classList.add('active'); });
-  const titles = {overview:'Overview',complaints:'All Complaints',officers:'Officer Management',citizens:'Citizen Management',analytics:'Analytics'};
-  document.getElementById('section-title').textContent = titles[section]||section;
-  if (section==='analytics') { populateOfficerFilter(); updateAllCharts(); loadChartData(); }
-}
-
 function showToast(msg) {
   const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show');
   setTimeout(()=>t.classList.remove('show'),3000);
@@ -1420,7 +1433,7 @@ function showSection(section) {
   document.getElementById(`section-${section}`).classList.add('active');
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n => {
-    if (n.textContent.toLowerCase().includes(section.substring(0, 4))) n.classList.add('active');
+    if (n.dataset.section === section) n.classList.add('active');
   });
   const titles = {
     overview:'Overview',
@@ -1437,16 +1450,25 @@ function showSection(section) {
     loadChartData();
   }
   if (section === 'map') {
-    initAdminMap();
-    renderAdminMap();
-    setTimeout(() => adminMap && adminMap.invalidateSize(), 60);
+    requestAnimationFrame(() => {
+      initAdminMap();
+      renderAdminMap();
+      setTimeout(() => {
+        if (!adminMap) return;
+        adminMap.invalidateSize();
+        if (adminMapMarkers.length) fitAdminMap();
+      }, 90);
+    });
   }
 }
 
+window.addEventListener('resize', () => {
+  if (currentSection !== 'map' || !adminMap) return;
+  setTimeout(() => adminMap.invalidateSize(), 50);
+});
+
 init();
 </script>
-</body>
-</html>
 <script>
 // ── OFFICER MANAGEMENT ────────────────────────────────
 let selectedZone = '';
@@ -1575,3 +1597,5 @@ function renderZoneCards() {
   }).join('');
 }
 </script>
+</body>
+</html>
