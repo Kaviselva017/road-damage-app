@@ -399,11 +399,11 @@ nav{display:flex;align-items:center;justify-content:space-between;padding:1rem 1
       font-family:var(--mono);
     }
     #page-report{
-      display:grid;
       grid-template-columns:minmax(0, 1.18fr) minmax(320px, .82fr);
       gap:1rem;
       align-items:start;
     }
+    #page-report.active{display:grid;}
     #page-report > .portal-hero{grid-column:1 / -1;}
     #page-report > .terminal-card:first-of-type,
     #page-report > #impact-panel,
