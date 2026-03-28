@@ -1,20 +1,13 @@
-#!/bin/bash
+#!/usr/bin/env bash
 set -e
-
-cd /opt/render/project/src/backend
 
 echo "=== RoadWatch Startup ==="
 
-echo "[0/3] Clearing stale database..."
-# Delete ALL .db files so schema is always recreated fresh
-find /opt/render -name "*.db" -delete 2>/dev/null && echo "[init] Deleted stale .db files" || echo "[init] No .db files found"
-rm -f road_damage.db ./road_damage.db 2>/dev/null || true
+echo "=== Creating DB ==="
+python -c "from app.database import Base, engine; import app.models.models; Base.metadata.create_all(bind=engine)"
 
-echo "[1/3] Running Alembic migrations..."
-alembic upgrade head || alembic upgrade heads
-
-echo "[2/3] Seeding default accounts..."
+echo "=== Seeding DB ==="
 python seed.py
 
-echo "[3/3] Starting server..."
-exec uvicorn app.main:app --host 0.0.0.0 --port "${PORT:-8000}"
+echo "=== Starting Server ==="
+uvicorn app.main:app --host 0.0.0.0 --port 10000
