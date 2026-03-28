@@ -57,13 +57,11 @@ def login_citizen(data: UserLogin, db: Session = Depends(get_db)):
 
 @router.post("/officer/login", response_model=TokenResponse)
 def login_officer(data: OfficerLogin, db: Session = Depends(get_db)):
-    from datetime import datetime
     officer = db.query(FieldOfficer).filter(FieldOfficer.email == data.email).first()
     if not officer or not verify_password(data.password, officer.hashed_password):
         raise HTTPException(401, "Invalid credentials")
     if not officer.is_active:
         raise HTTPException(403, "Account inactive")
-    officer.last_login = datetime.utcnow()
     role = "admin" if officer.is_admin else "officer"
     db.add(LoginLog(email=data.email, role=role))
     db.commit()
