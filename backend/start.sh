@@ -1,20 +1,17 @@
-git add backend/start.sh backend/app/dependencies.py backend/app/schemas/schemas.py
-git commit -m "fix: add dependencies.py, schemas, run migrations on start"
-git push origin main
-```
+#!/usr/bin/env bash
+set -euo pipefail
 
-**3 — Fix Render dashboard start command:**
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR"
 
-Go to Render → your service → **Settings** → **Start Command** → change it to:
-```
-cd backend && bash start.sh
-```
+PORT="${PORT:-8000}"
 
-Click **Save** → it will auto-redeploy.
+echo "==> Running Alembic migrations..."
+python -m alembic -c alembic.ini upgrade head
+echo "==> Migrations complete"
 
-**4 — Watch logs for:**
-```
-==> Running Alembic migrations...
-==> Migrations complete
-==> Starting server on port 10000
-Your service is live 🎉
+echo "==> Running seed..."
+python seed.py || echo "Seed skipped"
+
+echo "==> Starting server on port $PORT..."
+exec python -m uvicorn app.main:app --host 0.0.0.0 --port "$PORT"
