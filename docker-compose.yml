@@ -19,12 +19,18 @@ services:
     ports:
       - "8000:8000"
     environment:
+      APP_ENV: development
       DATABASE_URL: postgresql://road_user:road_pass@db:5432/road_damage_db
       SECRET_KEY: ${SECRET_KEY:-change-me-in-production}
+      CORS_ORIGINS: http://localhost:3000,http://127.0.0.1:3000,http://localhost:8000,http://127.0.0.1:8000
       UPLOAD_DIR: /app/uploads
       YOLO_MODEL_PATH: /app/ai_model/road_damage_yolov8.pt
-      SENDGRID_API_KEY: ${SENDGRID_API_KEY:-}
-      FROM_EMAIL: ${FROM_EMAIL:-noreply@example.com}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      EMAIL_FROM: "${EMAIL_FROM:-RoadWatch <noreply@roadwatch.app>}"
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@roadwatch.app}
+      BASE_URL: ${BASE_URL:-http://localhost:8000}
     volumes:
       - uploads_data:/app/uploads
       - ./ai_model:/app/ai_model

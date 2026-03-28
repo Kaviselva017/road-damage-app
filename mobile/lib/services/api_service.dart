@@ -3,7 +3,14 @@ import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class ApiService {
-  static const String baseUrl = 'http://YOUR_SERVER_IP:8000/api';
+  static const String _configuredBaseUrl =
+      String.fromEnvironment('ROADWATCH_API_URL', defaultValue: '');
+  static String get baseUrl {
+    if (_configuredBaseUrl.isNotEmpty) return _configuredBaseUrl;
+    if (Platform.isAndroid) return 'http://10.0.2.2:8000/api';
+    return 'http://127.0.0.1:8000/api';
+  }
+
   final Dio _dio = Dio(BaseOptions(baseUrl: baseUrl));
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
 
@@ -45,17 +52,44 @@ class ApiService {
     required double latitude,
     required double longitude,
     String? address,
+    String? areaType,
+    double? impactScore,
+    int? sensitiveLocationCount,
     required File image,
   }) async {
     final formData = FormData.fromMap({
       'latitude': latitude,
       'longitude': longitude,
       if (address != null) 'address': address,
+      if (areaType != null) 'area_type': areaType,
+      if (impactScore != null) 'impact_score': impactScore,
+      if (sensitiveLocationCount != null)
+        'sensitive_location_count': sensitiveLocationCount,
       'image': await MultipartFile.fromFile(image.path,
           filename: image.path.split('/').last),
     });
     final res = await _dio.post('/complaints/submit', data: formData);
     return res.data;
+  }
+
+  Future<Map<String, dynamic>> previewPriority({
+    required double latitude,
+    required double longitude,
+    String? address,
+    String? areaType,
+    double? impactScore,
+    int? sensitiveLocationCount,
+  }) async {
+    final res = await _dio.get('/complaints/priority/preview', queryParameters: {
+      'latitude': latitude,
+      'longitude': longitude,
+      if (address != null) 'address': address,
+      if (areaType != null) 'area_type': areaType,
+      if (impactScore != null) 'impact_score': impactScore,
+      if (sensitiveLocationCount != null)
+        'sensitive_location_count': sensitiveLocationCount,
+    });
+    return Map<String, dynamic>.from(res.data as Map);
   }
 
   Future<List<dynamic>> getMyComplaints() async {

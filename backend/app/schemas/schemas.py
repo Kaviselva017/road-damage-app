@@ -84,6 +84,14 @@ class OfficerOut(BaseModel):
     class Config:
         from_attributes = True
 
+class OfficerDirectoryOut(BaseModel):
+    id: int
+    name: str
+    zone: Optional[str]
+
+    class Config:
+        from_attributes = True
+
 class MessageCreate(BaseModel):
     message: str
 

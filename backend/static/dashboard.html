@@ -343,6 +343,8 @@ body{
 <script>
 const BASE = window.location.origin;
 const API = `${BASE}/api`;
+const INDIA_TIMEZONE = 'Asia/Kolkata';
+const DATE_FORMATTER = new Intl.DateTimeFormat('en-IN', { timeZone: INDIA_TIMEZONE, day: '2-digit', month: 'short', year: 'numeric' });
 let token = localStorage.getItem('officer_token');
 let officerName = localStorage.getItem('officer_name');
 let allComplaints = [];
@@ -353,6 +355,26 @@ let selectedId = null;
 let priorityMode = false;
 let afterPhotoFor = null;
 const afterPhotos = {};
+
+function parseDateValue(value) {
+  if (!value) return null;
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
+  let normalized = String(value).trim();
+  if (!normalized) return null;
+  normalized = normalized.replace(' ', 'T');
+  if (/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
+    normalized = `${normalized}T00:00:00Z`;
+  } else if (!/(Z|[+-]\d{2}:\d{2})$/i.test(normalized)) {
+    normalized = `${normalized}Z`;
+  }
+  const parsed = new Date(normalized);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function formatDate(value) {
+  const parsed = parseDateValue(value);
+  return parsed ? DATE_FORMATTER.format(parsed) : '--';
+}
 
 // ── Init ──────────────────────────────────────────────
 function init() {
@@ -478,7 +500,7 @@ function renderList(items) {
         <div class="c-status st-${c.status}">${c.status.replace('_',' ')}</div>
       </div>
       <div class="c-row2">
-        <strong>${c.damage_type.replace('_',' ')}</strong> · ${c.severity.toUpperCase()} · ${new Date(c.created_at).toLocaleDateString()}
+        <strong>${c.damage_type.replace('_',' ')}</strong> · ${c.severity.toUpperCase()} · ${formatDate(c.created_at)}
       </div>
       ${c.address ? `<div class="c-row2" style="margin-top:2px;font-size:0.7rem;opacity:0.7">${c.address.substring(0,50)}</div>` : ''}
     </div>
@@ -689,7 +711,7 @@ function renderDetail(c) {
       <div class="info-cell"><div class="info-label">Type</div><div class="info-value">${c.damage_type.replace('_',' ')}</div></div>
       <div class="info-cell"><div class="info-label">Severity</div><div class="info-value"><span class="sev-badge sev-${c.severity}">${c.severity.toUpperCase()}</span></div></div>
       <div class="info-cell"><div class="info-label">AI Confidence</div><div class="info-value">${((c.ai_confidence||0)*100).toFixed(1)}%</div></div>
-      <div class="info-cell"><div class="info-label">Reported</div><div class="info-value">${new Date(c.created_at).toLocaleDateString()}</div></div>
+      <div class="info-cell"><div class="info-label">Reported</div><div class="info-value">${formatDate(c.created_at)}</div></div>
     </div>
 
     ${c.description ? `<div style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:0.7rem;margin-bottom:0.8rem;font-size:0.8rem;color:var(--muted);line-height:1.5">${c.description}</div>` : ''}

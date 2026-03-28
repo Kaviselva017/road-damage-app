@@ -2,16 +2,61 @@ services:
   - type: web
     name: roadwatch-api
     env: python
-    buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    buildCommand: pip install -r backend/requirements.txt
+    startCommand: cd backend && bash start.sh
     envVars:
+      - key: APP_ENV
+        value: production
+
+      # Database — SQLite for free tier (data resets on redeploy)
+      # For persistent data, create a Render PostgreSQL DB and use its URL instead
       - key: DATABASE_URL
         value: sqlite:///./road_damage.db
+
+      # Security — set this in Render dashboard, NOT here
       - key: SECRET_KEY
-        value: roadwatch-secure-key-2026
+        sync: false
+
       - key: ALGORITHM
         value: HS256
       - key: ACCESS_TOKEN_EXPIRE_MINUTES
-        value: 10080
+        value: "10080"
+
+      # CORS — your live URL
+      - key: CORS_ORIGINS
+        value: https://road-damage-appsystem.onrender.com
+
+      # File storage
       - key: UPLOAD_DIR
         value: uploads
+
+      # AI model path (mock mode if file not present)
+      - key: YOLO_MODEL_PATH
+        value: ai_model/road_damage_yolov8.pt
+
+      # ── EMAIL (Gmail SMTP) ─────────────────────────────────
+      # Set these in Render Dashboard → Environment Variables
+      # SMTP_USER  = kaviselvakumar2005@gmail.com
+      # SMTP_PASS  = your 16-char Gmail app password (no spaces)
+      # EMAIL_FROM = kaviselvakumar2005@gmail.com
+      # ADMIN_EMAIL = kaviselvakumar2005@gmail.com
+      - key: SMTP_SERVER
+        value: smtp.gmail.com
+      - key: SMTP_PORT
+        value: "587"
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: EMAIL_FROM
+        sync: false
+      - key: ADMIN_EMAIL
+        sync: false
+
+      # App base URL (used in email links)
+      - key: BASE_URL
+        value: https://road-damage-appsystem.onrender.com
+
+      # ── RESEND (optional fallback) ─────────────────────────
+      - key: RESEND_API_KEY
+        sync: false

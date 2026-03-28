@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../services/api_service.dart';
 
@@ -9,6 +10,7 @@ class MyComplaintsScreen extends StatefulWidget {
 }
 
 class _MyComplaintsScreenState extends State<MyComplaintsScreen> {
+  static final DateFormat _reportDateTimeFormat = DateFormat('dd MMM yyyy, hh:mm a');
   late Future<List<dynamic>> _complaints;
 
   @override
@@ -37,6 +39,30 @@ class _MyComplaintsScreenState extends State<MyComplaintsScreen> {
 
   String _statusLabel(String status) {
     return status.replaceAll('_', ' ').toUpperCase();
+  }
+
+  DateTime? _parseDateValue(dynamic value) {
+    if (value == null) return null;
+    var text = value.toString().trim();
+    if (text.isEmpty) return null;
+    text = text.replaceFirst(' ', 'T');
+    final hasOffset = RegExp(r'(Z|[+-]\d{2}:\d{2})$').hasMatch(text);
+    if (RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(text)) {
+      text = '${text}T00:00:00Z';
+    } else if (!hasOffset) {
+      text = '${text}Z';
+    }
+    try {
+      return DateTime.parse(text).toUtc().add(const Duration(hours: 5, minutes: 30));
+    } catch (_) {
+      return null;
+    }
+  }
+
+  String _formatReportedAt(dynamic value) {
+    final parsed = _parseDateValue(value);
+    if (parsed == null) return '--';
+    return '${_reportDateTimeFormat.format(parsed)} IST';
   }
 
   @override
@@ -116,6 +142,17 @@ class _MyComplaintsScreenState extends State<MyComplaintsScreen> {
                           Expanded(child: Text(c['address'],
                               style: const TextStyle(color: Colors.white60, fontSize: 12))),
                         ]),
+                      const SizedBox(height: 8),
+                      Row(children: [
+                        const Icon(Icons.schedule, size: 14, color: Colors.white38),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            'Registered ${_formatReportedAt(c['created_at'])}',
+                            style: const TextStyle(color: Colors.white60, fontSize: 12),
+                          ),
+                        ),
+                      ]),
                       if (c['description'] != null) ...[
                         const SizedBox(height: 8),
                         Text(c['description'],

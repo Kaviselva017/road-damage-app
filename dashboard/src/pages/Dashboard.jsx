@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../services/AuthContext';
 import { api } from '../services/api';
+import { formatDate } from '../utils/dateTime';
 
 const SEVERITY_COLORS = { high: '#e05c5c', medium: '#f5a623', low: '#3ecfb2' };
 const STATUS_COLORS = {
@@ -122,7 +123,7 @@ export default function Dashboard() {
                     </span>
                   </td>
                   <td style={{ ...styles.td, fontSize: 12, color: '#7a8299' }}>
-                    {new Date(c.created_at).toLocaleDateString()}
+                    {formatDate(c.created_at)}
                   </td>
                   <td style={styles.td}>
                     <button onClick={() => navigate(`/complaint/${c.complaint_id}`)} style={styles.btnSmall}>

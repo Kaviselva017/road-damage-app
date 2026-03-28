@@ -1,0 +1,95 @@
+name: Backend CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: sqlite:///./backend/ci.db
+      ROADWATCH_BASE: http://127.0.0.1:8000
+      APP_ENV: development
+      SECRET_KEY: ci-secret-key-not-for-production
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: |
+            backend/requirements.txt
+            backend/requirements-dev.txt
+
+      - name: Verify repository hygiene
+        run: python scripts/check_repo_hygiene.py
+
+      - name: Install backend dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r backend/requirements-dev.txt
+
+      - name: Verify Python modules compile
+        run: |
+          python -m compileall backend/app backend/test_roadwatch.py backend/test_officer_directory_security.py backend/test_notification_persistence.py backend/test_priority_scoring.py backend/test_non_road_rejection.py backend/ws_manager.py backend/alembic backend/seed.py
+
+      - name: Seed database
+        run: python backend/seed.py
+
+      - name: Run end-to-end integration suite
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          python -m uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 8000 > backend-ci.log 2>&1 &
+          UVICORN_PID=$!
+
+          cleanup() {
+            kill "$UVICORN_PID" || true
+          }
+          trap cleanup EXIT
+
+          for i in {1..20}; do
+            if curl --fail --silent "$ROADWATCH_BASE/healthz" > /dev/null; then
+              break
+            fi
+            sleep 2
+          done
+
+          if ! curl --fail --silent "$ROADWATCH_BASE/healthz" > /dev/null; then
+            echo "Backend failed to become healthy"
+            cat backend-ci.log
+            exit 1
+          fi
+
+          if ! python backend/test_roadwatch.py; then
+            cat backend-ci.log
+            exit 1
+          fi
+
+          if ! python backend/test_officer_directory_security.py; then
+            cat backend-ci.log
+            exit 1
+          fi
+
+          if ! python backend/test_notification_persistence.py; then
+            cat backend-ci.log
+            exit 1
+          fi
+
+          if ! python backend/test_priority_scoring.py; then
+            cat backend-ci.log
+            exit 1
+          fi
+
+          if ! python backend/test_non_road_rejection.py; then
+            cat backend-ci.log
+            exit 1
+          fi

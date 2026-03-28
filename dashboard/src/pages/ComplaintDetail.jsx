@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../services/AuthContext';
 import { api } from '../services/api';
+import { formatDateTime } from '../utils/dateTime';
 
 const SEVERITY_COLORS = { high: '#e05c5c', medium: '#f5a623', low: '#3ecfb2' };
 
@@ -65,7 +66,7 @@ export default function ComplaintDetail() {
           <div style={{ background: '#161a23', borderRadius: 12, padding: 20, border: '1px solid #252b38', marginBottom: 16 }}>
             <h2 style={{ margin: '0 0 4px', color: '#f5a623' }}>{complaint.complaint_id}</h2>
             <p style={{ color: '#7a8299', margin: '0 0 16px', fontSize: 13 }}>
-              Reported {new Date(complaint.created_at).toLocaleString()}
+              Reported {formatDateTime(complaint.created_at)}
             </p>
             <Row label="Latitude" value={complaint.latitude} />
             <Row label="Longitude" value={complaint.longitude} />
