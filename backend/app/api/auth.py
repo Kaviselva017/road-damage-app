@@ -13,7 +13,7 @@ from app.schemas.schemas import (
 from app.services.auth_service import create_access_token, hash_password, verify_password
 from app.services import notification_service as ns
 
-router = APIRouter(prefix="/auth", tags=["auth"])
+router = APIRouter(tags=["auth"])
 
 
 @router.post("/register", response_model=TokenResponse)
