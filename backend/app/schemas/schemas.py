@@ -105,3 +105,26 @@ class MessageOut(BaseModel):
 
     class Config:
         from_attributes = True
+
+# --- Missing schemas needed by auth.py ---
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    name: str
+
+class UserRegister(BaseModel):
+    name: str
+    email: EmailStr
+    password: str
+    phone: Optional[str] = None
+
+class OfficerLogin(BaseModel):
+    email: EmailStr
+    password: str
+
+class OfficerRegister(BaseModel):
+    name: str
+    email: EmailStr
+    password: str
+    phone: Optional[str] = None
+    zone: Optional[str] = None
