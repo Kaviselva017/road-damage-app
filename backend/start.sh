@@ -23,18 +23,32 @@ try:
     conn = sqlite3.connect(db_path)
     cur = conn.cursor()
 
+    # field_officers patches
     cur.execute("PRAGMA table_info(field_officers)")
     cols = [row[1] for row in cur.fetchall()]
-    print(f"[patch] Existing columns: {cols}")
+    print(f"[patch] field_officers columns: {cols}")
 
     if "last_login" not in cols:
         cur.execute("ALTER TABLE field_officers ADD COLUMN last_login DATETIME")
         conn.commit()
-        print("[patch] Added last_login column")
+        print("[patch] Added last_login")
     else:
         print("[patch] last_login already exists")
 
+    # users patches
+    cur.execute("PRAGMA table_info(users)")
+    ucols = [row[1] for row in cur.fetchall()]
+    print(f"[patch] users columns: {ucols}")
+
+    if "reward_points" not in ucols:
+        cur.execute("ALTER TABLE users ADD COLUMN reward_points INTEGER DEFAULT 0")
+        conn.commit()
+        print("[patch] Added reward_points")
+    else:
+        print("[patch] reward_points already exists")
+
     conn.close()
+    print("[patch] Done")
 except Exception as e:
     print(f"[patch] ERROR: {e}")
 
