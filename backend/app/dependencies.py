@@ -1,10 +1,41 @@
-"""
-app/dependencies.py — re-exports auth helpers for import convenience
-"""
-from app.services.auth_service import (
-    get_current_user,
-    get_current_officer,
-    get_current_admin,
-)
+from fastapi import Depends, HTTPException
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from sqlalchemy.orm import Session
 
-__all__ = ["get_current_user", "get_current_officer", "get_current_admin"]
+from app.database import get_db
+from app.services.auth_service import decode_token
+from app.models.models import User, FieldOfficer
+
+bearer = HTTPBearer(auto_error=False)
+
+
+def _token(creds: HTTPAuthorizationCredentials = Depends(bearer)) -> str:
+    if not creds:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    return creds.credentials
+
+
+def get_current_user(token: str = Depends(_token), db: Session = Depends(get_db)) -> User:
+    payload = decode_token(token)
+    if not payload or payload.get("role") != "citizen":
+        raise HTTPException(status_code=401, detail="Invalid citizen token")
+    user = db.query(User).filter(User.id == payload.get("sub")).first()
+    if not user or not user.is_active:
+        raise HTTPException(status_code=401, detail="User not found or inactive")
+    return user
+
+
+def get_current_officer(token: str = Depends(_token), db: Session = Depends(get_db)) -> FieldOfficer:
+    payload = decode_token(token)
+    if not payload or payload.get("role") not in ("officer", "admin"):
+        raise HTTPException(status_code=401, detail="Invalid officer token")
+    officer = db.query(FieldOfficer).filter(FieldOfficer.id == payload.get("sub")).first()
+    if not officer or not officer.is_active:
+        raise HTTPException(status_code=401, detail="Officer not found or inactive")
+    return officer
+
+
+def get_current_admin(officer: FieldOfficer = Depends(get_current_officer)) -> FieldOfficer:
+    if not officer.is_admin:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return officer

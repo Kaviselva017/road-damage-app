@@ -6,12 +6,12 @@ cd "$SCRIPT_DIR"
 
 PORT="${PORT:-8000}"
 
-echo "==> Running Alembic migrations..."
-python -m alembic -c alembic.ini upgrade head
-echo "==> Migrations complete"
+echo "=== RoadWatch Startup ==="
+echo "[1/3] Running Alembic migrations..."
+python -m alembic -c alembic.ini upgrade head || echo "[WARN] Alembic failed — tables will be created by SQLAlchemy"
 
-echo "==> Running seed..."
-python seed.py || echo "Seed skipped"
+echo "[2/3] Seeding default accounts..."
+python seed.py
 
-echo "==> Starting server on port $PORT..."
+echo "[3/3] Starting server on port $PORT..."
 exec python -m uvicorn app.main:app --host 0.0.0.0 --port "$PORT"

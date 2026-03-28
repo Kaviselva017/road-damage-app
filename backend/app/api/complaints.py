@@ -1,448 +1,396 @@
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, status, WebSocket, WebSocketDisconnect, Request
+"""
+RoadWatch — Complaints API
+Uses plain strings for status/severity/damage_type — no SQLAlchemy Enum issues.
+All datetimes returned with Z suffix for correct browser parsing.
+"""
+import logging
+import os
+import uuid
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Optional
+
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from sqlalchemy.orm import Session
-from typing import List, Optional
-from datetime import datetime
-import uuid, os, shutil
 
 from app.database import get_db
-from app.models.models import Complaint, User, FieldOfficer, SeverityLevel, ComplaintStatus
-from app.services.auth_service import get_current_user, get_current_officer
-from app.services.ai_service import analyze_image
+from app.dependencies import get_current_officer, get_current_user
+from app.models.models import Complaint, ComplaintOfficer, FieldOfficer, Notification, User
+from app.schemas.schemas import FundUpdate, StatusUpdate
+from app.services import ai_service
+from app.ws_manager import manager
 
-router = APIRouter()
+logger = logging.getLogger(__name__)
+router = APIRouter(prefix="/complaints", tags=["complaints"])
 
 UPLOAD_DIR = os.getenv("UPLOAD_DIR", "uploads")
-os.makedirs(UPLOAD_DIR, exist_ok=True)
+Path(UPLOAD_DIR).mkdir(parents=True, exist_ok=True)
 
-try:
-    from ws_manager import manager as ws_manager
-    WS_ENABLED = True
-except ImportError:
-    WS_ENABLED = False
+VALID_STATUSES  = {"pending", "assigned", "in_progress", "completed", "rejected"}
+VALID_SEVERITIES = {"high", "medium", "low"}
+VALID_DAMAGES   = {"pothole", "crack", "surface_damage", "multiple"}
 
-def generate_complaint_id():
-    return f"RD-{datetime.now().strftime('%Y%m%d')}-{str(uuid.uuid4())[:6].upper()}"
 
-@router.websocket("/ws/officer")
-async def websocket_officer(websocket: WebSocket):
-    if not WS_ENABLED:
-        await websocket.close(); return
-    await ws_manager.connect(websocket)
-    try:
-        while True:
-            await websocket.receive_text()
-    except WebSocketDisconnect:
-        ws_manager.disconnect(websocket)
+def _now():
+    return datetime.utcnow()
 
+
+def _iso(dt: Optional[datetime]) -> Optional[str]:
+    """Always return ISO with Z so ALL browsers parse correctly."""
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.isoformat().replace("+00:00", "Z")
+
+
+def _area(addr: str) -> str:
+    a = (addr or "").lower()
+    if any(w in a for w in ["hospital", "clinic", "medical", "health"]): return "hospital"
+    if any(w in a for w in ["school", "college", "university", "academy"]): return "school"
+    if any(w in a for w in ["highway", "nh-", "sh-", "expressway"]): return "highway"
+    if any(w in a for w in ["mall", "market", "shopping", "commercial"]): return "market"
+    return "residential"
+
+
+def _priority(sev: str, dmg: str, area: str) -> float:
+    s = {"high": 35, "medium": 20, "low": 10}.get(sev, 10)
+    d = {"pothole": 5, "multiple": 8, "crack": 3, "surface_damage": 2}.get(dmg, 0)
+    a = {"hospital": 30, "school": 25, "highway": 25, "market": 20, "residential": 10}.get(area, 10)
+    t = {"hospital": 20, "school": 18, "market": 18, "highway": 16, "residential": 8}.get(area, 8)
+    r = {"pothole": 15, "multiple": 14, "crack": 8, "surface_damage": 6}.get(dmg, 6)
+    return min(float(s + d + a + t + r), 100.0)
+
+
+def _best_officer(db: Session) -> Optional[FieldOfficer]:
+    officers = db.query(FieldOfficer).filter(
+        FieldOfficer.is_active == True,
+        FieldOfficer.is_admin  == False,
+    ).all()
+    if not officers:
+        return None
+    return min(officers, key=lambda o: db.query(Complaint).filter(
+        Complaint.officer_id == o.id,
+        Complaint.status.in_(["pending", "assigned"]),
+    ).count())
+
+
+def _c(c: Complaint, db: Session) -> dict:
+    oname, uname = None, None
+    if c.officer_id:
+        o = db.query(FieldOfficer).filter(FieldOfficer.id == c.officer_id).first()
+        oname = o.name if o else None
+    if c.user_id:
+        u = db.query(User).filter(User.id == c.user_id).first()
+        uname = u.name if u else None
+    return {
+        "id":             c.id,
+        "complaint_id":   c.complaint_id,
+        "user_id":        c.user_id,
+        "officer_id":     c.officer_id,
+        "officer_name":   oname,
+        "citizen_name":   uname,
+        "latitude":       c.latitude,
+        "longitude":      c.longitude,
+        "address":        c.address,
+        "area_type":      c.area_type,
+        "damage_type":    c.damage_type,
+        "severity":       c.severity,
+        "ai_confidence":  c.ai_confidence,
+        "description":    c.description,
+        "image_url":      c.image_url,
+        "after_image_url": c.after_image_url,
+        "status":         c.status,
+        "officer_notes":  c.officer_notes,
+        "priority_score": c.priority_score,
+        "allocated_fund": c.allocated_fund,
+        "fund_note":      c.fund_note,
+        "is_duplicate":   c.is_duplicate,
+        "duplicate_of":   c.duplicate_of,
+        "created_at":     _iso(c.created_at),
+        "resolved_at":    _iso(c.resolved_at),
+    }
+
+
+# ── Submit ─────────────────────────────────────────────────────
 @router.post("/submit")
-async def submit_complaint(
-    request: Request,
-    latitude: float = Form(...),
+async def submit(
+    latitude:  float = Form(...),
     longitude: float = Form(...),
-    address: Optional[str] = Form(None),
-    image: UploadFile = File(...),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    address:   Optional[str] = Form(None),
+    image:     UploadFile = File(...),
+    db:        Session = Depends(get_db),
+    user:      User    = Depends(get_current_user),
 ):
-    try:
-        # Save image
-        ext = image.filename.split(".")[-1] if image.filename and "." in image.filename else "jpg"
-        filename = f"{uuid.uuid4()}.{ext}"
-        filepath = os.path.join(UPLOAD_DIR, filename)
-        with open(filepath, "wb") as f:
-            shutil.copyfileobj(image.file, f)
+    # Save image
+    ext      = Path(image.filename or "img.jpg").suffix or ".jpg"
+    fname    = f"{uuid.uuid4().hex}{ext}"
+    fpath    = Path(UPLOAD_DIR) / fname
+    img_bytes = await image.read()
+    with open(fpath, "wb") as f:
+        f.write(img_bytes)
 
-        # AI detection
-        try:
-            detection = analyze_image(filepath)
-            damage_type = detection.damage_type
-            severity = detection.severity
-            confidence = detection.confidence
-            description = detection.description
-        except Exception:
-            damage_type = "surface_damage"
-            severity = SeverityLevel.MEDIUM
-            confidence = 0.75
-            description = "Road damage detected."
-
-        # Duplicate check (simple distance check)
-        try:
-            existing = db.query(Complaint).filter(
-                Complaint.latitude.between(latitude - 0.0005, latitude + 0.0005),
-                Complaint.longitude.between(longitude - 0.0005, longitude + 0.0005),
-                Complaint.status != ComplaintStatus.COMPLETED
-            ).first()
-            if existing:
-                return {
-                    "warning": "duplicate",
-                    "message": f"Similar complaint already exists nearby: {existing.complaint_id}",
-                    "existing_complaint_id": existing.complaint_id
-                }
-        except Exception:
-            pass
-
-        # Get officer
-        officer = None
-        try:
-            officer = db.query(FieldOfficer).filter(FieldOfficer.is_active == True).first()
-        except Exception:
-            officer = db.query(FieldOfficer).first()
-
-        # Create complaint with only base columns (safe)
-        complaint = Complaint(
-            complaint_id=generate_complaint_id(),
-            user_id=current_user.id,
-            officer_id=officer.id if officer else None,
-            latitude=latitude,
-            longitude=longitude,
-            address=address,
-            damage_type=damage_type,
-            severity=severity,
-            ai_confidence=confidence,
-            description=description,
-            image_url=f"/uploads/{filename}",
-            status=ComplaintStatus.ASSIGNED if officer else ComplaintStatus.PENDING,
-            created_at=datetime.utcnow()
-        )
-
-        # Try setting extra columns if they exist
-        try:
-            complaint.allocated_fund = 0.0
-            complaint.priority_score = 0.0
-            complaint.is_duplicate = False
-        except Exception:
-            pass
-
-        db.add(complaint)
-        try:
-            current_user.points = (current_user.points or 0) + 10
-        except Exception:
-            pass
-        db.commit()
-        db.refresh(complaint)
-
-        # ── FULL EMERGENCY NOTIFICATION FLOW ─────────────────
-        import logging as _logging, traceback as _tb, threading as _threading
-        _log = _logging.getLogger(__name__)
-
-        # FIX: SQLAlchemy DetachedInstanceError — snapshot ALL values from ORM objects
-        # INTO plain Python types BEFORE the thread starts, because the DB session
-        # closes when this request ends, making lazy-loaded attributes inaccessible.
-        _citizen_email    = str(current_user.email or "")
-        _citizen_name     = str(current_user.name  or "")
-        _complaint_id     = str(complaint.complaint_id)
-        _sev_val          = complaint.severity.value if hasattr(complaint.severity, "value") else str(complaint.severity)
-        _dmg_val          = complaint.damage_type.value if hasattr(complaint.damage_type, "value") else str(complaint.damage_type)
-        _priority_val     = float(getattr(complaint, "priority_score", 0) or 0)
-        _address          = str(complaint.address or "")
-        _latitude         = float(complaint.latitude)
-        _longitude        = float(complaint.longitude)
-        _description      = str(complaint.description or "Road damage detected.")
-        _area_type        = str(getattr(complaint, "area_type", "unknown") or "unknown")
-        _status_val       = complaint.status.value if hasattr(complaint.status, "value") else str(complaint.status)
-
-        # Snapshot officer data too (also an ORM object)
-        _officer_email    = str(officer.email or "") if officer else ""
-        _officer_name     = str(officer.name  or "") if officer else ""
-        _officer_id       = officer.id if officer else None
-
-        # Build a lightweight plain-object complaint snapshot for notify functions
-        class _ComplaintSnap:
-            def __init__(self):
-                self.complaint_id  = _complaint_id
-                self.severity      = type("S", (), {"value": _sev_val})()
-                self.damage_type   = type("D", (), {"value": _dmg_val})()
-                self.priority_score= _priority_val
-                self.area_type     = _area_type
-                self.address       = _address
-                self.latitude      = _latitude
-                self.longitude     = _longitude
-                self.description   = _description
-
-        class _OfficerSnap:
-            def __init__(self):
-                self.email = _officer_email
-                self.name  = _officer_name
-                self.id    = _officer_id
-
-        _c_snap = _ComplaintSnap()
-        _o_snap = _OfficerSnap() if officer else None
-
-        def _send_notifications():
-            try:
-                from app.services.notification_service import (
-                    notify_admin_emergency,
-                    notify_officer_assigned,
-                    notify_citizen_submitted
-                )
-
-                _log.info(f"Sending notifications for {_complaint_id} sev={_sev_val} to={_citizen_email}")
-
-                ok1 = notify_citizen_submitted(
-                    citizen_email=_citizen_email,
-                    citizen_name=_citizen_name,
-                    complaint_id=_complaint_id,
-                    severity=_sev_val,
-                    address=_address,
-                    priority=_priority_val
-                )
-                _log.info(f"Citizen submit email: {'SENT' if ok1 else 'FAILED'} → {_citizen_email}")
-
-                if _sev_val == "high":
-                    ok2 = notify_admin_emergency(_c_snap, _citizen_name)
-                    _log.info(f"Admin emergency: {'SENT' if ok2 else 'FAILED'}")
-
-                if _o_snap:
-                    ok3 = notify_officer_assigned(_o_snap, _c_snap)
-                    _log.info(f"Officer email: {'SENT' if ok3 else 'FAILED'} → {_officer_email}")
-
-            except Exception as e:
-                _log.error(f"Notification error: {e}\n{_tb.format_exc()}")
-
-        _threading.Thread(target=_send_notifications, daemon=True).start()
-
-        # WebSocket broadcast
-        try:
-            if WS_ENABLED:
-                await ws_manager.broadcast_new_complaint(complaint)
-        except Exception:
-            pass
-
+    # Duplicate check
+    img_hash = ai_service.image_hash(img_bytes)
+    dup = db.query(Complaint).filter(
+        Complaint.image_hash == img_hash,
+        Complaint.status != "rejected",
+    ).first()
+    if dup:
         return {
-            "id": complaint.id,
-            "complaint_id": complaint.complaint_id,
-            "latitude": complaint.latitude,
-            "longitude": complaint.longitude,
-            "address": complaint.address,
-            "damage_type": complaint.damage_type.value if hasattr(complaint.damage_type, 'value') else str(complaint.damage_type),
-            "severity": complaint.severity.value if hasattr(complaint.severity, 'value') else str(complaint.severity),
-            "ai_confidence": complaint.ai_confidence,
-            "description": complaint.description,
-            "image_url": complaint.image_url,
-            "status": complaint.status.value if hasattr(complaint.status, 'value') else str(complaint.status),
-            "created_at": complaint.created_at.isoformat() + "Z" if complaint.created_at else None
+            "warning": "duplicate",
+            "existing_complaint_id": dup.complaint_id,
+            "message": "A similar complaint already exists.",
         }
 
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
+    # AI
+    ai = ai_service.analyze_image(str(fpath))
 
-@router.post("/{complaint_id}/after-photo")
-async def upload_after_photo(
-    complaint_id: str,
-    image: UploadFile = File(...),
-    db: Session = Depends(get_db),
-    current_officer: FieldOfficer = Depends(get_current_officer)
-):
-    c = db.query(Complaint).filter(Complaint.complaint_id == complaint_id).first()
-    if not c:
-        raise HTTPException(status_code=404, detail="Complaint not found")
-    ext = image.filename.split(".")[-1] if image.filename and "." in image.filename else "jpg"
-    filename = f"{uuid.uuid4()}_after.{ext}"
-    filepath = os.path.join(UPLOAD_DIR, filename)
-    with open(filepath, "wb") as f:
-        shutil.copyfileobj(image.file, f)
-    c.officer_notes = (c.officer_notes or "") + f"\n[AFTER_PHOTO:/uploads/{filename}]"
+    area     = _area(address or "")
+    priority = _priority(ai["severity"], ai["damage_type"], area)
+    cid      = f"RD-{_now().strftime('%Y%m%d')}-{uuid.uuid4().hex[:6].upper()}"
+    officer  = _best_officer(db)
+
+    c = Complaint(
+        complaint_id   = cid,
+        user_id        = user.id,
+        officer_id     = officer.id if officer else None,
+        latitude       = latitude,
+        longitude      = longitude,
+        address        = address,
+        area_type      = area,
+        damage_type    = ai["damage_type"],
+        severity       = ai["severity"],
+        ai_confidence  = ai["ai_confidence"],
+        description    = ai["description"],
+        image_url      = f"/uploads/{fname}",
+        image_hash     = img_hash,
+        status         = "assigned" if officer else "pending",
+        priority_score = priority,
+        allocated_fund = 0.0,
+        is_duplicate   = False,
+        created_at     = _now(),
+    )
+    db.add(c)
+    if officer:
+        db.add(ComplaintOfficer(complaint_id=cid, officer_id=officer.id, assigned_at=_now()))
+    user.reward_points = (user.reward_points or 0) + 10
+    db.flush()
+
+    db.add(Notification(
+        user_id      = user.id,
+        complaint_id = cid,
+        message      = f"Complaint {cid} registered and assigned to a field officer.",
+        type         = "submitted",
+        created_at   = _now(),
+    ))
     db.commit()
-    return {"after_image_url": f"/uploads/{filename}"}
 
+    # Email (non-blocking)
+    try:
+        from app.services.notification_service import notify_complaint_submitted
+        notify_complaint_submitted(
+            to_email=user.email, citizen_name=user.name,
+            complaint_id=cid, damage_type=ai["damage_type"],
+            severity=ai["severity"], priority_score=priority, area_type=area,
+        )
+    except Exception as e:
+        logger.warning(f"[Email] submit: {e}")
+
+    if ai["severity"] == "high":
+        try:
+            from app.services.notification_service import notify_admin_emergency
+            notify_admin_emergency(
+                complaint_id=cid, severity=ai["severity"],
+                damage_type=ai["damage_type"], address=address or "",
+                priority_score=priority, latitude=latitude, longitude=longitude,
+            )
+        except Exception as e:
+            logger.warning(f"[Email] admin alert: {e}")
+
+    try:
+        await manager.broadcast_new_complaint(c)
+    except Exception:
+        pass
+
+    return _c(c, db)
+
+
+# ── My complaints ──────────────────────────────────────────────
 @router.get("/my")
-def my_complaints(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    complaints = db.query(Complaint).filter(
-        Complaint.user_id == current_user.id
+def my_complaints(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    rows = db.query(Complaint).filter(
+        Complaint.user_id == user.id
     ).order_by(Complaint.created_at.desc()).all()
-    return [serialize_complaint(c) for c in complaints]
+    return [_c(r, db) for r in rows]
 
-@router.get("/{complaint_id}")
-def get_complaint(complaint_id: str, db: Session = Depends(get_db)):
-    c = db.query(Complaint).filter(Complaint.complaint_id == complaint_id).first()
-    if not c:
-        raise HTTPException(status_code=404, detail="Complaint not found")
-    return serialize_complaint(c)
 
+# ── Priority ranking ───────────────────────────────────────────
+@router.get("/priority/ranking")
+def priority_ranking(db: Session = Depends(get_db), _: FieldOfficer = Depends(get_current_officer)):
+    rows = db.query(Complaint).filter(
+        Complaint.status != "completed"
+    ).order_by(Complaint.priority_score.desc()).limit(50).all()
+    return [_c(r, db) for r in rows]
+
+
+# ── Budget recommendations ─────────────────────────────────────
+@router.get("/budget/recommendations")
+def budget_recs(db: Session = Depends(get_db), _: FieldOfficer = Depends(get_current_officer)):
+    rows = db.query(Complaint).filter(
+        Complaint.status.in_(["pending", "assigned", "in_progress"]),
+        Complaint.allocated_fund == 0,
+    ).order_by(Complaint.priority_score.desc()).limit(20).all()
+    est = {"pothole": 15000, "crack": 8000, "surface_damage": 25000, "multiple": 40000}
+    result = []
+    for r in rows:
+        d = _c(r, db)
+        base = est.get(r.damage_type, 15000)
+        mult = {"high": 1.5, "medium": 1.0, "low": 0.7}.get(r.severity, 1.0)
+        d["recommended_budget"] = round(base * mult)
+        result.append(d)
+    return result
+
+
+# ── Notifications ──────────────────────────────────────────────
+@router.get("/notifications/my")
+def my_notifications(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    rows = db.query(Notification).filter(
+        Notification.user_id == user.id
+    ).order_by(Notification.created_at.desc()).limit(50).all()
+    return [{"id": n.id, "user_id": n.user_id, "complaint_id": n.complaint_id,
+             "message": n.message, "type": n.type, "is_read": n.is_read,
+             "created_at": _iso(n.created_at)} for n in rows]
+
+
+@router.post("/notifications/read-all")
+def read_all(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    db.query(Notification).filter(
+        Notification.user_id == user.id, Notification.is_read == False
+    ).update({"is_read": True})
+    db.commit()
+    return {"status": "ok"}
+
+
+# ── Officer: list all ──────────────────────────────────────────
 @router.get("/")
 def list_complaints(
-    status: Optional[str] = None,
+    status:   Optional[str] = None,
     severity: Optional[str] = None,
-    skip: int = 0, limit: int = 100,
-    db: Session = Depends(get_db),
-    current_officer: FieldOfficer = Depends(get_current_officer)
+    db:       Session        = Depends(get_db),
+    officer:  FieldOfficer   = Depends(get_current_officer),
 ):
-    query = db.query(Complaint).filter(Complaint.officer_id == current_officer.id)
+    q = db.query(Complaint)
+    if not officer.is_admin:
+        q = q.filter(Complaint.officer_id == officer.id)
     if status:
-        try:
-            query = query.filter(Complaint.status == ComplaintStatus(status))
-        except Exception:
-            pass
+        q = q.filter(Complaint.status == status)
     if severity:
-        try:
-            query = query.filter(Complaint.severity == SeverityLevel(severity))
-        except Exception:
-            pass
-    complaints = query.order_by(Complaint.created_at.desc()).offset(skip).limit(limit).all()
-    return [serialize_complaint(c) for c in complaints]
+        q = q.filter(Complaint.severity == severity)
+    rows = q.order_by(Complaint.priority_score.desc(), Complaint.created_at.desc()).all()
+    return [_c(r, db) for r in rows]
 
+
+# ── Single complaint ───────────────────────────────────────────
+@router.get("/{complaint_id}")
+def get_complaint(complaint_id: str, request: Request, db: Session = Depends(get_db)):
+    from app.services.auth_service import decode_token
+    auth  = request.headers.get("Authorization", "")
+    token = auth.replace("Bearer ", "").strip()
+    if not token or not decode_token(token):
+        raise HTTPException(401, "Not authenticated")
+    c = db.query(Complaint).filter(Complaint.complaint_id == complaint_id).first()
+    if not c:
+        raise HTTPException(404, "Complaint not found")
+    return _c(c, db)
+
+
+# ── Update status ──────────────────────────────────────────────
 @router.patch("/{complaint_id}/status")
 async def update_status(
     complaint_id: str,
-    request: Request,
-    db: Session = Depends(get_db),
-    current_officer: FieldOfficer = Depends(get_current_officer)
+    data:    StatusUpdate,
+    db:      Session      = Depends(get_db),
+    officer: FieldOfficer = Depends(get_current_officer),
 ):
-    body = await request.json()
-    c = db.query(Complaint).filter(
-        Complaint.complaint_id == complaint_id,
-        Complaint.officer_id == current_officer.id
-    ).first()
+    if data.status not in VALID_STATUSES:
+        raise HTTPException(400, f"Invalid status. Use: {VALID_STATUSES}")
+    c = db.query(Complaint).filter(Complaint.complaint_id == complaint_id).first()
     if not c:
-        raise HTTPException(status_code=404, detail="Complaint not found")
-    try:
-        c.status = ComplaintStatus(body.get("status", c.status.value))
-    except Exception:
-        pass
-    if body.get("officer_notes"):
-        c.officer_notes = body["officer_notes"]
-    if c.status == ComplaintStatus.COMPLETED:
-        c.resolved_at = datetime.utcnow()
-    db.commit()
-    db.refresh(c)
-    
-    # Notify citizen of status change — snapshot values before any thread
-    try:
-        from app.services.notification_service import notify_citizen_status
-        from app.models.models import User
-        import threading as _t2, logging as _l2
-        citizen = db.query(User).filter(User.id == c.user_id).first()
-        if citizen:
-            # Snapshot to plain strings (avoids DetachedInstanceError in thread)
-            _ce  = str(citizen.email or "")
-            _cn  = str(citizen.name  or "")
-            _cid = str(c.complaint_id)
-            _ns  = str(body.get("status", ""))
-            _adr = str(c.address or "")
-            _on  = str(current_officer.name) if hasattr(current_officer, "name") else ""
-            def _send_status_notif():
-                try:
-                    ok = notify_citizen_status(
-                        citizen_email=_ce, citizen_name=_cn,
-                        complaint_id=_cid, new_status=_ns,
-                        address=_adr, officer_name=_on
-                    )
-                    _l2.getLogger(__name__).info(f"Status email {'SENT' if ok else 'FAILED'} → {_ce} [{_ns}]")
-                except Exception as ex:
-                    _l2.getLogger(__name__).warning(f"Status notification error: {ex}")
-            _t2.Thread(target=_send_status_notif, daemon=True).start()
-    except Exception as e:
-        import logging
-        logging.getLogger(__name__).warning(f"Status notification setup error: {e}")
-    try:
-        if WS_ENABLED:
-            await ws_manager.broadcast_status_update(c)
-    except Exception:
-        pass
-    return serialize_complaint(c)
+        raise HTTPException(404, "Complaint not found")
 
+    old = c.status
+    c.status = data.status
+    if data.officer_notes is not None:
+        c.officer_notes = data.officer_notes
+    if data.status == "completed":
+        c.resolved_at = _now()
+    db.flush()
+
+    if c.user_id and c.status != old:
+        msgs = {
+            "assigned":    f"Complaint {complaint_id} assigned to a field officer.",
+            "in_progress": f"Repair work started on complaint {complaint_id}.",
+            "completed":   f"Complaint {complaint_id} has been repaired! Thank you.",
+            "rejected":    f"Complaint {complaint_id} has been reviewed and closed.",
+        }
+        db.add(Notification(
+            user_id=c.user_id, complaint_id=complaint_id,
+            message=msgs.get(data.status, f"Status updated to {data.status}."),
+            type=data.status, created_at=_now(),
+        ))
+        db.commit()
+        try:
+            from app.services.notification_service import notify_status_update
+            user = db.query(User).filter(User.id == c.user_id).first()
+            if user:
+                notify_status_update(
+                    to_email=user.email, citizen_name=user.name,
+                    complaint_id=complaint_id, new_status=data.status,
+                    officer_notes=data.officer_notes or "", officer_name=officer.name,
+                )
+        except Exception as e:
+            logger.warning(f"[Email] status update: {e}")
+    else:
+        db.commit()
+
+    try:
+        await manager.broadcast_status_update(c)
+    except Exception:
+        pass
+
+    return _c(c, db)
+
+
+# ── Allocate fund ──────────────────────────────────────────────
 @router.patch("/{complaint_id}/fund")
-def allocate_fund(
+def fund(
     complaint_id: str,
-    request_data: dict,
-    db: Session = Depends(get_db),
-    current_officer: FieldOfficer = Depends(get_current_officer)
+    data:    FundUpdate,
+    db:      Session      = Depends(get_db),
+    officer: FieldOfficer = Depends(get_current_officer),
 ):
     c = db.query(Complaint).filter(Complaint.complaint_id == complaint_id).first()
     if not c:
-        raise HTTPException(status_code=404, detail="Complaint not found")
-    try:
-        c.allocated_fund = request_data.get("amount", 0)
-        c.fund_note = request_data.get("note", "")
-        c.fund_allocated_at = datetime.utcnow()
+        raise HTTPException(404, "Complaint not found")
+    c.allocated_fund    = data.amount
+    c.fund_note         = data.note
+    c.fund_allocated_at = _now()
+    db.flush()
+    if c.user_id:
+        db.add(Notification(
+            user_id=c.user_id, complaint_id=complaint_id,
+            message=f"Rs. {data.amount:,.0f} allocated for complaint {complaint_id}.",
+            type="funded", created_at=_now(),
+        ))
         db.commit()
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
-    return serialize_complaint(c)
-
-def serialize_complaint(c):
-    result = {
-        "id": c.id,
-        "complaint_id": c.complaint_id,
-        "latitude": c.latitude,
-        "longitude": c.longitude,
-        "address": c.address,
-        "damage_type": c.damage_type.value if hasattr(c.damage_type, 'value') else str(c.damage_type),
-        "severity": c.severity.value if hasattr(c.severity, 'value') else str(c.severity),
-        "ai_confidence": c.ai_confidence,
-        "description": c.description,
-        "image_url": c.image_url,
-        "status": c.status.value if hasattr(c.status, 'value') else str(c.status),
-        "officer_notes": c.officer_notes,
-        "created_at": (c.created_at.isoformat() + "Z") if c.created_at else (datetime.utcnow().isoformat() + "Z"),
-        "updated_at": str(c.updated_at) if c.updated_at else None,
-        "resolved_at": str(c.resolved_at) if c.resolved_at else None,
-    }
-    # Extra fields - safe get
-    for field in ["allocated_fund", "fund_note", "priority_score", "rainfall_mm", "traffic_volume", "road_age_years", "weather_condition", "is_duplicate", "duplicate_of"]:
         try:
-            result[field] = getattr(c, field, None)
-        except Exception:
-            result[field] = None
-    return result
-
-# ── NOTIFICATIONS ──────────────────────────────────────────
-@router.get("/notifications/my")
-def get_my_notifications(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    try:
-        from app.models.models import Notification
-        notifs = db.query(Notification).filter(
-            Notification.user_id == current_user.id
-        ).order_by(Notification.created_at.desc()).limit(30).all()
-        return [{
-            "id": n.id,
-            "type": n.type or "info",
-            "title": n.title or "",
-            "message": n.message or "",
-            "is_read": bool(n.is_read),
-            "complaint_id": n.complaint_id,
-            "created_at": n.created_at.isoformat() if n.created_at else None
-        } for n in notifs]
-    except Exception as e:
-        return []
-
-@router.post("/notifications/read-all")
-def mark_all_read(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    try:
-        from app.models.models import Notification
-        db.query(Notification).filter(
-            Notification.user_id == current_user.id,
-            Notification.is_read == False
-        ).update({"is_read": True})
+            from app.services.notification_service import notify_fund_allocated
+            user = db.query(User).filter(User.id == c.user_id).first()
+            if user:
+                notify_fund_allocated(user.email, user.name, complaint_id, data.amount, data.note or "")
+        except Exception as e:
+            logger.warning(f"[Email] fund: {e}")
+    else:
         db.commit()
-    except Exception:
-        pass
-    return {"success": True}
-
-@router.patch("/notifications/{notif_id}/read")
-def mark_one_read(
-    notif_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    try:
-        from app.models.models import Notification
-        n = db.query(Notification).filter(
-            Notification.id == notif_id,
-            Notification.user_id == current_user.id
-        ).first()
-        if n:
-            n.is_read = True
-            db.commit()
-    except Exception:
-        pass
-    return {"success": True}
+    return _c(c, db)

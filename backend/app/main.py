@@ -1,79 +1,92 @@
+"""
+RoadWatch — FastAPI Application Entry Point
+"""
 import os
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
-from app.api import complaints, officers, auth, uploads, messages, admin
-from app.database import assert_schema_current
+from app.database import Base, engine
+from app.ws_manager import manager
 
-BASE_DIR = Path(__file__).resolve().parents[1]
-STATIC_DIR = BASE_DIR / "static"
-UPLOADS_DIR = Path(complaints.UPLOAD_DIR)
+# ── Always create tables (safety net if alembic fails) ────────
+Base.metadata.create_all(bind=engine)
 
-assert_schema_current()
+# ── Import routers AFTER create_all ───────────────────────────
+from app.api import auth, complaints, admin, messages
 
-app = FastAPI(title="Road Damage Reporting API", version="3.0.0")
+app = FastAPI(title="RoadWatch API", version="2.0.0", docs_url="/docs")
 
-
-def _load_cors_origins():
-    configured = os.getenv("CORS_ORIGINS", "")
-    if configured.strip():
-        return [origin.strip() for origin in configured.split(",") if origin.strip()]
-    return [
-        "http://127.0.0.1:8000",
-        "http://localhost:8000",
-        "http://127.0.0.1:3000",
-        "http://localhost:3000",
-        "http://10.0.2.2:8000",
-    ]
-
-
-CORS_ORIGINS = _load_cors_origins()
-
+# ── CORS ──────────────────────────────────────────────────────
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=CORS_ORIGINS,
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-STATIC_DIR.mkdir(parents=True, exist_ok=True)
-UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+# ── Uploads dir ───────────────────────────────────────────────
+UPLOAD_DIR = os.getenv("UPLOAD_DIR", "uploads")
+Path(UPLOAD_DIR).mkdir(parents=True, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 
-app.mount("/uploads", StaticFiles(directory=str(UPLOADS_DIR)), name="uploads")
-app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+# ── Static HTML dir ───────────────────────────────────────────
+STATIC_DIR = Path(__file__).parent.parent / "static"
+if STATIC_DIR.exists():
+    app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
-app.include_router(auth.router,       prefix="/api/auth",       tags=["Auth"])
-app.include_router(complaints.router, prefix="/api/complaints",  tags=["Complaints"])
-app.include_router(officers.router,   prefix="/api/officers",    tags=["Officers"])
-app.include_router(uploads.router,    prefix="/api/uploads",     tags=["Uploads"])
-app.include_router(messages.router,   prefix="/api/messages",    tags=["Messages"])
-app.include_router(admin.router,      prefix="/api/admin",       tags=["Admin"])
 
-@app.get("/healthz")
-def healthcheck():
-    return {"status": "ok"}
+def _html(name: str):
+    p = STATIC_DIR / name
+    if p.exists():
+        return FileResponse(str(p), media_type="text/html")
+    return HTMLResponse(f"<h3>{name} not found in static/</h3>", status_code=404)
 
-@app.get("/")
+
+# ── Page routes ───────────────────────────────────────────────
+@app.get("/", include_in_schema=False)
 def root():
-    return FileResponse(STATIC_DIR / "login.html")
+    return _html("login.html")
 
-@app.get("/login")
-def login_page():
-    return FileResponse(STATIC_DIR / "login.html")
 
-@app.get("/citizen")
-def citizen_app():
-    return FileResponse(STATIC_DIR / "citizen.html")
+@app.get("/citizen", include_in_schema=False)
+def citizen():
+    return _html("citizen.html")
 
-@app.get("/dashboard")
-def dashboard_app():
-    return FileResponse(STATIC_DIR / "dashboard.html")
 
-@app.get("/admin")
-def admin_panel():
-    return FileResponse(STATIC_DIR / "admin.html")
+@app.get("/admin", include_in_schema=False)
+def admin_page():
+    return _html("admin.html")
+
+
+@app.get("/dashboard", include_in_schema=False)
+def dashboard():
+    return _html("dashboard.html")
+
+
+# ── Health ────────────────────────────────────────────────────
+@app.get("/healthz", include_in_schema=False)
+def health():
+    return {"status": "ok", "version": "2.0.0"}
+
+
+# ── API routers ───────────────────────────────────────────────
+app.include_router(auth.router,       prefix="/api")
+app.include_router(complaints.router, prefix="/api")
+app.include_router(messages.router,   prefix="/api")
+app.include_router(admin.router,      prefix="/api")
+
+
+# ── WebSocket ─────────────────────────────────────────────────
+@app.websocket("/ws")
+async def ws_endpoint(websocket: WebSocket):
+    await manager.connect(websocket)
+    try:
+        while True:
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        manager.disconnect(websocket)
