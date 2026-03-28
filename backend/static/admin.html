@@ -609,6 +609,8 @@ tr:hover td { background:rgba(255,255,255,0.02); }
 <script>
 const BASE = window.location.hostname === 'localhost' ? 'http://localhost:8000' : window.location.origin;
 const API = BASE + '/api';
+const _up = new URLSearchParams(window.location.search);
+if (_up.get('tk')) { localStorage.setItem('admin_token', _up.get('tk')); localStorage.setItem('admin_name', _up.get('nm') || 'admin'); }
 let token = localStorage.getItem('admin_token');
 let adminName = localStorage.getItem('admin_name');
 let allComplaints = [], allOfficers = [], allCitizens = [], stats = {};
@@ -1638,3 +1640,4 @@ function renderZoneCards() {
 </script>
 </body>
 </html>
+
