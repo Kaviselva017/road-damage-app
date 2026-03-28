@@ -1,17 +1,21 @@
-#!/usr/bin/env bash
-set -euo pipefail
+#!/bin/bash
+set -e
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-cd "$SCRIPT_DIR"
+cd /opt/render/project/src/backend
 
-PORT="${PORT:-8000}"
+echo "[start] Setting up database..."
 
-echo "=== RoadWatch Startup ==="
-echo "[1/3] Running Alembic migrations..."
-python -m alembic -c alembic.ini upgrade head || echo "[WARN] Alembic failed — tables will be created by SQLAlchemy"
+# Remove stale SQLite DB so models are recreated fresh (fixes missing column errors)
+if [ -f "road_damage.db" ]; then
+    echo "[start] Removing stale road_damage.db to apply schema changes..."
+    rm -f road_damage.db
+fi
 
-echo "[2/3] Seeding default accounts..."
+echo "[start] Running Alembic migrations..."
+alembic upgrade head
+
+echo "[start] Seeding database..."
 python seed.py
 
-echo "[3/3] Starting server on port $PORT..."
-exec python -m uvicorn app.main:app --host 0.0.0.0 --port "$PORT"
+echo "[start] Starting server..."
+uvicorn app.main:app --host 0.0.0.0 --port "${PORT:-8000}"
