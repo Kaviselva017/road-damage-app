@@ -1,80 +1,120 @@
 """
 AI Damage Detection Service
-Uses YOLOv8 for pothole/crack detection.
-Model file: ai_model/road_damage_yolov8.pt
+Uses YOLOv8 for pothole/crack detection when available.
+Falls back to deterministic PIL heuristics when the model runtime is unavailable.
 """
+import logging
 import os
-import random
 from pathlib import Path
-from app.schemas.schemas import AIDetectionResult
-from app.models.models import DamageType, SeverityLevel
 
-MODEL_PATH = os.getenv("YOLO_MODEL_PATH", "ai_model/road_damage_yolov8.pt")
+from app.models.models import DamageType, SeverityLevel
+from app.schemas.schemas import AIDetectionResult
+
+BASE_DIR = Path(__file__).resolve().parents[2]
+MODEL_PATH = os.getenv("YOLO_MODEL_PATH", str(BASE_DIR / "ai_model" / "road_damage_yolov8.pt"))
 
 _model = None
+logger = logging.getLogger(__name__)
+
+
+def _clamp(value: float, lower: float = 0.0, upper: float = 1.0) -> float:
+    return max(lower, min(upper, value))
+
+
+def _manual_review_result() -> AIDetectionResult:
+    return AIDetectionResult(
+        damage_type=DamageType.SURFACE_DAMAGE,
+        severity=SeverityLevel.MEDIUM,
+        confidence=0.0,
+        description="Road image accepted, but automated damage analysis is unavailable. Officer review required.",
+    )
+
 
 def get_model():
     global _model
     if _model is None:
         try:
             from ultralytics import YOLO
+
             if Path(MODEL_PATH).exists():
                 _model = YOLO(MODEL_PATH)
-                print(f"✅ YOLOv8 model loaded from {MODEL_PATH}")
+                logger.info("YOLOv8 model loaded from %s", MODEL_PATH)
             else:
-                print(f"⚠️  Model not found at {MODEL_PATH}. Using smart detection.")
+                logger.warning("YOLO model not found at %s. Using heuristic detection.", MODEL_PATH)
         except ImportError:
-            print("⚠️  ultralytics not installed. Using smart detection.")
+            logger.warning("ultralytics is not installed. Using heuristic detection.")
     return _model
 
 
 def is_road_image(image_path: str) -> tuple[bool, float]:
     """
-    Check if image contains a road using basic image analysis.
+    Check if image contains a road using lightweight PIL heuristics.
     Returns (is_road, confidence).
     """
     try:
-        from PIL import Image
-        import numpy as np
-        
-        img = Image.open(image_path).convert("RGB")
-        img = img.resize((224, 224))
-        arr = np.array(img, dtype=np.float32)
-        
-        # Road detection heuristics:
-        # 1. Gray/asphalt dominance (road surfaces are grayish)
-        r, g, b = arr[:,:,0], arr[:,:,1], arr[:,:,2]
-        
-        # Gray pixels: where R, G, B are close to each other
-        gray_mask = (np.abs(r.astype(int) - g.astype(int)) < 30) &                     (np.abs(g.astype(int) - b.astype(int)) < 30) &                     (np.abs(r.astype(int) - b.astype(int)) < 30)
-        gray_ratio = float(gray_mask.mean())
-        
-        # Dark asphalt: mean brightness < 150
-        brightness = float(arr.mean())
-        
-        # Horizontal texture: roads tend to have horizontal patterns
-        # Check bottom half (where road usually is)
-        bottom_half = arr[112:, :, :]
-        bottom_gray = float(((np.abs(bottom_half[:,:,0].astype(int) - bottom_half[:,:,1].astype(int)) < 30) & 
-                             (np.abs(bottom_half[:,:,1].astype(int) - bottom_half[:,:,2].astype(int)) < 30)).mean())
-        
-        # Score: combination of gray ratio, brightness, bottom gray
-        score = (gray_ratio * 0.4) + (bottom_gray * 0.4) + ((1 - min(brightness/255, 1)) * 0.2)
+        from PIL import Image, ImageFilter, ImageStat
 
-        # More permissive thresholds:
-        # - Concrete/light roads have high gray_ratio but high brightness
-        # - Wet/dark roads have low brightness
-        # - Dusty/red roads may have low gray_ratio
-        # Only reject if clearly NOT a road (very colorful, very bright sky-like image)
-        bright_colorful = brightness > 200 and gray_ratio < 0.15
-        is_road = not bright_colorful and (score > 0.12 or gray_ratio > 0.20 or bottom_gray > 0.20)
-        confidence = min(score * 2, 1.0)
-        
-        return is_road, confidence
-        
-    except Exception as e:
-        # If PIL fails, assume it could be a road
-        return True, 0.5
+        with Image.open(image_path) as opened:
+            rgb = opened.convert("RGB").resize((224, 224))
+
+        hsv = rgb.convert("HSV")
+        gray = rgb.convert("L")
+        bottom_rgb = rgb.crop((0, 112, 224, 224))
+        bottom_gray = bottom_rgb.convert("L")
+        edge_image = gray.filter(ImageFilter.FIND_EDGES)
+
+        brightness = ImageStat.Stat(gray).mean[0] / 255.0
+        saturation = ImageStat.Stat(hsv).mean[1] / 255.0
+        edge_density = ImageStat.Stat(edge_image).mean[0] / 255.0
+        variance = _clamp(ImageStat.Stat(gray).var[0] / (255.0 * 255.0))
+        bottom_variance = _clamp(ImageStat.Stat(bottom_gray).var[0] / (255.0 * 255.0))
+
+        sample_pixels = list(rgb.getdata())[::8]
+        bottom_pixels = list(bottom_rgb.getdata())[::4]
+
+        def _ratio(pixels, predicate) -> float:
+            if not pixels:
+                return 0.0
+            matches = sum(1 for pixel in pixels if predicate(pixel))
+            return matches / len(pixels)
+
+        gray_ratio = _ratio(sample_pixels, lambda pixel: max(pixel) - min(pixel) <= 32)
+        bottom_gray_ratio = _ratio(bottom_pixels, lambda pixel: max(pixel) - min(pixel) <= 34)
+        green_ratio = _ratio(
+            sample_pixels,
+            lambda pixel: pixel[1] > pixel[0] + 18 and pixel[1] > pixel[2] + 18,
+        )
+        blue_ratio = _ratio(
+            sample_pixels,
+            lambda pixel: pixel[2] > pixel[0] + 18 and pixel[2] > pixel[1] + 18,
+        )
+
+        texture_score = _clamp((edge_density * 2.8) + (variance * 3.5) + (bottom_variance * 2.2))
+        road_score = (
+            gray_ratio * 0.34
+            + bottom_gray_ratio * 0.28
+            + (1.0 - saturation) * 0.18
+            + texture_score * 0.15
+            + (1.0 - min(abs(brightness - 0.5) * 1.5, 1.0)) * 0.05
+        )
+        road_score -= (green_ratio * 0.22) + (blue_ratio * 0.18)
+        road_score = _clamp(road_score)
+
+        obviously_non_road = any(
+            (
+                brightness > 0.85 and edge_density < 0.02 and variance < 0.01,
+                saturation > 0.45 and gray_ratio < 0.16 and bottom_gray_ratio < 0.18,
+                green_ratio > 0.24 and bottom_gray_ratio < 0.18,
+                blue_ratio > 0.26 and bottom_gray_ratio < 0.18,
+            )
+        )
+
+        is_road = road_score >= 0.32 and not obviously_non_road
+        confidence = _clamp(road_score if is_road else 1.0 - road_score, 0.5, 0.99)
+        return is_road, round(confidence, 3)
+    except Exception as exc:
+        logger.warning("Road-image validation failed for %s: %s", image_path, exc)
+        return False, 0.0
 
 
 def analyze_image(image_path: str) -> AIDetectionResult:
@@ -82,23 +122,23 @@ def analyze_image(image_path: str) -> AIDetectionResult:
     Run detection on uploaded image.
     First checks if it's a road image, then detects damage.
     """
-    # Step 1: Check if image is a road
     is_road, road_confidence = is_road_image(image_path)
-    
+
     if not is_road:
         return AIDetectionResult(
             damage_type=DamageType.SURFACE_DAMAGE,
             severity=SeverityLevel.LOW,
             confidence=road_confidence,
-            description=f"⚠️ This image does not appear to be a road surface (confidence: {road_confidence:.0%}). Please upload a clear photo of the road damage."
+            description=(
+                "This image does not appear to be a road surface "
+                f"(confidence: {road_confidence:.0%}). Please upload a clear photo of the road damage."
+            ),
         )
-    
-    # Step 2: Run YOLO or smart detection
+
     model = get_model()
     if model is not None:
         return _run_yolo(model, image_path)
-    else:
-        return _smart_detection(image_path)
+    return _smart_detection(image_path)
 
 
 def _run_yolo(model, image_path: str) -> AIDetectionResult:
@@ -116,107 +156,97 @@ def _run_yolo(model, image_path: str) -> AIDetectionResult:
             damage_type=DamageType.SURFACE_DAMAGE,
             severity=SeverityLevel.LOW,
             confidence=0.0,
-            description="Road detected but no significant damage found. Minor surface wear observed."
+            description="Road detected but no significant damage found. Minor surface wear observed.",
         )
 
-    best = max(detections, key=lambda d: d["confidence"])
+    best = max(detections, key=lambda detection: detection["confidence"])
     damage_type = _map_label_to_type(best["label"])
     severity = _estimate_severity(best["confidence"], len(detections))
     return AIDetectionResult(
         damage_type=damage_type,
         severity=severity,
         confidence=round(best["confidence"], 3),
-        description=_generate_description(damage_type, severity, len(detections))
+        description=_generate_description(damage_type, severity, len(detections)),
     )
 
 
 def _smart_detection(image_path: str) -> AIDetectionResult:
     """
-    Smart detection using image analysis when YOLO model not available.
-    Analyzes texture, cracks, and surface irregularities.
+    Deterministic heuristic detection used when YOLO is unavailable.
     """
     try:
-        from PIL import Image, ImageFilter
-        import numpy as np
-        
-        img = Image.open(image_path).convert("L")  # grayscale
-        img = img.resize((256, 256))
-        arr = np.array(img, dtype=np.float32)
-        
-        # Edge detection for cracks/damage
-        from PIL import ImageFilter
-        edges = np.array(img.filter(ImageFilter.FIND_EDGES), dtype=np.float32)
-        edge_density = float(edges.mean()) / 255.0
-        
-        # Texture variance (damaged roads have high variance)
-        variance = float(arr.var()) / (255*255)
-        
-        # Dark spots (potholes are darker)
-        dark_ratio = float((arr < 80).mean())
-        
-        # Combine scores
-        damage_score = edge_density * 0.4 + variance * 0.4 + dark_ratio * 0.2
-        
+        from PIL import Image, ImageFilter, ImageStat
+
+        with Image.open(image_path) as opened:
+            gray = opened.convert("L").resize((256, 256))
+
+        edges = gray.filter(ImageFilter.FIND_EDGES)
+        edge_density = ImageStat.Stat(edges).mean[0] / 255.0
+        variance = _clamp(ImageStat.Stat(gray).var[0] / (255.0 * 255.0))
+
+        pixels = list(gray.getdata())
+        if not pixels:
+            return _manual_review_result()
+
+        dark_ratio = sum(1 for pixel in pixels if pixel < 80) / len(pixels)
+        mid_dark_ratio = sum(1 for pixel in pixels if pixel < 120) / len(pixels)
+        damage_score = (
+            edge_density * 0.42
+            + variance * 0.33
+            + dark_ratio * 0.15
+            + mid_dark_ratio * 0.10
+        )
+
         if damage_score > 0.15:
             if dark_ratio > 0.12:
-                dtype = DamageType.POTHOLE
+                damage_type = DamageType.POTHOLE
             elif edge_density > 0.12:
-                dtype = DamageType.CRACK
+                damage_type = DamageType.CRACK
             else:
-                dtype = DamageType.SURFACE_DAMAGE
-            
+                damage_type = DamageType.SURFACE_DAMAGE
+
             if damage_score > 0.25:
-                sev = SeverityLevel.HIGH
-                conf = min(0.75 + damage_score, 0.95)
+                severity = SeverityLevel.HIGH
+                confidence = min(0.75 + damage_score, 0.95)
             elif damage_score > 0.18:
-                sev = SeverityLevel.MEDIUM
-                conf = min(0.60 + damage_score, 0.85)
+                severity = SeverityLevel.MEDIUM
+                confidence = min(0.60 + damage_score, 0.85)
             else:
-                sev = SeverityLevel.LOW
-                conf = min(0.50 + damage_score, 0.75)
+                severity = SeverityLevel.LOW
+                confidence = min(0.50 + damage_score, 0.75)
         else:
-            dtype = DamageType.SURFACE_DAMAGE
-            sev = SeverityLevel.LOW
-            conf = 0.45
-            
+            damage_type = DamageType.SURFACE_DAMAGE
+            severity = SeverityLevel.LOW
+            confidence = 0.45
+
         return AIDetectionResult(
-            damage_type=dtype,
-            severity=sev,
-            confidence=round(conf, 3),
-            description=_generate_description(dtype, sev, 1)
+            damage_type=damage_type,
+            severity=severity,
+            confidence=round(confidence, 3),
+            description=_generate_description(damage_type, severity, 1),
         )
-        
-    except Exception:
-        return _mock_detection(image_path)
-
-
-def _mock_detection(image_path: str) -> AIDetectionResult:
-    types = [DamageType.POTHOLE, DamageType.CRACK, DamageType.SURFACE_DAMAGE]
-    severities = [SeverityLevel.LOW, SeverityLevel.MEDIUM, SeverityLevel.HIGH]
-    weights = [0.5, 0.35, 0.15]
-    damage_type = random.choices(types, k=1)[0]
-    severity = random.choices(severities, weights=weights, k=1)[0]
-    confidence = round(random.uniform(0.55, 0.85), 3)
-    return AIDetectionResult(
-        damage_type=damage_type,
-        severity=severity,
-        confidence=confidence,
-        description=_generate_description(damage_type, severity, 1)
-    )
+    except Exception as exc:
+        logger.warning("Heuristic damage detection failed for %s: %s", image_path, exc)
+        return _manual_review_result()
 
 
 def _map_label_to_type(label: str) -> DamageType:
-    if "pothole" in label: return DamageType.POTHOLE
-    elif "crack" in label or "linear" in label: return DamageType.CRACK
-    elif "multiple" in label or "alligator" in label: return DamageType.MULTIPLE
-    else: return DamageType.SURFACE_DAMAGE
+    if "pothole" in label:
+        return DamageType.POTHOLE
+    if "crack" in label or "linear" in label:
+        return DamageType.CRACK
+    if "multiple" in label or "alligator" in label:
+        return DamageType.MULTIPLE
+    return DamageType.SURFACE_DAMAGE
 
 
 def _estimate_severity(confidence: float, detection_count: int) -> SeverityLevel:
     score = confidence + (detection_count * 0.05)
-    if score >= 0.85: return SeverityLevel.HIGH
-    elif score >= 0.60: return SeverityLevel.MEDIUM
-    else: return SeverityLevel.LOW
+    if score >= 0.85:
+        return SeverityLevel.HIGH
+    if score >= 0.60:
+        return SeverityLevel.MEDIUM
+    return SeverityLevel.LOW
 
 
 def _generate_description(damage_type, severity, count: int) -> str:

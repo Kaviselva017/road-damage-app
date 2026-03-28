@@ -11,6 +11,35 @@ async function request(path, options = {}, token = null) {
   return res.json();
 }
 
+function stripApiSuffix(url) {
+  return url.replace(/\/api\/?$/, '');
+}
+
+export function getAppBaseUrl() {
+  try {
+    const resolved = new URL(BASE_URL, window.location.origin);
+    resolved.pathname = stripApiSuffix(resolved.pathname);
+    resolved.search = '';
+    resolved.hash = '';
+    return resolved.toString().replace(/\/$/, '');
+  } catch {
+    return stripApiSuffix(BASE_URL);
+  }
+}
+
+export function getOfficerSocketUrl() {
+  try {
+    const resolved = new URL(getAppBaseUrl(), window.location.origin);
+    resolved.protocol = resolved.protocol === 'https:' ? 'wss:' : 'ws:';
+    resolved.pathname = '/api/complaints/ws/officer';
+    resolved.search = '';
+    resolved.hash = '';
+    return resolved.toString();
+  } catch {
+    return `${getAppBaseUrl().replace(/^http/i, 'ws')}/api/complaints/ws/officer`;
+  }
+}
+
 export const api = {
   officerLogin: (email, password) =>
     request('/auth/officer/login', {

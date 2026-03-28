@@ -1,0 +1,9 @@
+INFO:     127.0.0.1:61816 - "POST /api/auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61817 - "POST /api/auth/officer/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61819 - "POST /api/auth/officer/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61823 - "POST /api/complaints/submit HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61828 - "GET /api/complaints/notifications/my HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61837 - "GET /api/admin/officers HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61846 - "PATCH /api/admin/complaints/RD-20260327-15D14D/reassign HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61853 - "PATCH /api/complaints/RD-20260327-15D14D/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61859 - "GET /api/complaints/notifications/my HTTP/1.1" 200 OK

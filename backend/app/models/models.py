@@ -2,7 +2,7 @@ from sqlalchemy import Column, Integer, String, Float, DateTime, Enum, ForeignKe
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.database import Base
-from datetime import datetime
+from app.utils.datetime_utils import utc_now
 import enum
 
 class SeverityLevel(str, enum.Enum):
@@ -52,6 +52,7 @@ class FieldOfficer(Base):
     phone = Column(String(20))
     hashed_password = Column(String(255), nullable=False)
     zone = Column(String(100))
+    is_admin = Column(Boolean, default=False)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     complaints = relationship("Complaint", back_populates="officer")
@@ -129,7 +130,7 @@ class Message(Base):
     sender_role = Column(String(20))
     sender_name = Column(String(100))
     message = Column(Text)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
     complaint = relationship("Complaint", back_populates="messages")
 
 class LoginLog(Base):
@@ -140,7 +141,7 @@ class LoginLog(Base):
     role = Column(String(20))
     name = Column(String(100), nullable=True)
     ip_address = Column(String(50))
-    logged_in_at = Column(DateTime, default=datetime.utcnow)
+    logged_in_at = Column(DateTime, default=utc_now)
     logout_at = Column(DateTime, nullable=True)
     session_duration_mins = Column(Integer, nullable=True)
     status = Column(String(20), default="success")
@@ -150,7 +151,7 @@ class ComplaintOfficer(Base):
     id = Column(Integer, primary_key=True, index=True)
     complaint_id = Column(String(20), ForeignKey("complaints.complaint_id"))
     officer_id = Column(Integer, ForeignKey("field_officers.id"))
-    assigned_at = Column(DateTime, default=datetime.utcnow)
+    assigned_at = Column(DateTime, default=utc_now)
     role = Column(String(50), default="field")
 
 class Notification(Base):
@@ -162,4 +163,4 @@ class Notification(Base):
     title = Column(String(200))
     message = Column(Text)
     is_read = Column(Boolean, default=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)

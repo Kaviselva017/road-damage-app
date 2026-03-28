@@ -14,9 +14,14 @@ class ReportScreen extends StatefulWidget {
 class _ReportScreenState extends State<ReportScreen> {
   File? _image;
   Position? _position;
+  Map<String, dynamic>? _priorityPreview;
   bool _isLoading = false;
+  bool _isSyncingPriority = false;
+  bool _locationDeniedForever = false;
+  bool _locationServicesDisabled = false;
   String? _result;
   String? _error;
+  String _locationStatus = 'Requesting location sync...';
 
   final ImagePicker _picker = ImagePicker();
 
@@ -30,22 +35,95 @@ class _ReportScreenState extends State<ReportScreen> {
   }
 
   Future<void> _getLocation() async {
+    if (mounted) {
+      setState(() {
+        _error = null;
+        _locationStatus = 'Checking GPS permission...';
+      });
+    }
     bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) {
-      setState(() => _error = 'Location services are disabled.');
+      if (!mounted) return;
+      setState(() {
+        _locationServicesDisabled = true;
+        _locationStatus = 'Location services are disabled.';
+        _error = 'Turn on device location to sync priority analysis faster.';
+      });
       return;
+    }
+    if (mounted) {
+      setState(() => _locationServicesDisabled = false);
     }
     LocationPermission permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
     }
-    if (permission == LocationPermission.deniedForever) {
-      setState(() => _error = 'Location permission permanently denied.');
+    if (permission == LocationPermission.denied) {
+      if (!mounted) return;
+      setState(() {
+        _locationStatus = 'Location permission denied.';
+        _error = 'Allow location access so GPS and priority analysis can sync automatically.';
+      });
       return;
     }
-    final pos = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high);
-    setState(() => _position = pos);
+    if (permission == LocationPermission.deniedForever) {
+      if (!mounted) return;
+      setState(() {
+        _locationDeniedForever = true;
+        _locationStatus = 'Location permission permanently denied.';
+        _error = 'Open app settings and allow location access to sync automatically.';
+      });
+      return;
+    }
+    try {
+      final pos = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+        timeLimit: const Duration(seconds: 15),
+      );
+      if (!mounted) return;
+      setState(() {
+        _position = pos;
+        _locationDeniedForever = false;
+        _locationStatus = 'Live GPS synced';
+      });
+      await _syncPriorityPreview();
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _locationStatus = 'Unable to read device GPS.';
+        _error = 'Could not get your live location. Try again in an open area.';
+      });
+    }
+  }
+
+  Future<void> _syncPriorityPreview() async {
+    if (_position == null) return;
+    if (mounted) {
+      setState(() => _isSyncingPriority = true);
+    }
+    try {
+      final api = context.read<ApiService>();
+      final preview = await api.previewPriority(
+        latitude: _position!.latitude,
+        longitude: _position!.longitude,
+      );
+      if (!mounted) return;
+      setState(() {
+        _priorityPreview = preview;
+        _locationStatus = (preview['duplicate_detected'] ?? false)
+            ? 'GPS synced with nearby reports'
+            : 'GPS and priority synced';
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _error ??= 'Priority preview sync failed. Submission still works.';
+      });
+    } finally {
+      if (mounted) {
+        setState(() => _isSyncingPriority = false);
+      }
+    }
   }
 
   Future<void> _submit() async {
@@ -56,12 +134,25 @@ class _ReportScreenState extends State<ReportScreen> {
     setState(() { _isLoading = true; _error = null; });
 
     if (_position == null) await _getLocation();
+    if (_position == null) {
+      setState(() {
+        _error ??= 'Location is required to submit a complaint.';
+        _isLoading = false;
+      });
+      return;
+    }
 
     try {
       final api = context.read<ApiService>();
       final complaint = await api.submitComplaint(
         latitude: _position!.latitude,
         longitude: _position!.longitude,
+        address: _priorityPreview?['address'] as String?,
+        areaType: _priorityPreview?['area_type'] as String?,
+        impactScore:
+            (_priorityPreview?['impact_score'] as num?)?.toDouble(),
+        sensitiveLocationCount:
+            (_priorityPreview?['sensitive_location_count'] as num?)?.toInt(),
         image: _image!,
       );
       setState(() {
@@ -77,6 +168,19 @@ class _ReportScreenState extends State<ReportScreen> {
   void initState() {
     super.initState();
     _getLocation();
+  }
+
+  String _formatAreaLabel(dynamic areaType) {
+    final raw = (areaType ?? 'residential').toString().replaceAll('_', ' ');
+    return raw.isEmpty
+        ? 'Residential'
+        : raw[0].toUpperCase() + raw.substring(1);
+  }
+
+  Color _priorityColor(num score) {
+    if (score >= 70) return Colors.redAccent;
+    if (score >= 35) return const Color(0xFFF5A623);
+    return Colors.greenAccent;
   }
 
   @override
@@ -127,23 +231,128 @@ class _ReportScreenState extends State<ReportScreen> {
                 color: Colors.grey[850],
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: Row(children: [
-                Icon(
-                  _position != null ? Icons.location_on : Icons.location_searching,
-                  color: _position != null ? Colors.greenAccent : Colors.orange,
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    _position != null
-                        ? 'GPS: ${_position!.latitude.toStringAsFixed(5)}, ${_position!.longitude.toStringAsFixed(5)}'
-                        : 'Acquiring GPS location...',
-                    style: const TextStyle(color: Colors.white70, fontSize: 13),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(children: [
+                    Icon(
+                      _position != null
+                          ? Icons.location_on
+                          : Icons.location_searching,
+                      color:
+                          _position != null ? Colors.greenAccent : Colors.orange,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        _position != null
+                            ? 'GPS: ${_position!.latitude.toStringAsFixed(5)}, ${_position!.longitude.toStringAsFixed(5)}'
+                            : _locationStatus,
+                        style: const TextStyle(
+                            color: Colors.white70, fontSize: 13),
+                      ),
+                    ),
+                  ]),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 10,
+                    runSpacing: 10,
+                    children: [
+                      OutlinedButton.icon(
+                        onPressed: _isLoading ? null : _getLocation,
+                        icon: const Icon(Icons.my_location),
+                        label: Text(
+                          _position == null ? 'Allow location' : 'Refresh GPS',
+                        ),
+                      ),
+                      if (_locationDeniedForever)
+                        OutlinedButton.icon(
+                          onPressed: Geolocator.openAppSettings,
+                          icon: const Icon(Icons.settings),
+                          label: const Text('Open settings'),
+                        ),
+                      if (_locationServicesDisabled)
+                        OutlinedButton.icon(
+                          onPressed: Geolocator.openLocationSettings,
+                          icon: const Icon(Icons.gps_off),
+                          label: const Text('Turn on GPS'),
+                        ),
+                    ],
                   ),
-                ),
-              ]),
+                ],
+              ),
             ),
             const SizedBox(height: 12),
+
+            if (_priorityPreview != null || _isSyncingPriority)
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.grey[900],
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFFF5A623)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.bolt, color: Color(0xFFF5A623)),
+                        const SizedBox(width: 10),
+                        const Expanded(
+                          child: Text(
+                            'Priority Sync',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                        if (_isSyncingPriority)
+                          const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      _priorityPreview == null
+                          ? 'Syncing live system priority from your current location...'
+                          : 'Estimated priority P${(_priorityPreview!['estimated_priority_score'] ?? 0)}',
+                      style: TextStyle(
+                        color: _priorityPreview == null
+                            ? Colors.white70
+                            : _priorityColor(
+                                (_priorityPreview!['estimated_priority_score']
+                                        as num?) ??
+                                    0,
+                              ),
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    if (_priorityPreview != null) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        'Area: ${_formatAreaLabel(_priorityPreview!['area_type'])}',
+                        style: const TextStyle(color: Colors.white70),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        (_priorityPreview!['duplicate_detected'] ?? false)
+                            ? '${_priorityPreview!['nearby_report_count']} nearby open reports detected'
+                            : 'No nearby duplicate reports detected',
+                        style: const TextStyle(color: Colors.white54),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+
+            if (_priorityPreview != null || _isSyncingPriority)
+              const SizedBox(height: 12),
 
             if (_error != null)
               Container(

@@ -125,6 +125,49 @@ async def submit_complaint(
         import logging as _logging, traceback as _tb, threading as _threading
         _log = _logging.getLogger(__name__)
 
+        # FIX: SQLAlchemy DetachedInstanceError — snapshot ALL values from ORM objects
+        # INTO plain Python types BEFORE the thread starts, because the DB session
+        # closes when this request ends, making lazy-loaded attributes inaccessible.
+        _citizen_email    = str(current_user.email or "")
+        _citizen_name     = str(current_user.name  or "")
+        _complaint_id     = str(complaint.complaint_id)
+        _sev_val          = complaint.severity.value if hasattr(complaint.severity, "value") else str(complaint.severity)
+        _dmg_val          = complaint.damage_type.value if hasattr(complaint.damage_type, "value") else str(complaint.damage_type)
+        _priority_val     = float(getattr(complaint, "priority_score", 0) or 0)
+        _address          = str(complaint.address or "")
+        _latitude         = float(complaint.latitude)
+        _longitude        = float(complaint.longitude)
+        _description      = str(complaint.description or "Road damage detected.")
+        _area_type        = str(getattr(complaint, "area_type", "unknown") or "unknown")
+        _status_val       = complaint.status.value if hasattr(complaint.status, "value") else str(complaint.status)
+
+        # Snapshot officer data too (also an ORM object)
+        _officer_email    = str(officer.email or "") if officer else ""
+        _officer_name     = str(officer.name  or "") if officer else ""
+        _officer_id       = officer.id if officer else None
+
+        # Build a lightweight plain-object complaint snapshot for notify functions
+        class _ComplaintSnap:
+            def __init__(self):
+                self.complaint_id  = _complaint_id
+                self.severity      = type("S", (), {"value": _sev_val})()
+                self.damage_type   = type("D", (), {"value": _dmg_val})()
+                self.priority_score= _priority_val
+                self.area_type     = _area_type
+                self.address       = _address
+                self.latitude      = _latitude
+                self.longitude     = _longitude
+                self.description   = _description
+
+        class _OfficerSnap:
+            def __init__(self):
+                self.email = _officer_email
+                self.name  = _officer_name
+                self.id    = _officer_id
+
+        _c_snap = _ComplaintSnap()
+        _o_snap = _OfficerSnap() if officer else None
+
         def _send_notifications():
             try:
                 from app.services.notification_service import (
@@ -132,28 +175,26 @@ async def submit_complaint(
                     notify_officer_assigned,
                     notify_citizen_submitted
                 )
-                sev_val = complaint.severity.value if hasattr(complaint.severity,'value') else str(complaint.severity)
-                priority_val = getattr(complaint, 'priority_score', 0) or 0
 
-                _log.info(f"Sending notifications for {complaint.complaint_id} sev={sev_val} to={current_user.email}")
+                _log.info(f"Sending notifications for {_complaint_id} sev={_sev_val} to={_citizen_email}")
 
                 ok1 = notify_citizen_submitted(
-                    citizen_email=current_user.email,
-                    citizen_name=current_user.name,
-                    complaint_id=complaint.complaint_id,
-                    severity=sev_val,
-                    address=complaint.address or "",
-                    priority=priority_val
+                    citizen_email=_citizen_email,
+                    citizen_name=_citizen_name,
+                    complaint_id=_complaint_id,
+                    severity=_sev_val,
+                    address=_address,
+                    priority=_priority_val
                 )
-                _log.info(f"Citizen email: {'sent' if ok1 else 'FAILED'}")
+                _log.info(f"Citizen submit email: {'SENT' if ok1 else 'FAILED'} → {_citizen_email}")
 
-                if sev_val == "high":
-                    ok2 = notify_admin_emergency(complaint, current_user.name)
-                    _log.info(f"Admin emergency: {'sent' if ok2 else 'FAILED'}")
+                if _sev_val == "high":
+                    ok2 = notify_admin_emergency(_c_snap, _citizen_name)
+                    _log.info(f"Admin emergency: {'SENT' if ok2 else 'FAILED'}")
 
-                if officer:
-                    ok3 = notify_officer_assigned(officer, complaint)
-                    _log.info(f"Officer email: {'sent' if ok3 else 'FAILED'}")
+                if _o_snap:
+                    ok3 = notify_officer_assigned(_o_snap, _c_snap)
+                    _log.info(f"Officer email: {'SENT' if ok3 else 'FAILED'} → {_officer_email}")
 
             except Exception as e:
                 _log.error(f"Notification error: {e}\n{_tb.format_exc()}")
@@ -179,7 +220,7 @@ async def submit_complaint(
             "description": complaint.description,
             "image_url": complaint.image_url,
             "status": complaint.status.value if hasattr(complaint.status, 'value') else str(complaint.status),
-            "created_at": str(complaint.created_at)
+            "created_at": complaint.created_at.isoformat() + "Z" if complaint.created_at else None
         }
 
     except Exception as e:
@@ -267,24 +308,34 @@ async def update_status(
     db.commit()
     db.refresh(c)
     
-    # Notify citizen of status change
+    # Notify citizen of status change — snapshot values before any thread
     try:
         from app.services.notification_service import notify_citizen_status
         from app.models.models import User
+        import threading as _t2, logging as _l2
         citizen = db.query(User).filter(User.id == c.user_id).first()
-        officer_name = current_officer.name if hasattr(current_officer,'name') else ""
         if citizen:
-            notify_citizen_status(
-                citizen_email=citizen.email,
-                citizen_name=citizen.name,
-                complaint_id=c.complaint_id,
-                new_status=body.get("status", ""),
-                address=c.address or "",
-                officer_name=officer_name
-            )
+            # Snapshot to plain strings (avoids DetachedInstanceError in thread)
+            _ce  = str(citizen.email or "")
+            _cn  = str(citizen.name  or "")
+            _cid = str(c.complaint_id)
+            _ns  = str(body.get("status", ""))
+            _adr = str(c.address or "")
+            _on  = str(current_officer.name) if hasattr(current_officer, "name") else ""
+            def _send_status_notif():
+                try:
+                    ok = notify_citizen_status(
+                        citizen_email=_ce, citizen_name=_cn,
+                        complaint_id=_cid, new_status=_ns,
+                        address=_adr, officer_name=_on
+                    )
+                    _l2.getLogger(__name__).info(f"Status email {'SENT' if ok else 'FAILED'} → {_ce} [{_ns}]")
+                except Exception as ex:
+                    _l2.getLogger(__name__).warning(f"Status notification error: {ex}")
+            _t2.Thread(target=_send_status_notif, daemon=True).start()
     except Exception as e:
         import logging
-        logging.getLogger(__name__).warning(f"Status notification error: {e}")
+        logging.getLogger(__name__).warning(f"Status notification setup error: {e}")
     try:
         if WS_ENABLED:
             await ws_manager.broadcast_status_update(c)
@@ -326,7 +377,7 @@ def serialize_complaint(c):
         "image_url": c.image_url,
         "status": c.status.value if hasattr(c.status, 'value') else str(c.status),
         "officer_notes": c.officer_notes,
-        "created_at": c.created_at.isoformat() if c.created_at else datetime.utcnow().isoformat(),
+        "created_at": (c.created_at.isoformat() + "Z") if c.created_at else (datetime.utcnow().isoformat() + "Z"),
         "updated_at": str(c.updated_at) if c.updated_at else None,
         "resolved_at": str(c.resolved_at) if c.resolved_at else None,
     }

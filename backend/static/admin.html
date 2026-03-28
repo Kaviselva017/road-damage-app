@@ -627,6 +627,45 @@ const MAP_STATUS_COLORS = {
   completed:'#10b981',
   rejected:'#ef4444'
 };
+const INDIA_TIMEZONE = 'Asia/Kolkata';
+const DATE_FORMATTER = new Intl.DateTimeFormat('en-IN', { timeZone: INDIA_TIMEZONE, day: '2-digit', month: 'short', year: 'numeric' });
+const TIME_FORMATTER = new Intl.DateTimeFormat('en-IN', { timeZone: INDIA_TIMEZONE, hour: 'numeric', minute: '2-digit', hour12: true });
+const DATE_TIME_FORMATTER = new Intl.DateTimeFormat('en-IN', { timeZone: INDIA_TIMEZONE, day: '2-digit', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true });
+
+function parseDateValue(value) {
+  if (!value) return null;
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
+  let normalized = String(value).trim();
+  if (!normalized) return null;
+  normalized = normalized.replace(' ', 'T');
+  if (/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
+    normalized = `${normalized}T00:00:00Z`;
+  } else if (!/(Z|[+-]\d{2}:\d{2})$/i.test(normalized)) {
+    normalized = `${normalized}Z`;
+  }
+  const parsed = new Date(normalized);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function formatDate(value) {
+  const parsed = parseDateValue(value);
+  return parsed ? DATE_FORMATTER.format(parsed) : '—';
+}
+
+function formatTime(value) {
+  const parsed = parseDateValue(value);
+  return parsed ? TIME_FORMATTER.format(parsed) : '—';
+}
+
+function formatDateTime(value) {
+  const parsed = parseDateValue(value);
+  return parsed ? DATE_TIME_FORMATTER.format(parsed) : '—';
+}
+
+function toEpochMs(value) {
+  const parsed = parseDateValue(value);
+  return parsed ? parsed.getTime() : 0;
+}
 
 function resolveComplaintImageUrl(imageUrl) {
   if (!imageUrl) return '';
@@ -680,7 +719,7 @@ function logout() {
 
 async function loadAll() {
   await Promise.all([loadStats(), loadComplaints(), loadOfficers(), loadCitizens(), loadChartData()]);
-  document.getElementById('last-updated').textContent = 'Updated ' + new Date().toLocaleTimeString();
+  document.getElementById('last-updated').textContent = 'Updated ' + formatTime(new Date());
   if (currentSection === 'map') {
     initAdminMap();
     renderAdminMap();
@@ -759,7 +798,7 @@ function filterComplaints() {
       <td><div style="font-size:0.8rem">${c.citizen_name||'—'}</div><div style="font-size:0.7rem;color:var(--muted)">${c.citizen_phone||''}</div></td>
       <td style="font-size:0.8rem">${c.officer_name||'Unassigned'}</td>
       <td style="font-size:0.75rem;color:var(--muted);max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${(c.address||'').substring(0,40)}</td>
-      <td style="font-size:0.75rem;color:var(--muted)">${c.created_at?new Date(c.created_at).toLocaleDateString():'—'}</td>
+      <td style="font-size:0.75rem;color:var(--muted)">${formatDate(c.created_at)}</td>
       <td>
         <button class="act-btn" onclick="openReassign('${c.complaint_id}')">Reassign</button>
         ${c.image_url ? `<button class="act-btn" onclick='openComplaintPhoto(${JSON.stringify(c.image_url)})'>Photo</button>` : ''}
@@ -1151,7 +1190,7 @@ function getMapFilteredComplaints() {
   return filtered.sort((left, right) => {
     const priorityDelta = complaintPriority(right) - complaintPriority(left);
     if (priorityDelta !== 0) return priorityDelta;
-    return new Date(right.created_at || 0) - new Date(left.created_at || 0);
+    return toEpochMs(right.created_at) - toEpochMs(left.created_at);
   });
 }
 
@@ -1255,7 +1294,7 @@ function renderMapDetail(complaint) {
       <div class="map-detail-row"><span class="map-detail-label">Zone</span><span class="map-detail-value">${complaintZone(complaint)}</span></div>
       <div class="map-detail-row"><span class="map-detail-label">Officer</span><span class="map-detail-value">${formatComplaintValue(complaint.officer_name, 'Unassigned')}</span></div>
       <div class="map-detail-row"><span class="map-detail-label">Citizen</span><span class="map-detail-value">${formatComplaintValue(complaint.citizen_name)}</span></div>
-      <div class="map-detail-row"><span class="map-detail-label">Reported</span><span class="map-detail-value">${complaint.created_at ? new Date(complaint.created_at).toLocaleString() : '—'}</span></div>
+      <div class="map-detail-row"><span class="map-detail-label">Reported</span><span class="map-detail-value">${formatDateTime(complaint.created_at)}</span></div>
       <div class="map-detail-row"><span class="map-detail-label">Coordinates</span><span class="map-detail-value">${Number(complaint.latitude).toFixed(5)}, ${Number(complaint.longitude).toFixed(5)}</span></div>
     </div>
     <div class="map-detail-actions">
