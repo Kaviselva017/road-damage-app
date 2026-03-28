@@ -10,20 +10,26 @@ alembic upgrade head || alembic upgrade heads
 
 echo "[1.5/3] Patching missing columns..."
 python - <<'PYEOF'
-import sqlite3, os
+import sqlite3, os, glob
 
-db_path = os.getenv("DATABASE_URL", "sqlite:///./road_damage.db")
-db_path = db_path.replace("sqlite:///./", "").replace("sqlite:///", "").replace("sqlite://", "")
-if not os.path.isabs(db_path):
-    db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), db_path)
+# Find the actual DB file anywhere under /opt/render
+candidates = glob.glob("/opt/render/**/*.db", recursive=True)
+print(f"[patch] Found DB files: {candidates}")
 
-print(f"[patch] DB path: {db_path}")
+# Also try the direct path
+direct = "/opt/render/project/src/backend/road_damage.db"
+if os.path.exists(direct):
+    candidates = [direct] + [c for c in candidates if c != direct]
 
-try:
+if not candidates:
+    print("[patch] No .db file found, will be created fresh — skipping patch")
+else:
+    db_path = candidates[0]
+    print(f"[patch] Using: {db_path}")
+
     conn = sqlite3.connect(db_path)
     cur = conn.cursor()
 
-    # field_officers patches
     cur.execute("PRAGMA table_info(field_officers)")
     cols = [row[1] for row in cur.fetchall()]
     print(f"[patch] field_officers columns: {cols}")
@@ -35,7 +41,6 @@ try:
     else:
         print("[patch] last_login already exists")
 
-    # users patches
     cur.execute("PRAGMA table_info(users)")
     ucols = [row[1] for row in cur.fetchall()]
     print(f"[patch] users columns: {ucols}")
@@ -49,8 +54,6 @@ try:
 
     conn.close()
     print("[patch] Done")
-except Exception as e:
-    print(f"[patch] ERROR: {e}")
 
 PYEOF
 
