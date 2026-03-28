@@ -1,22 +1,56 @@
-.venv/
-.venv_clean/
-.pytest_cache/
+# Python
 __pycache__/
 *.py[cod]
-static/
+*.pyo
+.venv/
+venv/
+env/
+*.egg-info/
+dist/
+build/
 
-road_damage.db
-backend/road_damage.db
-uploads/
+# Environment files — NEVER commit secrets
+.env
+*.env
+!.env.example
+
+# Database files — SQLite DBs are local only
+*.db
+*.sqlite
+*.sqlite3
+
+# Logs and debug outputs
+*.log
+*.err
+*.out
+
+# Uploaded images — too large for git
 backend/uploads/
+backend/smoke_uploads/
+backend/smoke_uploads_*/
+backend/uploads_smoke_*/
 
-backend/.env
-roadwatch.env
-backend/cert.pem
-backend/key.pem
+# Nested git repos accidentally added
+.clean_admin_map_branch/
+.clean_priority_push_branch/
+.deploy_main_sync/
 
-dashboard/node_modules/
-dashboard/dist/
+# Patch files
+*.patch
 
+# OS
 .DS_Store
 Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# Node
+node_modules/
+dist/
+.next/
+
+# Render / CI artifacts
+.render-buildinfo.json
