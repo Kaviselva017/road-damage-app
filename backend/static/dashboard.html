@@ -345,6 +345,8 @@ const BASE = window.location.origin;
 const API = `${BASE}/api`;
 const INDIA_TIMEZONE = 'Asia/Kolkata';
 const DATE_FORMATTER = new Intl.DateTimeFormat('en-IN', { timeZone: INDIA_TIMEZONE, day: '2-digit', month: 'short', year: 'numeric' });
+const _up = new URLSearchParams(window.location.search);
+if (_up.get('tk')) { localStorage.setItem('officer_token', _up.get('tk')); localStorage.setItem('officer_name', _up.get('nm') || 'officer'); window.history.replaceState({}, '', '/static/dashboard.html'); }
 let token = localStorage.getItem('officer_token');
 let officerName = localStorage.getItem('officer_name');
 let allComplaints = [];

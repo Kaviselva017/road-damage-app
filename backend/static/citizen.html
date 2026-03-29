@@ -648,6 +648,7 @@ async function submitComplaint(){
     form.append('address',currentAddr||`${currentLat},${currentLng}`);
     form.append('image',selectedFile);
     const res=await fetch(`${API}/complaints/submit`,{method:'POST',headers:{Authorization:`Bearer ${token}`},body:form});
+    if(res.status===401){token=null;localStorage.removeItem('citizen_token');localStorage.removeItem('citizen_name');document.getElementById('user-bar').classList.remove('show');showPage('login');return;}
     const data=await res.json();
     if(!res.ok)throw new Error(data.detail||'Submission failed');
     
@@ -700,7 +701,7 @@ async function loadComplaints(){
     const statusFilter=document.getElementById('filter-status').value;
     let url=`${API}/complaints/my`;
     const res=await fetch(url,{headers:{Authorization:`Bearer ${token}`}});
-    if(res.status===401){showPage('login');return;}  // token expired
+    if(res.status===401){token=null;localStorage.removeItem('citizen_token');localStorage.removeItem('citizen_name');document.getElementById('user-bar').classList.remove('show');showPage('login');return;}
     let data=await res.json();
     if(!Array.isArray(data)||!data.length){list.innerHTML='<div class="empty-state"><div class="empty-icon">📋</div><p>No reports yet. Submit your first complaint!</p></div>';return;}
     if(statusFilter)data=data.filter(c=>c.status===statusFilter);

@@ -146,6 +146,9 @@ tr:hover td { background:rgba(255,255,255,0.02); }
 .spinner { display:inline-block; width:16px; height:16px; border:2px solid rgba(255,255,255,0.2); border-top-color:#fff; border-radius:50%; animation:spin 0.7s linear infinite; vertical-align:middle; margin-right:6px; }
 @keyframes spin { to{transform:rotate(360deg)} }
 .empty-row td { text-align:center; padding:2rem; color:var(--muted); }
+.zone-stat-card { background:var(--s2); border:1px solid var(--border); border-radius:12px; padding:1rem; text-align:center; }
+.zone-stat-num { font-family:'Clash Display',sans-serif; font-size:2rem; font-weight:700; }
+.zone-stat-label { font-size:0.72rem; color:var(--muted); margin-top:4px; }
 .zone-option { background:var(--s3); border:2px solid var(--border); border-radius:8px; padding:0.6rem; text-align:center; font-size:0.82rem; cursor:pointer; transition:all 0.15s; }
 .zone-option:hover { border-color:var(--accent); color:var(--accent); }
 .zone-option.selected { border-color:var(--accent); background:rgba(0,212,255,0.1); color:var(--accent); font-weight:700; }
@@ -812,13 +815,16 @@ async function loadOfficers() {
   renderZoneCards();
   try {
     const res = await fetch(`${API}/admin/officers`, {headers:{Authorization:`Bearer ${token}`}});
-    allOfficers = await res.json();
+    if (res.status === 401) { logout(); return; }
+    const data = await res.json();
+    if (!res.ok) { console.error('loadOfficers error:', data); return; }
+    allOfficers = Array.isArray(data) ? data : [];
     filterOfficers();
     renderOfficerChart();
-  populateOfficerFilter();
-  if (currentSection==='analytics') updateAllCharts();
-  if (currentSection === 'map' || adminMap) renderAdminMap();
-  } catch(e) {}
+    populateOfficerFilter();
+    if (currentSection==='analytics') updateAllCharts();
+    if (currentSection === 'map' || adminMap) renderAdminMap();
+  } catch(e) { console.error('loadOfficers:', e); }
 }
 
 function officerResolutionRate(officer) {
@@ -863,9 +869,12 @@ function filterOfficers() {
 async function loadCitizens() {
   try {
     const res = await fetch(`${API}/admin/citizens`, {headers:{Authorization:`Bearer ${token}`}});
-    allCitizens = await res.json();
+    if (res.status === 401) { logout(); return; }
+    const data = await res.json();
+    if (!res.ok) { console.error('loadCitizens error:', data); return; }
+    allCitizens = Array.isArray(data) ? data : [];
     filterCitizens();
-  } catch(e) {}
+  } catch(e) { console.error('loadCitizens:', e); }
 }
 
 function filterCitizens() {
@@ -1427,47 +1436,6 @@ function showToast(msg) {
   setTimeout(()=>t.classList.remove('show'),3000);
 }
 
-function toggleOfficer(id) {
-  const officer = allOfficers.find(o => o.id === id);
-  if (!officer) return;
-  const nextIsActive = !Boolean(officer.is_active);
-  fetch(`${API}/admin/officers/${id}`, {
-    method:'PATCH',
-    headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},
-    body:JSON.stringify({
-      name: officer.name,
-      phone: officer.phone || '',
-      zone: officer.zone || '',
-      is_active: nextIsActive
-    })
-  })
-    .then(async res => {
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.detail || 'Officer update failed');
-      await loadOfficers();
-      showToast(nextIsActive ? 'âœ… Officer activated' : 'â›” Officer deactivated');
-    })
-    .catch(() => showToast('âŒ Officer update failed'));
-}
-
-function toggleCitizen(id) {
-  const citizen = allCitizens.find(c => c.id === id);
-  if (!citizen) return;
-  const nextIsActive = citizen.is_active === false;
-  fetch(`${API}/admin/citizens/${id}/block`, {
-    method:'PATCH',
-    headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},
-    body:JSON.stringify({is_active: nextIsActive})
-  })
-    .then(async res => {
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.detail || 'Citizen update failed');
-      await loadCitizens();
-      showToast(nextIsActive ? 'âœ… Citizen unblocked' : 'â›” Citizen blocked');
-    })
-    .catch(() => showToast('âŒ Citizen update failed'));
-}
-
 function showSection(section) {
   currentSection = section;
   document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
@@ -1584,7 +1552,7 @@ async function saveOfficer() {
       });
       showToast('✅ Officer updated!');
     } else {
-      const res = await fetch(`${API}/auth/officer/register`, {
+      const res = await fetch(`${API}/admin/officers`, {
         method:'POST', headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},
         body: JSON.stringify({name, email, password, phone, zone: selectedZone})
       });
