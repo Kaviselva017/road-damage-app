@@ -1,26 +1,37 @@
+"""
+RoadWatch Auth API — endpoints match exactly what login.html & citizen.html call.
+
+  POST /api/auth/register          ← citizen register (login.html + citizen.html)
+  POST /api/auth/login             ← citizen login    (login.html + citizen.html)
+  POST /api/auth/officer/login     ← officer + admin login (login.html + admin.html)
+  POST /api/auth/officer/register  ← create officer from admin panel (admin.html)
+  GET  /api/auth/me                ← citizen points refresh (citizen.html)
+  GET  /api/auth/admin/me          ← admin name in header (admin.html via /api/auth/officer/login redirects here)
+"""
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import Optional
-import bcrypt
-from jose import jwt, JWTError
+from passlib.context import CryptContext
+from jose import jwt
 import os
 from datetime import datetime, timedelta
 
 from app.database import get_db
-from app.models import Officer, Citizen
-from app.dependencies import get_current_citizen, get_current_admin
+from app.models.models import User, FieldOfficer
+from app.dependencies import get_current_user, get_current_admin, get_current_officer
 
-router = APIRouter(prefix="/api/auth", tags=["auth"])
+router = APIRouter(prefix="/auth", tags=["auth"])
 
 SECRET_KEY = os.getenv("SECRET_KEY", "road-damage-secret-2024")
-ALGORITHM = "HS256"
+ALGORITHM  = "HS256"
+pwd_ctx    = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 def create_token(data: dict, expires_hours: int = 24) -> str:
-    payload = data.copy()
-    payload["exp"] = datetime.utcnow() + timedelta(hours=expires_hours)
-    return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
+    p = data.copy()
+    p["exp"] = datetime.utcnow() + timedelta(hours=expires_hours)
+    return jwt.encode(p, SECRET_KEY, algorithm=ALGORITHM)
 
 
 # ── Schemas ───────────────────────────────────────────────────────────────────
@@ -40,106 +51,115 @@ class CitizenLogin(BaseModel):
 class OfficerLogin(BaseModel):
     email: str
     password: str
-    badge_number: str
 
 
-class AdminLogin(BaseModel):
+class OfficerCreate(BaseModel):
+    name: str
     email: str
     password: str
-    admin_code: str
+    zone: Optional[str] = None
+    phone: Optional[str] = None
 
 
 # ── Citizen Auth ──────────────────────────────────────────────────────────────
 
-@router.post("/citizen/register", status_code=status.HTTP_201_CREATED)
+@router.post("/register", status_code=status.HTTP_201_CREATED)
 def citizen_register(payload: CitizenRegister, db: Session = Depends(get_db)):
-    if db.query(Citizen).filter(Citizen.email == payload.email).first():
+    """POST /api/auth/register — used by login.html & citizen.html"""
+    if db.query(User).filter(User.email == payload.email).first():
         raise HTTPException(status_code=400, detail="Email already registered")
-    hashed = bcrypt.hashpw(payload.password.encode(), bcrypt.gensalt()).decode()
-    citizen = Citizen(
+    user = User(
         name=payload.name,
         email=payload.email,
-        hashed_password=hashed,
+        hashed_password=pwd_ctx.hash(payload.password),
         phone=payload.phone,
         reward_points=0,
+        is_active=True,
     )
-    db.add(citizen)
+    db.add(user)
     db.commit()
-    db.refresh(citizen)
-    token = create_token({"sub": str(citizen.id), "role": "citizen"})
-    return {"access_token": token, "token_type": "bearer", "name": citizen.name}
+    db.refresh(user)
+    token = create_token({"sub": user.id, "role": "citizen"})
+    return {"access_token": token, "token_type": "bearer", "name": user.name}
 
 
-@router.post("/citizen/login")
+@router.post("/login")
 def citizen_login(payload: CitizenLogin, db: Session = Depends(get_db)):
-    citizen = db.query(Citizen).filter(Citizen.email == payload.email).first()
-    if not citizen or not bcrypt.checkpw(payload.password.encode(), citizen.hashed_password.encode()):
+    """POST /api/auth/login — used by login.html & citizen.html"""
+    user = db.query(User).filter(User.email == payload.email).first()
+    if not user or not pwd_ctx.verify(payload.password, user.hashed_password):
         raise HTTPException(status_code=401, detail="Invalid credentials")
-    token = create_token({"sub": str(citizen.id), "role": "citizen"})
+    if not user.is_active:
+        raise HTTPException(status_code=403, detail="Account inactive")
+    token = create_token({"sub": user.id, "role": "citizen"})
     return {
         "access_token": token,
         "token_type": "bearer",
-        "name": citizen.name,
-        "reward_points": citizen.reward_points,
+        "name": user.name,
+        "reward_points": user.reward_points or 0,
     }
 
 
-# ── Officer Auth ──────────────────────────────────────────────────────────────
+# ── Officer / Admin Auth ──────────────────────────────────────────────────────
 
 @router.post("/officer/login")
 def officer_login(payload: OfficerLogin, db: Session = Depends(get_db)):
-    officer = (
-        db.query(Officer)
-        .filter(Officer.email == payload.email, Officer.badge_number == payload.badge_number)
-        .first()
+    """POST /api/auth/officer/login — used by both officer & admin in login.html + admin.html"""
+    officer = db.query(FieldOfficer).filter(FieldOfficer.email == payload.email).first()
+    if not officer or not pwd_ctx.verify(payload.password, officer.hashed_password):
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    if not officer.is_active:
+        raise HTTPException(status_code=403, detail="Account inactive")
+    officer.last_login = datetime.utcnow()
+    db.commit()
+    role = "admin" if officer.is_admin else "officer"
+    token = create_token({"sub": officer.id, "role": role})
+    return {"access_token": token, "token_type": "bearer", "name": officer.name, "role": role}
+
+
+@router.post("/officer/register", status_code=status.HTTP_201_CREATED)
+def officer_register(
+    payload: OfficerCreate,
+    db: Session = Depends(get_db),
+    current_admin: FieldOfficer = Depends(get_current_admin),
+):
+    """POST /api/auth/officer/register — used by admin.html to create officers"""
+    if db.query(FieldOfficer).filter(FieldOfficer.email == payload.email).first():
+        raise HTTPException(status_code=400, detail="Email already registered")
+    officer = FieldOfficer(
+        name=payload.name,
+        email=payload.email,
+        hashed_password=pwd_ctx.hash(payload.password),
+        phone=payload.phone,
+        zone=payload.zone,
+        is_admin=False,
+        is_active=True,
     )
-    if not officer or not bcrypt.checkpw(payload.password.encode(), officer.hashed_password.encode()):
-        raise HTTPException(status_code=401, detail="Invalid credentials")
-    if officer.is_admin:
-        raise HTTPException(status_code=403, detail="Use admin login")
-    token = create_token({"sub": str(officer.id), "role": "officer"})
-    return {"access_token": token, "token_type": "bearer", "name": officer.name}
-
-
-# ── Admin Auth ────────────────────────────────────────────────────────────────
-
-ADMIN_CODE = os.getenv("ADMIN_CODE", "ADM-2030")
-
-
-@router.post("/admin/login")
-def admin_login(payload: AdminLogin, db: Session = Depends(get_db)):
-    if payload.admin_code != ADMIN_CODE:
-        raise HTTPException(status_code=401, detail="Invalid admin code")
-    officer = db.query(Officer).filter(Officer.email == payload.email, Officer.is_admin == True).first()
-    if not officer or not bcrypt.checkpw(payload.password.encode(), officer.hashed_password.encode()):
-        raise HTTPException(status_code=401, detail="Invalid credentials")
-    token = create_token({"sub": str(officer.id), "role": "admin"})
-    return {"access_token": token, "token_type": "bearer", "name": officer.name}
+    db.add(officer)
+    db.commit()
+    db.refresh(officer)
+    return {"message": "Officer created", "id": officer.id, "name": officer.name}
 
 
 # ── /me endpoints ─────────────────────────────────────────────────────────────
 
 @router.get("/me")
-def get_me(
-    db: Session = Depends(get_db),
-    current_citizen: Citizen = Depends(get_current_citizen),
-):
-    """Returns current citizen info including reward_points."""
+def get_me(current_user: User = Depends(get_current_user)):
+    """GET /api/auth/me — citizen points refresh (citizen.html)"""
     return {
-        "id": current_citizen.id,
-        "name": current_citizen.name,
-        "email": current_citizen.email,
-        "reward_points": getattr(current_citizen, "reward_points", 0),
+        "id": current_user.id,
+        "name": current_user.name,
+        "email": current_user.email,
+        "reward_points": current_user.reward_points or 0,
     }
 
 
 @router.get("/admin/me")
-def get_admin_me(
-    db: Session = Depends(get_db),
-    current_admin: Officer = Depends(get_current_admin),
-):
+def get_admin_me(current_admin: FieldOfficer = Depends(get_current_admin)):
+    """GET /api/auth/admin/me — admin name in header"""
     return {
         "id": current_admin.id,
         "name": current_admin.name,
         "email": current_admin.email,
+        "is_admin": current_admin.is_admin,
     }
