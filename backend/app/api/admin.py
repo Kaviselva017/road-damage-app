@@ -1,288 +1,250 @@
 """
-RoadWatch Admin API — endpoints match exactly what admin.html calls.
-
-  GET    /api/admin/stats
-  GET    /api/admin/complaints
-  PATCH  /api/admin/complaints/:id/reassign
-  GET    /api/admin/officers
-  PATCH  /api/admin/officers/:id          (edit officer)
-  DELETE /api/admin/officers/:id
-  PATCH  /api/admin/officers/:id/toggle   (activate/deactivate)
-  GET    /api/admin/citizens
-  DELETE /api/admin/citizens/:id
-  PATCH  /api/admin/citizens/:id/toggle
-  POST   /api/admin/citizens/:id/block
-  GET    /api/admin/chart/daily
+RoadWatch — Admin API
+Fixed: POST /admin/officers (create officer without double-auth),
+       resolution_rate in stats, all toggle/delete endpoints.
 """
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
-from pydantic import BaseModel
+import logging
+from datetime import datetime, timedelta, timezone
 from typing import Optional
-from datetime import datetime, timedelta
+
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models.models import User, FieldOfficer, Complaint
-from app.dependencies import get_current_admin
+from app.dependencies import get_current_admin, get_current_user
+from app.models.models import Complaint, ComplaintOfficer, FieldOfficer, User
+from app.schemas.schemas import OfficerUpdate, ReassignUpdate
+from app.services.auth_service import hash_password
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/admin", tags=["admin"])
 
 
-# ── Schemas ───────────────────────────────────────────────────────────────────
-
-class OfficerEdit(BaseModel):
-    name: Optional[str] = None
-    phone: Optional[str] = None
-    zone: Optional[str] = None
-
-
-class ReassignPayload(BaseModel):
-    officer_id: int
+def _iso(dt):
+    if dt is None:
+        return None
+    if hasattr(dt, "tzinfo") and dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.isoformat().replace("+00:00", "Z")
 
 
-class StatusPayload(BaseModel):
-    status: str
-
-
-# ── Stats ─────────────────────────────────────────────────────────────────────
-
-@router.get("/stats")
-def dashboard_stats(
-    db: Session = Depends(get_db),
-    _: FieldOfficer = Depends(get_current_admin),
-):
-    total     = db.query(Complaint).count()
-    pending   = db.query(Complaint).filter(Complaint.status == "pending").count()
-    resolved  = db.query(Complaint).filter(Complaint.status == "completed").count()
-    in_prog   = db.query(Complaint).filter(Complaint.status == "in_progress").count()
-    assigned  = db.query(Complaint).filter(Complaint.status == "assigned").count()
-    citizens  = db.query(User).count()
-    officers  = db.query(FieldOfficer).filter(FieldOfficer.is_admin == False).count()
+def _ostats(o: FieldOfficer, db: Session) -> dict:
+    total = db.query(Complaint).filter(Complaint.officer_id == o.id).count()
+    done  = db.query(Complaint).filter(Complaint.officer_id == o.id, Complaint.status == "completed").count()
+    pend  = db.query(Complaint).filter(Complaint.officer_id == o.id, Complaint.status.in_(["pending", "assigned"])).count()
+    prog  = db.query(Complaint).filter(Complaint.officer_id == o.id, Complaint.status == "in_progress").count()
     return {
-        "total_complaints": total,
-        "pending_complaints": pending,
-        "resolved_complaints": resolved,
-        "in_progress_complaints": in_prog,
-        "assigned_complaints": assigned,
-        "total_citizens": citizens,
-        "total_officers": officers,
+        "id": o.id, "name": o.name, "email": o.email,
+        "phone": o.phone, "zone": o.zone,
+        "is_admin": o.is_admin, "is_active": o.is_active,
+        "total_complaints": total, "completed": done,
+        "pending": pend, "in_progress": prog,
     }
 
 
-# ── Complaints ────────────────────────────────────────────────────────────────
+def _ustats(u: User, db: Session) -> dict:
+    total = db.query(Complaint).filter(Complaint.user_id == u.id).count()
+    high  = db.query(Complaint).filter(Complaint.user_id == u.id, Complaint.severity == "high").count()
+    fixed = db.query(Complaint).filter(Complaint.user_id == u.id, Complaint.status == "completed").count()
+    return {
+        "id": u.id, "name": u.name, "email": u.email,
+        "phone": u.phone, "is_active": u.is_active,
+        "reward_points": u.reward_points or 0,
+        "points": u.reward_points or 0,  # alias for admin.html
+        "total_reports": total, "high_severity": high,
+        "fixed": fixed, "completed": fixed,
+        "created_at": _iso(u.created_at),
+    }
 
-@router.get("/complaints")
-def list_complaints(
-    db: Session = Depends(get_db),
-    _: FieldOfficer = Depends(get_current_admin),
-):
-    rows = db.query(Complaint).order_by(Complaint.created_at.desc()).all()
-    result = []
+
+# ── Stats ──────────────────────────────────────────────────────
+@router.get("/stats")
+def stats(db: Session = Depends(get_db), _=Depends(get_current_admin)):
+    all_c = db.query(Complaint).all()
+
+    def cs(s): return sum(1 for c in all_c if c.status == s)
+    def sv(s): return sum(1 for c in all_c if c.severity == s)
+
+    cutoff = datetime.utcnow() - timedelta(days=7)
+    recent = sum(1 for c in all_c if c.created_at and c.created_at >= cutoff)
+
+    total_officers  = db.query(FieldOfficer).count()
+    active_officers = db.query(FieldOfficer).filter(FieldOfficer.is_active == True).count()
+    total_citizens  = db.query(User).count()
+
+    total     = len(all_c)
+    pending   = cs("pending") + cs("assigned")
+    completed = cs("completed")
+    high      = sv("high")
+    res_rate  = round((completed / total * 100) if total > 0 else 0)
+
+    return {
+        "total": total, "pending": pending,
+        "in_progress": cs("in_progress"), "completed": completed,
+        "rejected": cs("rejected"),
+        "high": high, "medium": sv("medium"), "low": sv("low"),
+        "total_officers": total_officers, "active_officers": active_officers,
+        "total_citizens": total_citizens, "recent_7days": recent,
+        "resolution_rate": res_rate,
+        # alias keys
+        "total_complaints": total, "high_severity": high,
+        "pending_count": pending, "completed_count": completed,
+    }
+
+
+# ── Chart ──────────────────────────────────────────────────────
+@router.get("/chart/daily")
+def chart_daily(db: Session = Depends(get_db), _=Depends(get_current_admin)):
+    from collections import defaultdict
+    cutoff = datetime.utcnow() - timedelta(days=14)
+    rows = db.query(Complaint).filter(Complaint.created_at >= cutoff).all()
+    counts = defaultdict(int)
     for c in rows:
-        user    = db.query(User).filter(User.id == c.user_id).first()
-        officer = db.query(FieldOfficer).filter(FieldOfficer.id == c.officer_id).first() if c.officer_id else None
-        result.append({
-            "id": c.id,
-            "complaint_id": c.complaint_id,
-            "description": c.description,
-            "address": c.address or "",
-            "latitude": c.latitude,
-            "longitude": c.longitude,
-            "area_type": c.area_type,
-            "damage_type": c.damage_type,
-            "severity": c.severity,
-            "status": c.status,
-            "ai_confidence": c.ai_confidence,
-            "priority_score": c.priority_score,
-            "image_url": c.image_url,
-            "after_image_url": c.after_image_url,
-            "officer_notes": c.officer_notes,
-            "allocated_fund": c.allocated_fund,
-            "is_duplicate": c.is_duplicate,
-            "report_count": c.report_count,
-            "created_at": c.created_at.isoformat() if c.created_at else "",
-            "resolved_at": c.resolved_at.isoformat() if c.resolved_at else None,
-            "citizen_name": user.name if user else "Unknown",
-            "citizen_id": c.user_id,
-            "officer_name": officer.name if officer else "Unassigned",
-            "officer_id": c.officer_id,
-        })
+        if c.created_at:
+            counts[c.created_at.strftime("%d %b")] += 1
+    result = []
+    for i in range(13, -1, -1):
+        d = datetime.utcnow() - timedelta(days=i)
+        label = d.strftime("%d %b")
+        result.append({"date": label, "count": counts.get(label, 0)})
     return result
+
+
+# ── Complaints ─────────────────────────────────────────────────
+@router.get("/complaints")
+def admin_complaints(
+    status: Optional[str] = None, severity: Optional[str] = None,
+    db: Session = Depends(get_db), _=Depends(get_current_admin),
+):
+    from app.api.complaints import _c
+    q = db.query(Complaint)
+    if status:   q = q.filter(Complaint.status == status)
+    if severity: q = q.filter(Complaint.severity == severity)
+    rows = q.order_by(Complaint.priority_score.desc(), Complaint.created_at.desc()).all()
+    return [_c(r, db) for r in rows]
 
 
 @router.patch("/complaints/{complaint_id}/reassign")
-def reassign_complaint(
-    complaint_id: int,
-    payload: ReassignPayload,
-    db: Session = Depends(get_db),
-    _: FieldOfficer = Depends(get_current_admin),
+def reassign(
+    complaint_id: str, data: ReassignUpdate,
+    db: Session = Depends(get_db), _=Depends(get_current_admin),
 ):
-    """PATCH /api/admin/complaints/:id/reassign — used by admin.html"""
-    complaint = db.query(Complaint).filter(Complaint.id == complaint_id).first()
-    if not complaint:
-        raise HTTPException(status_code=404, detail="Complaint not found")
-    officer = db.query(FieldOfficer).filter(FieldOfficer.id == payload.officer_id).first()
-    if not officer:
-        raise HTTPException(status_code=404, detail="Officer not found")
-    complaint.officer_id = payload.officer_id
-    complaint.status = "assigned"
+    from app.api.complaints import _c
+    c = db.query(Complaint).filter(Complaint.complaint_id == complaint_id).first()
+    if not c: raise HTTPException(404, "Complaint not found")
+    o = db.query(FieldOfficer).filter(FieldOfficer.id == data.officer_id).first()
+    if not o: raise HTTPException(404, "Officer not found")
+    c.officer_id = data.officer_id
+    c.status = "assigned"
+    db.add(ComplaintOfficer(complaint_id=complaint_id, officer_id=data.officer_id,
+                            assigned_at=datetime.utcnow()))
     db.commit()
-    return {"message": "Reassigned", "officer_name": officer.name}
+    return _c(c, db)
 
 
-# ── Officers ──────────────────────────────────────────────────────────────────
-
+# ── Officers ───────────────────────────────────────────────────
 @router.get("/officers")
-def list_officers(
-    db: Session = Depends(get_db),
-    _: FieldOfficer = Depends(get_current_admin),
-):
-    officers = db.query(FieldOfficer).filter(FieldOfficer.is_admin == False).all()
-    return [
-        {
-            "id": o.id,
-            "name": o.name,
-            "email": o.email,
-            "phone": o.phone,
-            "zone": o.zone,
-            "is_active": o.is_active,
-            "last_login": o.last_login.isoformat() if o.last_login else None,
-            "created_at": o.created_at.isoformat() if o.created_at else "",
-        }
-        for o in officers
-    ]
+def get_officers(db: Session = Depends(get_db), _=Depends(get_current_admin)):
+    rows = db.query(FieldOfficer).all()
+    return [_ostats(o, db) for o in rows]
 
 
-@router.patch("/officers/{officer_id}")
-def edit_officer(
-    officer_id: int,
-    payload: OfficerEdit,
+# ── POST /admin/officers — create officer (admin token only) ───
+@router.post("/officers")
+def create_officer(
+    data: dict,
     db: Session = Depends(get_db),
-    _: FieldOfficer = Depends(get_current_admin),
+    _=Depends(get_current_admin),
 ):
-    """PATCH /api/admin/officers/:id — edit officer details"""
-    officer = db.query(FieldOfficer).filter(FieldOfficer.id == officer_id).first()
-    if not officer:
-        raise HTTPException(status_code=404, detail="Officer not found")
-    if payload.name  is not None: officer.name  = payload.name
-    if payload.phone is not None: officer.phone = payload.phone
-    if payload.zone  is not None: officer.zone  = payload.zone
+    """
+    Create a new officer directly through admin panel.
+    Expects: { name, email, password, phone, zone }
+    """
+    name     = (data.get("name") or "").strip()
+    email    = (data.get("email") or "").strip().lower()
+    password = (data.get("password") or "").strip()
+    phone    = (data.get("phone") or "").strip() or None
+    zone     = (data.get("zone") or "Zone A").strip()
+
+    if not name or not email or not password:
+        raise HTTPException(400, "name, email and password are required")
+
+    if db.query(FieldOfficer).filter(FieldOfficer.email == email).first():
+        raise HTTPException(400, f"Officer with email '{email}' already exists")
+
+    try:
+        officer = FieldOfficer(
+            name=name, email=email, phone=phone, zone=zone,
+            hashed_password=hash_password(password),
+            is_active=True, is_admin=False,
+            created_at=datetime.utcnow(),
+        )
+        db.add(officer)
+        db.commit()
+        db.refresh(officer)
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(500, f"Failed to create officer: {str(e)}")
+
+    return _ostats(officer, db)
+
+
+@router.patch("/officers/{oid}")
+def update_officer(
+    oid: int, data: OfficerUpdate,
+    db: Session = Depends(get_db), _=Depends(get_current_admin),
+):
+    o = db.query(FieldOfficer).filter(FieldOfficer.id == oid).first()
+    if not o: raise HTTPException(404, "Officer not found")
+    if data.name:     o.name  = data.name
+    if data.phone:    o.phone = data.phone
+    if data.zone:     o.zone  = data.zone
+    if data.password: o.hashed_password = hash_password(data.password)
     db.commit()
-    return {"message": "Officer updated"}
+    return _ostats(o, db)
 
 
-@router.delete("/officers/{officer_id}")
-def delete_officer(
-    officer_id: int,
-    db: Session = Depends(get_db),
-    _: FieldOfficer = Depends(get_current_admin),
-):
-    officer = db.query(FieldOfficer).filter(FieldOfficer.id == officer_id).first()
-    if not officer:
-        raise HTTPException(status_code=404, detail="Officer not found")
-    if officer.is_admin:
-        raise HTTPException(status_code=400, detail="Cannot delete admin account")
-    db.delete(officer)
+@router.patch("/officers/{oid}/toggle")
+def toggle_officer(oid: int, db: Session = Depends(get_db), _=Depends(get_current_admin)):
+    o = db.query(FieldOfficer).filter(FieldOfficer.id == oid).first()
+    if not o: raise HTTPException(404, "Officer not found")
+    o.is_active = not o.is_active
     db.commit()
-    return {"message": "Officer deleted"}
+    return {"id": o.id, "is_active": o.is_active, "name": o.name}
 
 
-@router.patch("/officers/{officer_id}/toggle")
-def toggle_officer(
-    officer_id: int,
-    db: Session = Depends(get_db),
-    _: FieldOfficer = Depends(get_current_admin),
-):
-    """PATCH /api/admin/officers/:id/toggle — activate / deactivate"""
-    officer = db.query(FieldOfficer).filter(FieldOfficer.id == officer_id).first()
-    if not officer:
-        raise HTTPException(status_code=404, detail="Officer not found")
-    officer.is_active = not officer.is_active
+@router.delete("/officers/{oid}")
+def delete_officer(oid: int, db: Session = Depends(get_db), _=Depends(get_current_admin)):
+    o = db.query(FieldOfficer).filter(FieldOfficer.id == oid).first()
+    if not o: raise HTTPException(404, "Officer not found")
+    db.query(Complaint).filter(Complaint.officer_id == oid).update(
+        {"officer_id": None, "status": "pending"}
+    )
+    db.delete(o)
     db.commit()
-    return {"message": "Toggled", "is_active": officer.is_active}
+    return {"deleted": True, "id": oid}
 
 
-# ── Citizens ──────────────────────────────────────────────────────────────────
-
+# ── Citizens ───────────────────────────────────────────────────
 @router.get("/citizens")
-def list_citizens(
-    db: Session = Depends(get_db),
-    _: FieldOfficer = Depends(get_current_admin),
-):
-    users = db.query(User).all()
-    return [
-        {
-            "id": u.id,
-            "name": u.name,
-            "email": u.email,
-            "phone": u.phone,
-            "reward_points": u.reward_points or 0,
-            "is_active": u.is_active,
-            "created_at": u.created_at.isoformat() if u.created_at else "",
-            "complaint_count": len(u.complaints) if u.complaints else 0,
-        }
-        for u in users
-    ]
+def get_citizens(db: Session = Depends(get_db), _=Depends(get_current_admin)):
+    rows = db.query(User).all()
+    return [_ustats(u, db) for u in rows]
 
 
-@router.delete("/citizens/{citizen_id}")
-def delete_citizen(
-    citizen_id: int,
-    db: Session = Depends(get_db),
-    _: FieldOfficer = Depends(get_current_admin),
-):
-    user = db.query(User).filter(User.id == citizen_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="Citizen not found")
-    db.delete(user)
+@router.patch("/citizens/{uid}/toggle")
+def toggle_citizen(uid: int, db: Session = Depends(get_db), _=Depends(get_current_admin)):
+    u = db.query(User).filter(User.id == uid).first()
+    if not u: raise HTTPException(404, "Citizen not found")
+    u.is_active = not u.is_active
     db.commit()
-    return {"message": "Citizen deleted"}
+    return {"id": u.id, "is_active": u.is_active, "name": u.name}
 
 
-@router.patch("/citizens/{citizen_id}/toggle")
-def toggle_citizen(
-    citizen_id: int,
-    db: Session = Depends(get_db),
-    _: FieldOfficer = Depends(get_current_admin),
-):
-    user = db.query(User).filter(User.id == citizen_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="Citizen not found")
-    user.is_active = not user.is_active
+@router.delete("/citizens/{uid}")
+def delete_citizen(uid: int, db: Session = Depends(get_db), _=Depends(get_current_admin)):
+    u = db.query(User).filter(User.id == uid).first()
+    if not u: raise HTTPException(404, "Citizen not found")
+    u.is_active = False
     db.commit()
-    return {"message": "Toggled", "is_active": user.is_active}
-
-
-@router.post("/citizens/{citizen_id}/block")
-def block_citizen(
-    citizen_id: int,
-    db: Session = Depends(get_db),
-    _: FieldOfficer = Depends(get_current_admin),
-):
-    user = db.query(User).filter(User.id == citizen_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="Citizen not found")
-    user.is_active = False
-    db.commit()
-    return {"message": "Citizen blocked"}
-
-
-# ── Chart ─────────────────────────────────────────────────────────────────────
-
-@router.get("/chart/daily")
-def chart_daily(
-    db: Session = Depends(get_db),
-    _: FieldOfficer = Depends(get_current_admin),
-):
-    """GET /api/admin/chart/daily — last 7 days complaint counts for admin.html chart"""
-    result = []
-    today = datetime.utcnow().date()
-    for i in range(6, -1, -1):
-        day = today - timedelta(days=i)
-        day_start = datetime(day.year, day.month, day.day)
-        day_end   = day_start + timedelta(days=1)
-        count = db.query(Complaint).filter(
-            Complaint.created_at >= day_start,
-            Complaint.created_at < day_end,
-        ).count()
-        result.append({"date": day.strftime("%b %d"), "count": count})
-    return result
+    return {"deleted": True, "id": uid}
