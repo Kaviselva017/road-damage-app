@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import Optional
 import bcrypt
-import jwt
+from jose import jwt, JWTError
 import os
 from datetime import datetime, timedelta
 
