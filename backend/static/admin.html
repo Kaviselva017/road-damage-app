@@ -613,7 +613,7 @@ tr:hover td { background:rgba(255,255,255,0.02); }
 const BASE = window.location.hostname === 'localhost' ? 'http://localhost:8000' : window.location.origin;
 const API = BASE + '/api';
 const _up = new URLSearchParams(window.location.search);
-if (_up.get('tk')) { localStorage.setItem('admin_token', _up.get('tk')); localStorage.setItem('admin_name', _up.get('nm') || 'admin'); }
+if (_up.get('tk')) { localStorage.setItem('admin_token', _up.get('tk')); localStorage.setItem('admin_name', _up.get('nm') || 'admin'); window.history.replaceState({}, '', '/admin'); }
 let token = localStorage.getItem('admin_token');
 let adminName = localStorage.getItem('admin_name');
 let allComplaints = [], allOfficers = [], allCitizens = [], stats = {};
@@ -737,65 +737,14 @@ async function refreshAll() { await loadAll(); showToast('✅ Data refreshed!');
 async function loadStats() {
   try {
     const res = await fetch(`${API}/admin/stats`, {headers:{Authorization:`Bearer ${token}`}});
-    stats = await res.json();
-    document.getElementById('s-total').textContent = stats.total;
-    document.getElementById('s-pending').textContent = stats.pending;
-    document.getElementById('s-progress').textContent = stats.in_progress;
-    document.getElementById('s-done').textContent = stats.completed;
-    document.getElementById('s-high').textContent = stats.high;
-    document.getElementById('s-officers').textContent = stats.total_officers;
-    document.getElementById('s-citizens').textContent = stats.total_citizens;
-    document.getElementById('s-resolution').textContent = stats.resolution_rate + '%';
-    document.getElementById('s-recent').textContent = stats.recent_7days + ' this week';
-    document.getElementById('s-rate').textContent = stats.resolution_rate + '% resolved';
-    renderSeverityBars();
-    renderSevChart();
-    renderStatusChart();
-  } catch(e) { console.error(e); }
-}
-
-function renderSeverityBars() {
-  const total = stats.total || 1;
-  document.getElementById('sev-bars').innerHTML = `
-    <div class="sev-bar-item">
-      <div class="sev-bar-label" style="color:var(--red)">High</div>
-      <div class="sev-bar-track"><div class="sev-bar-fill" style="width:${stats.high/total*100}%;background:var(--red)"></div></div>
-      <div class="sev-bar-count" style="color:var(--red)">${stats.high}</div>
-    </div>
-    <div class="sev-bar-item">
-      <div class="sev-bar-label" style="color:var(--yellow)">Medium</div>
-      <div class="sev-bar-track"><div class="sev-bar-fill" style="width:${stats.medium/total*100}%;background:var(--yellow)"></div></div>
-      <div class="sev-bar-count" style="color:var(--yellow)">${stats.medium}</div>
-    </div>
-    <div class="sev-bar-item">
-      <div class="sev-bar-label" style="color:var(--green)">Low</div>
-      <div class="sev-bar-track"><div class="sev-bar-fill" style="width:${stats.low/total*100}%;background:var(--green)"></div></div>
-      <div class="sev-bar-count" style="color:var(--green)">${stats.low}</div>
-    </div>`;
-}
-
-async function loadComplaints() {
-  try {
-    const res = await fetch(`${API}/admin/complaints`, {headers:{Authorization:`Bearer ${token}`}});
-    allComplaints = await res.json();
-    filterComplaints();
-    if (currentSection === 'map' || adminMap) renderAdminMap();
-  } catch(e) {}
-}
-
-function filterComplaints() {
-  const status = document.getElementById('filter-status').value;
-  const sev = document.getElementById('filter-severity').value;
-  const q = document.getElementById('search-complaints').value.toLowerCase();
-  let filtered = allComplaints;
-  if (status) filtered = filtered.filter(c=>c.status===status);
-  if (sev) filtered = filtered.filter(c=>c.severity===sev);
-  if (q) filtered = filtered.filter(c=>c.complaint_id.toLowerCase().includes(q)||(c.address||'').toLowerCase().includes(q)||(c.citizen_name||'').toLowerCase().includes(q));
-  document.getElementById('complaints-count').textContent = filtered.length + ' complaints';
-  const tbody = document.getElementById('complaints-tbody');
-  if (!filtered.length) { tbody.innerHTML='<tr><td colspan="9" style="text-align:center;padding:2rem;color:var(--muted)">No complaints found</td></tr>'; return; }
-  tbody.innerHTML = filtered.map(c=>`
-    <tr>
+    if (res.status === 401) { console.error('loadStats: 401 Unauthorized'); return; }
+    const data = await res.json();
+    if (!res.ok) { console.error('loadStats error:', data); return; }
+    stats = data;
+    document.getElementById('s-total').textContent = stats.total || 0;
+    document.getElementById('s-pending').textContent = stats.pending || 0;
+    document.getElementById('s-progress').textContent = stats.in_progress || 0;
+    document.getElementById('s-done').textContent = stats.completed || 0;
       <td style="color:var(--accent);font-weight:700;font-size:0.78rem">${c.complaint_id||'—'}</td>
       <td>${(c.damage_type||'').replace('_',' ')||'—'}</td>
       <td><span class="badge badge-${c.severity||'low'}">${c.severity||'—'}</span></td>
@@ -815,7 +764,7 @@ async function loadOfficers() {
   renderZoneCards();
   try {
     const res = await fetch(`${API}/admin/officers`, {headers:{Authorization:`Bearer ${token}`}});
-    if (res.status === 401) { logout(); return; }
+    if (res.status === 401) { console.error('loadOfficers: 401 Unauthorized'); return; }
     const data = await res.json();
     if (!res.ok) { console.error('loadOfficers error:', data); return; }
     allOfficers = Array.isArray(data) ? data : [];
@@ -869,7 +818,7 @@ function filterOfficers() {
 async function loadCitizens() {
   try {
     const res = await fetch(`${API}/admin/citizens`, {headers:{Authorization:`Bearer ${token}`}});
-    if (res.status === 401) { logout(); return; }
+    if (res.status === 401) { console.error('loadCitizens: 401 Unauthorized'); return; }
     const data = await res.json();
     if (!res.ok) { console.error('loadCitizens error:', data); return; }
     allCitizens = Array.isArray(data) ? data : [];
