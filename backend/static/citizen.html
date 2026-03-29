@@ -1032,13 +1032,29 @@ async function syncLocationAnalysis(lat,lng,statusLabel){
   await syncPriorityPreview(syncId);
 }
 
+
+async function fetchUserPoints(){
+  if(!token) return;
+  try{
+    const res=await fetch(`${API}/auth/me`,{headers:{Authorization:`Bearer ${token}`}});
+    if(res.ok){
+      const d=await res.json();
+      const pts=d.reward_points||0;
+      const b=document.getElementById('pts-badge');
+      const s=document.getElementById('score-num');
+      if(b) b.textContent=`⭐ ${pts} pts`;
+      if(s) s.textContent=pts;
+    }
+  }catch(e){}
+}
+
 function init(){
   const p=new URLSearchParams(window.location.search);
   const ut=p.get('tk'),un=p.get('nm');
   if(ut){localStorage.setItem('citizen_token',ut);localStorage.setItem('citizen_name',un||'citizen');window.history.replaceState({},'','/citizen');}
   token=localStorage.getItem('citizen_token');
   userName=localStorage.getItem('citizen_name');
-  if(token){showLoggedIn();showPage('report');getLocation();checkNotifications();}
+  if(token){showLoggedIn();showPage('report');getLocation();checkNotifications();fetchUserPoints();}
   else{showPage('login');}
 }
 
@@ -1061,7 +1077,7 @@ async function doLogin(){
     userName=data.name||email.split('@')[0];
     localStorage.setItem('citizen_token',token);
     localStorage.setItem('citizen_name',userName);
-    showLoggedIn();showPage('report');getLocation();checkNotifications();
+    showLoggedIn();showPage('report');getLocation();checkNotifications();fetchUserPoints();
   }catch(e){showError('login-error',e.message);}
   btn.innerHTML='Sign In';btn.disabled=false;
 }
