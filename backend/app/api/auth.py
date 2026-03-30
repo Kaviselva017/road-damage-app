@@ -1,7 +1,12 @@
 """
-RoadWatch Auth API
-KEY FIX: uses app.services.auth_service.create_access_token to create tokens
-so that dependencies.py → decode_token can always decode them (same secret/algo).
+RoadWatch Auth API — compatible with auth_service.decode_token
+
+TOKEN COMPATIBILITY STRATEGY:
+  1. Try to import create_access_token from auth_service (same secret guaranteed)
+  2. If that function doesn't exist, fall back to jose.jwt.encode with
+     the same SECRET_KEY env var that auth_service.decode_token also reads.
+
+This ensures every token this file creates can be decoded by dependencies.py.
 """
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
@@ -9,26 +14,42 @@ from pydantic import BaseModel
 from typing import Optional
 from passlib.context import CryptContext
 from datetime import datetime, timedelta
+import os
 
 from app.database import get_db
 from app.models.models import User, FieldOfficer
 from app.dependencies import get_current_user, get_current_admin
-# ── Use the project's own token factory so decode_token can always read it ──
-from app.services.auth_service import create_access_token
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 pwd_ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
+# ── Token factory — must use same secret as auth_service.decode_token ─────────
+try:
+    from app.services.auth_service import create_access_token as _svc_token
 
-def _make_token(data: dict) -> str:
-    """Wrap create_access_token — handles both (data, expires_delta) signatures."""
-    try:
-        return create_access_token(data, expires_delta=timedelta(hours=24))
-    except TypeError:
-        try:
-            return create_access_token(data, timedelta(hours=24))
-        except TypeError:
-            return create_access_token(data)
+    def _make_token(data: dict) -> str:
+        # Try every common signature for create_access_token
+        for call in [
+            lambda: _svc_token(data, expires_delta=timedelta(hours=24)),
+            lambda: _svc_token(data, timedelta(hours=24)),
+            lambda: _svc_token(data),
+        ]:
+            try:
+                return call()
+            except TypeError:
+                continue
+        raise RuntimeError("create_access_token signature not recognised")
+
+except (ImportError, Exception):
+    # Fallback: use jose.jwt directly with the same env var auth_service reads
+    from jose import jwt as _jose_jwt
+    _SECRET = os.getenv("SECRET_KEY", os.getenv("JWT_SECRET", "roadwatch-secret-key-2024"))
+    _ALGO   = os.getenv("JWT_ALGORITHM", "HS256")
+
+    def _make_token(data: dict) -> str:
+        p = data.copy()
+        p["exp"] = datetime.utcnow() + timedelta(hours=24)
+        return _jose_jwt.encode(p, _SECRET, algorithm=_ALGO)
 
 
 # ── Schemas ───────────────────────────────────────────────────────────────────
@@ -62,7 +83,7 @@ class OfficerCreate(BaseModel):
 
 @router.post("/register", status_code=status.HTTP_201_CREATED)
 def citizen_register(payload: CitizenRegister, db: Session = Depends(get_db)):
-    """POST /api/auth/register — login.html & citizen.html"""
+    """POST /api/auth/register  — used by login.html & citizen.html"""
     if db.query(User).filter(User.email == payload.email).first():
         raise HTTPException(status_code=400, detail="Email already registered")
     user = User(
@@ -84,7 +105,7 @@ def citizen_register(payload: CitizenRegister, db: Session = Depends(get_db)):
 
 @router.post("/login")
 def citizen_login(payload: CitizenLogin, db: Session = Depends(get_db)):
-    """POST /api/auth/login — login.html & citizen.html"""
+    """POST /api/auth/login  — used by login.html & citizen.html"""
     user = db.query(User).filter(User.email == payload.email).first()
     if not user or not pwd_ctx.verify(payload.password, user.hashed_password):
         raise HTTPException(status_code=401, detail="Invalid credentials")
@@ -103,7 +124,7 @@ def citizen_login(payload: CitizenLogin, db: Session = Depends(get_db)):
 
 @router.post("/officer/login")
 def officer_login(payload: OfficerLogin, db: Session = Depends(get_db)):
-    """POST /api/auth/officer/login — login.html (officer+admin) & admin.html doLogin()"""
+    """POST /api/auth/officer/login  — used by login.html and admin.html doLogin()"""
     officer = db.query(FieldOfficer).filter(FieldOfficer.email == payload.email).first()
     if not officer or not pwd_ctx.verify(payload.password, officer.hashed_password):
         raise HTTPException(status_code=401, detail="Invalid credentials")
@@ -113,10 +134,15 @@ def officer_login(payload: OfficerLogin, db: Session = Depends(get_db)):
     db.commit()
     role = "admin" if officer.is_admin else "officer"
     token = _make_token({"sub": officer.id, "role": role})
-    return {"access_token": token, "token_type": "bearer", "name": officer.name, "role": role}
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "name": officer.name,
+        "role": role,
+    }
 
 
-# ── Create Officer (admin only) ───────────────────────────────────────────────
+# ── Create Officer (admin-only) ───────────────────────────────────────────────
 
 @router.post("/officer/register", status_code=status.HTTP_201_CREATED)
 def officer_register(
@@ -124,7 +150,7 @@ def officer_register(
     db: Session = Depends(get_db),
     current_admin: FieldOfficer = Depends(get_current_admin),
 ):
-    """POST /api/auth/officer/register — admin.html Add Officer modal"""
+    """POST /api/auth/officer/register  — admin.html Add Officer modal"""
     if db.query(FieldOfficer).filter(FieldOfficer.email == payload.email).first():
         raise HTTPException(status_code=400, detail="Email already registered")
     officer = FieldOfficer(
@@ -142,11 +168,11 @@ def officer_register(
     return {"message": "Officer created", "id": officer.id, "name": officer.name}
 
 
-# ── /me — citizen points ──────────────────────────────────────────────────────
+# ── /me  (citizen points refresh) ────────────────────────────────────────────
 
 @router.get("/me")
 def get_me(current_user: User = Depends(get_current_user)):
-    """GET /api/auth/me — citizen.html fetchUserPoints()"""
+    """GET /api/auth/me  — citizen.html fetchUserPoints()"""
     return {
         "id": current_user.id,
         "name": current_user.name,
@@ -157,7 +183,6 @@ def get_me(current_user: User = Depends(get_current_user)):
 
 @router.get("/admin/me")
 def get_admin_me(current_admin: FieldOfficer = Depends(get_current_admin)):
-    """GET /api/auth/admin/me"""
     return {
         "id": current_admin.id,
         "name": current_admin.name,

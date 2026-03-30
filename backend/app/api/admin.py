@@ -1,7 +1,22 @@
 """
-RoadWatch Admin API — all endpoints match exactly what admin.html calls.
-Citizen records include computed fields (total_reports, high_severity, etc.)
-that admin.html's filterCitizens() renders.
+RoadWatch Admin API
+
+Every field name returned matches EXACTLY what admin.html reads:
+
+  loadStats()    → stats.total, stats.pending, stats.in_progress,
+                   stats.completed, stats.high, stats.medium, stats.low,
+                   stats.total_officers, stats.total_citizens,
+                   stats.resolution_rate, stats.recent_7days
+
+  loadOfficers() → o.total_complaints, o.completed, o.pending,
+                   o.resolution_rate, o.zone, o.is_active
+
+  loadCitizens() → c.total_reports, c.completed, c.fixed, c.high_severity,
+                   c.points, c.reward_points, c.is_active
+
+  loadComplaints()→ c.complaint_id, c.damage_type, c.severity, c.status,
+                    c.citizen_name, c.officer_name, c.address, c.created_at,
+                    c.image_url
 """
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
@@ -38,27 +53,43 @@ def dashboard_stats(
     db: Session = Depends(get_db),
     _: FieldOfficer = Depends(get_current_admin),
 ):
-    total    = db.query(Complaint).count()
-    pending  = db.query(Complaint).filter(Complaint.status == "pending").count()
-    done     = db.query(Complaint).filter(Complaint.status == "completed").count()
-    in_prog  = db.query(Complaint).filter(Complaint.status == "in_progress").count()
-    assigned = db.query(Complaint).filter(Complaint.status == "assigned").count()
+    all_c    = db.query(Complaint).all()
+    total    = len(all_c)
+    pending  = sum(1 for c in all_c if c.status == "pending")
+    assigned = sum(1 for c in all_c if c.status == "assigned")
+    in_prog  = sum(1 for c in all_c if c.status == "in_progress")
+    done     = sum(1 for c in all_c if c.status == "completed")
+    rejected = sum(1 for c in all_c if c.status == "rejected")
+    high     = sum(1 for c in all_c if c.severity == "high")
+    medium   = sum(1 for c in all_c if c.severity == "medium")
+    low      = sum(1 for c in all_c if c.severity == "low")
+
+    resolution_rate = round(done / total * 100, 1) if total else 0
+
+    # complaints in last 7 days
+    week_ago    = datetime.utcnow() - timedelta(days=7)
+    recent_7days = sum(1 for c in all_c if c.created_at and c.created_at >= week_ago)
+
     citizens = db.query(User).count()
     officers = db.query(FieldOfficer).filter(FieldOfficer.is_admin == False).count()
 
-    # Completion rate %
-    rate = round((done / total * 100), 1) if total else 0
-
     return {
+        # fields admin.html's loadStats() reads directly:
+        "total":           total,
+        "pending":         pending + assigned,   # pending + assigned shown as "pending"
+        "in_progress":     in_prog,
+        "completed":       done,
+        "high":            high,
+        "medium":          medium,
+        "low":             low,
+        "total_officers":  officers,
+        "total_citizens":  citizens,
+        "resolution_rate": resolution_rate,
+        "recent_7days":    recent_7days,
+        # extras for other uses
+        "assigned":        assigned,
+        "rejected":        rejected,
         "total_complaints": total,
-        "pending_complaints": pending,
-        "resolved_complaints": done,
-        "completed": done,
-        "in_progress_complaints": in_prog,
-        "assigned_complaints": assigned,
-        "total_citizens": citizens,
-        "total_officers": officers,
-        "completion_rate": rate,
     }
 
 
@@ -75,30 +106,32 @@ def list_complaints(
         user    = db.query(User).filter(User.id == c.user_id).first()
         officer = db.query(FieldOfficer).filter(FieldOfficer.id == c.officer_id).first() if c.officer_id else None
         result.append({
-            "id": c.id,
-            "complaint_id": c.complaint_id,
-            "description": c.description,
-            "address": c.address or "",
-            "latitude": c.latitude,
-            "longitude": c.longitude,
-            "area_type": c.area_type,
-            "damage_type": c.damage_type,
-            "severity": c.severity,
-            "status": c.status,
-            "ai_confidence": c.ai_confidence,
-            "priority_score": c.priority_score,
-            "image_url": c.image_url,
-            "after_image_url": c.after_image_url,
-            "officer_notes": c.officer_notes,
-            "allocated_fund": c.allocated_fund,
-            "is_duplicate": c.is_duplicate,
-            "report_count": c.report_count,
-            "created_at": c.created_at.isoformat() if c.created_at else "",
-            "resolved_at": c.resolved_at.isoformat() if c.resolved_at else None,
-            "citizen_name": user.name if user else "Unknown",
-            "citizen_id": c.user_id,
-            "officer_name": officer.name if officer else "Unassigned",
-            "officer_id": c.officer_id,
+            "id":             c.id,
+            "complaint_id":   c.complaint_id,
+            "description":    c.description or "",
+            "address":        c.address or "",
+            "latitude":       c.latitude,
+            "longitude":      c.longitude,
+            "area_type":      c.area_type or "",
+            "damage_type":    c.damage_type or "",
+            "severity":       c.severity or "medium",
+            "status":         c.status or "pending",
+            "ai_confidence":  c.ai_confidence or 0,
+            "priority_score": c.priority_score or 0,
+            "image_url":      c.image_url or "",
+            "after_image_url":c.after_image_url or "",
+            "officer_notes":  c.officer_notes or "",
+            "allocated_fund": c.allocated_fund or 0,
+            "is_duplicate":   c.is_duplicate or False,
+            "report_count":   c.report_count or 1,
+            "created_at":     c.created_at.isoformat() if c.created_at else "",
+            "resolved_at":    c.resolved_at.isoformat() if c.resolved_at else None,
+            # Fields admin.html renders directly:
+            "citizen_name":   user.name if user else "Unknown",
+            "citizen_phone":  user.phone if user else "",
+            "citizen_id":     c.user_id,
+            "officer_name":   officer.name if officer else "Unassigned",
+            "officer_id":     c.officer_id,
         })
     return result
 
@@ -111,6 +144,9 @@ def reassign_complaint(
     _: FieldOfficer = Depends(get_current_admin),
 ):
     complaint = db.query(Complaint).filter(Complaint.id == complaint_id).first()
+    if not complaint:
+        # try by string complaint_id
+        complaint = db.query(Complaint).filter(Complaint.complaint_id == str(complaint_id)).first()
     if not complaint:
         raise HTTPException(status_code=404, detail="Complaint not found")
     officer = db.query(FieldOfficer).filter(FieldOfficer.id == payload.officer_id).first()
@@ -132,22 +168,26 @@ def list_officers(
     officers = db.query(FieldOfficer).filter(FieldOfficer.is_admin == False).all()
     result = []
     for o in officers:
-        # Compute stats admin.html renders
-        total_assigned = db.query(Complaint).filter(Complaint.officer_id == o.id).count()
-        completed      = db.query(Complaint).filter(
-            Complaint.officer_id == o.id, Complaint.status == "completed"
-        ).count()
+        complaints     = db.query(Complaint).filter(Complaint.officer_id == o.id).all()
+        total_c        = len(complaints)
+        completed_c    = sum(1 for c in complaints if c.status == "completed")
+        pending_c      = sum(1 for c in complaints if c.status in ("pending", "assigned"))
+        resolution     = round(completed_c / total_c * 100, 1) if total_c else 0
         result.append({
-            "id": o.id,
-            "name": o.name,
-            "email": o.email,
-            "phone": o.phone,
-            "zone": o.zone,
-            "is_active": o.is_active,
-            "last_login": o.last_login.isoformat() if o.last_login else None,
-            "created_at": o.created_at.isoformat() if o.created_at else "",
-            "total_assigned": total_assigned,
-            "completed": completed,
+            "id":               o.id,
+            "name":             o.name,
+            "email":            o.email,
+            "phone":            o.phone or "",
+            "zone":             o.zone or "",
+            "is_active":        o.is_active,
+            "last_login":       o.last_login.isoformat() if o.last_login else None,
+            "created_at":       o.created_at.isoformat() if o.created_at else "",
+            # Fields admin.html renders (filterOfficers, chart, zone cards):
+            "total_complaints": total_c,
+            "completed":        completed_c,
+            "pending":          pending_c,
+            "resolution_rate":  resolution,
+            "performance":      resolution,   # alias used by officerResolutionRate()
         })
     return result
 
@@ -210,25 +250,24 @@ def list_citizens(
     users = db.query(User).all()
     result = []
     for u in users:
-        # Compute stats that admin.html's filterCitizens() renders:
-        # c.total_reports, c.fixed||c.completed, c.high_severity, c.points
-        all_complaints   = db.query(Complaint).filter(Complaint.user_id == u.id).all()
-        total_reports    = len(all_complaints)
-        completed        = sum(1 for c in all_complaints if c.status == "completed")
-        high_severity    = sum(1 for c in all_complaints if c.severity == "high")
+        complaints   = db.query(Complaint).filter(Complaint.user_id == u.id).all()
+        total        = len(complaints)
+        completed    = sum(1 for c in complaints if c.status == "completed")
+        high_sev     = sum(1 for c in complaints if c.severity == "high")
         result.append({
-            "id": u.id,
-            "name": u.name,
-            "email": u.email,
-            "phone": u.phone or "",
+            "id":            u.id,
+            "name":          u.name,
+            "email":         u.email,
+            "phone":         u.phone or "",
+            "is_active":     u.is_active,
+            "created_at":    u.created_at.isoformat() if u.created_at else "",
+            # Fields admin.html's filterCitizens() renders:
+            "total_reports": total,
+            "completed":     completed,
+            "fixed":         completed,       # alias: c.fixed||c.completed
+            "high_severity": high_sev,
+            "points":        u.reward_points or 0,
             "reward_points": u.reward_points or 0,
-            "points": u.reward_points or 0,          # alias admin.html uses
-            "is_active": u.is_active,
-            "total_reports": total_reports,
-            "completed": completed,
-            "fixed": completed,                       # alias admin.html uses
-            "high_severity": high_severity,
-            "created_at": u.created_at.isoformat() if u.created_at else "",
         })
     return result
 
@@ -282,7 +321,7 @@ def chart_daily(
     db: Session = Depends(get_db),
     _: FieldOfficer = Depends(get_current_admin),
 ):
-    """Last 7 days complaint counts — admin.html renderDailyChart()"""
+    """Last 7 days complaint counts — renderDailyChart() in admin.html"""
     result = []
     today = datetime.utcnow().date()
     for i in range(6, -1, -1):
