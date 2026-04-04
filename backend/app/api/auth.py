@@ -1,78 +1,30 @@
 """
 RoadWatch Auth API
 Endpoints used by login.html, citizen.html, admin.html — matched exactly.
-Token creation tries auth_service first (same secret guaranteed), then falls back.
 """
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import Optional
 from passlib.context import CryptContext
-from datetime import datetime, timedelta
-import os
+from datetime import datetime, timezone
 
 from app.database import get_db
 from app.models.models import User, FieldOfficer
 from app.dependencies import get_current_user, get_current_admin
+from app.services.auth_service import create_access_token
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 pwd_ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
-# ── Token factory: same secret as decode_token ────────────────────────────────
+def _now():
+    return datetime.now(timezone.utc)
+
+
 def _make_token(data: dict) -> str:
-    """
-    Try every strategy to create a token decode_token can verify.
-    Strategy 1: import create_access_token from auth_service (same secret guaranteed)
-    Strategy 2: read SECRET_KEY from auth_service module attributes
-    Strategy 3: fall back to env vars with common defaults
-    """
-    # Strategy 1 — use auth_service.create_access_token directly
-    try:
-        from app.services.auth_service import create_access_token
-        for call in [
-            lambda: create_access_token(data, expires_delta=timedelta(hours=24)),
-            lambda: create_access_token(data, timedelta(hours=24)),
-            lambda: create_access_token(data),
-        ]:
-            try:
-                result = call()
-                if result:
-                    return result
-            except TypeError:
-                continue
-    except Exception:
-        pass
-
-    # Strategy 2 — read SECRET_KEY from auth_service module
-    try:
-        import app.services.auth_service as _svc
-        from jose import jwt as _j
-        _secret = getattr(_svc, 'SECRET_KEY',
-                  getattr(_svc, 'JWT_SECRET',
-                  getattr(_svc, 'secret_key',
-                  getattr(_svc, 'SECRET', None))))
-        _algo   = getattr(_svc, 'ALGORITHM',
-                  getattr(_svc, 'JWT_ALGORITHM', 'HS256'))
-        if _secret:
-            p = data.copy()
-            p['exp'] = datetime.utcnow() + timedelta(hours=24)
-            return _j.encode(p, _secret, algorithm=_algo)
-    except Exception:
-        pass
-
-    # Strategy 3 — env vars with common project defaults
-    from jose import jwt as _j
-    _secret = (
-        os.getenv('SECRET_KEY') or
-        os.getenv('JWT_SECRET') or
-        os.getenv('JWT_SECRET_KEY') or
-        'roadwatch-secret-key-2024'
-    )
-    _algo = os.getenv('JWT_ALGORITHM', 'HS256')
-    p = data.copy()
-    p['exp'] = datetime.utcnow() + timedelta(hours=24)
-    return _j.encode(p, _secret, algorithm=_algo)
+    """Create a JWT using the shared auth_service (same SECRET_KEY)."""
+    return create_access_token(data)
 
 
 # ── Schemas ───────────────────────────────────────────────────────────────────
@@ -107,21 +59,26 @@ class OfficerCreate(BaseModel):
 @router.post("/register", status_code=status.HTTP_201_CREATED)
 def citizen_register(payload: CitizenRegister, db: Session = Depends(get_db)):
     """POST /api/auth/register — login.html & citizen.html"""
-    if db.query(User).filter(User.email == payload.email).first():
-        raise HTTPException(status_code=400, detail="Email already registered")
-    user = User(
-        name=payload.name,
-        email=payload.email,
-        hashed_password=pwd_ctx.hash(payload.password),
-        phone=payload.phone,
-        reward_points=0,
-        is_active=True,
-    )
-    db.add(user)
-    db.commit()
-    db.refresh(user)
-    token = _make_token({"sub": user.id, "role": "citizen"})
-    return {"access_token": token, "token_type": "bearer", "name": user.name}
+    try:
+        if db.query(User).filter(User.email == payload.email).first():
+            raise HTTPException(status_code=400, detail="Email already registered")
+        user = User(
+            name=payload.name,
+            email=payload.email,
+            hashed_password=pwd_ctx.hash(payload.password),
+            phone=payload.phone,
+            reward_points=0,
+            is_active=True,
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+        token = _make_token({"sub": user.id, "role": "citizen"})
+        return {"access_token": token, "token_type": "bearer", "name": user.name}
+    except Exception as e:
+        import logging
+        logging.getLogger("roadwatch").error(f"Registration failed: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # ── Citizen Login ─────────────────────────────────────────────────────────────
@@ -153,7 +110,7 @@ def officer_login(payload: OfficerLogin, db: Session = Depends(get_db)):
         raise HTTPException(status_code=401, detail="Invalid credentials")
     if not officer.is_active:
         raise HTTPException(status_code=403, detail="Account inactive")
-    officer.last_login = datetime.utcnow()
+    officer.last_login = _now()
     db.commit()
     role = "admin" if officer.is_admin else "officer"
     token = _make_token({"sub": officer.id, "role": role})

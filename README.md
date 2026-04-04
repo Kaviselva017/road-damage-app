@@ -36,7 +36,7 @@ road-damage-app/
 │   │   ├── screens/
 │   │   └── services/
 │   └── pubspec.yaml
-├── dashboard/             # React.js officer dashboard
+├── frontend/              # Vite.js officer dashboard
 │   ├── src/
 │   │   ├── App.jsx
 │   │   ├── pages/
@@ -152,10 +152,10 @@ flutter run
 
 ---
 
-## Dashboard Setup (Manual)
+## Frontend Setup (Manual)
 
 ```bash
-cd dashboard
+cd frontend
 npm install
 # Create .env file:
 echo "VITE_API_URL=http://localhost:8000/api" > .env

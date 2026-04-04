@@ -1,56 +1,72 @@
-# Python
+# ── Python ────────────────────────────────────────────────────────
 __pycache__/
 *.py[cod]
 *.pyo
 .venv/
+.venv_clean/
 venv/
 env/
 *.egg-info/
 dist/
 build/
 
-# Environment files — NEVER commit secrets
+# ── Environment / secrets — NEVER commit ─────────────────────────
 .env
 *.env
 !.env.example
+!env_setup.txt
 
-# Database files — SQLite DBs are local only
+# ── Databases — local only ────────────────────────────────────────
 *.db
 *.sqlite
 *.sqlite3
+backend/ci.db
 
-# Logs and debug outputs
+# ── Logs ─────────────────────────────────────────────────────────
 *.log
 *.err
 *.out
+backend-ci.log
 
-# Uploaded images — too large for git
+# ── Uploaded images — too large / user-generated ─────────────────
 backend/uploads/
 backend/smoke_uploads/
 backend/smoke_uploads_*/
 backend/uploads_smoke_*/
+uploads/
 
-# Nested git repos accidentally added
+# ── AI model weights — large binaries ────────────────────────────
+ai_model/*.pt
+ai_model/*.pth
+ai_model/*.onnx
+# Keep the README
+!ai_model/README.md
+
+# ── Duplicate / stale branch copies ──────────────────────────────
 .clean_admin_map_branch/
 .clean_priority_push_branch/
 .deploy_main_sync/
 
-# Patch files
+# ── Patch files ───────────────────────────────────────────────────
 *.patch
 
-# OS
+# ── OS ────────────────────────────────────────────────────────────
 .DS_Store
 Thumbs.db
 
-# IDE
+# ── IDE ───────────────────────────────────────────────────────────
 .vscode/
 .idea/
 *.swp
 
-# Node
+# ── Node ──────────────────────────────────────────────────────────
 node_modules/
-dist/
+dashboard/dist/
 .next/
 
-# Render / CI artifacts
+# ── Render / CI ───────────────────────────────────────────────────
 .render-buildinfo.json
+
+# ── SSL certs generated locally ───────────────────────────────────
+backend/cert.pem
+backend/key.pem

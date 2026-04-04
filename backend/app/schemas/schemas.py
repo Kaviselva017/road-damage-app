@@ -57,3 +57,14 @@ class ReassignUpdate(BaseModel):
 
 class MessageSend(BaseModel):
     message: str
+
+
+class OfficerDirectoryOut(BaseModel):
+    id:    int
+    name:  str
+    email: str
+    phone: Optional[str] = None
+    zone:  Optional[str] = None
+
+    class Config:
+        from_attributes = True

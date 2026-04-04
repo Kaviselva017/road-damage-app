@@ -2,10 +2,10 @@
 RoadWatch Models — uses plain String for status/severity/damage_type
 so SQLite works without enum migration issues.
 """
-from datetime import datetime
 from sqlalchemy import Boolean, Column, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import relationship
 from app.database import Base
+from app.utils.datetime_utils import utc_now
 
 
 class User(Base):
@@ -17,7 +17,7 @@ class User(Base):
     hashed_password = Column(String, nullable=False)
     is_active       = Column(Boolean, default=True)
     reward_points   = Column(Integer, default=0)
-    created_at      = Column(DateTime, default=datetime.utcnow)
+    created_at      = Column(DateTime, default=utc_now)
 
     complaints    = relationship("Complaint", back_populates="user")
     notifications = relationship("Notification", back_populates="user")
@@ -34,7 +34,7 @@ class FieldOfficer(Base):
     is_admin        = Column(Boolean, default=False)
     is_active       = Column(Boolean, default=True)
     last_login      = Column(DateTime, nullable=True)
-    created_at      = Column(DateTime, default=datetime.utcnow)
+    created_at      = Column(DateTime, default=utc_now)
 
     complaints        = relationship("Complaint", back_populates="officer")
     complaint_officers = relationship("ComplaintOfficer", back_populates="officer")
@@ -72,7 +72,7 @@ class Complaint(Base):
     duplicate_of = Column(String, nullable=True)
     report_count = Column(Integer, default=1)
 
-    created_at  = Column(DateTime, default=datetime.utcnow)
+    created_at  = Column(DateTime, default=utc_now)
     resolved_at = Column(DateTime, nullable=True)
 
     user    = relationship("User", back_populates="complaints")
@@ -87,7 +87,7 @@ class ComplaintOfficer(Base):
     id           = Column(Integer, primary_key=True, index=True)
     complaint_id = Column(String, ForeignKey("complaints.complaint_id"))
     officer_id   = Column(Integer, ForeignKey("field_officers.id"))
-    assigned_at  = Column(DateTime, default=datetime.utcnow)
+    assigned_at  = Column(DateTime, default=utc_now)
 
     complaint = relationship("Complaint", back_populates="complaint_officers")
     officer   = relationship("FieldOfficer", back_populates="complaint_officers")
@@ -101,7 +101,7 @@ class Notification(Base):
     message      = Column(Text, nullable=False)
     type         = Column(String, default="info")
     is_read      = Column(Boolean, default=False)
-    created_at   = Column(DateTime, default=datetime.utcnow)
+    created_at   = Column(DateTime, default=utc_now)
 
     user          = relationship("User", back_populates="notifications")
     complaint_ref = relationship("Complaint", back_populates="notifications")
@@ -114,7 +114,7 @@ class Message(Base):
     sender_id    = Column(Integer, nullable=False)
     sender_role  = Column(String, nullable=False)
     message      = Column(Text, nullable=False)
-    created_at   = Column(DateTime, default=datetime.utcnow)
+    created_at   = Column(DateTime, default=utc_now)
 
     complaint_ref = relationship("Complaint", back_populates="messages")
 
@@ -125,6 +125,6 @@ class LoginLog(Base):
     email          = Column(String, nullable=False)
     role           = Column(String, nullable=False)
     ip_address     = Column(String, nullable=True)
-    logged_in_at   = Column(DateTime, default=datetime.utcnow)
+    logged_in_at   = Column(DateTime, default=utc_now)
     logged_out_at  = Column(DateTime, nullable=True)
     session_minutes = Column(Integer, nullable=True)

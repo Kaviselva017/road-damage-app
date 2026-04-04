@@ -1,0 +1,84 @@
+"""Add missing columns v2.1 — safe for existing and fresh databases.
+
+Revision ID: 20260331_0003
+Revises: 20260328_0002
+Create Date: 2026-03-31 00:00:00.000000
+
+This migration adds any columns that might be missing from older installs.
+All additions use batch_alter_table (required for SQLite ALTER TABLE support).
+"""
+from alembic import op
+import sqlalchemy as sa
+
+revision     = "20260331_0003"
+down_revision = "20260328_0002"
+branch_labels = None
+depends_on    = None
+
+
+def _col_exists(table: str, col: str) -> bool:
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    cols = {c["name"] for c in inspector.get_columns(table)}
+    return col in cols
+
+
+def _add_if_missing(table: str, col: str, col_def):
+    """Add column only if it doesn't already exist."""
+    if not _col_exists(table, col):
+        with op.batch_alter_table(table) as batch_op:
+            batch_op.add_column(sa.Column(col, col_def))
+
+
+def upgrade() -> None:
+    # ── complaints ────────────────────────────────────────────────
+    _add_if_missing("complaints", "area_type",         sa.String(50))
+    _add_if_missing("complaints", "report_count",      sa.Integer())
+    _add_if_missing("complaints", "priority_score",    sa.Float())
+    _add_if_missing("complaints", "allocated_fund",    sa.Float())
+    _add_if_missing("complaints", "fund_note",         sa.Text())
+    _add_if_missing("complaints", "fund_allocated_at", sa.DateTime())
+    _add_if_missing("complaints", "is_duplicate",      sa.Boolean())
+    _add_if_missing("complaints", "duplicate_of",      sa.String(20))
+    _add_if_missing("complaints", "rainfall_mm",       sa.Float())
+    _add_if_missing("complaints", "traffic_volume",    sa.String(50))
+    _add_if_missing("complaints", "road_age_years",    sa.Integer())
+    _add_if_missing("complaints", "weather_condition", sa.String(100))
+    _add_if_missing("complaints", "resolved_at",       sa.DateTime())
+    _add_if_missing("complaints", "image_hash",        sa.String(64))
+    # damage_size_score and sub-scores used by the priority display
+    _add_if_missing("complaints", "damage_size_score",     sa.Float())
+    _add_if_missing("complaints", "traffic_density_score", sa.Float())
+    _add_if_missing("complaints", "accident_risk_score",   sa.Float())
+    _add_if_missing("complaints", "area_criticality_score",sa.Float())
+
+    # ── field_officers ────────────────────────────────────────────
+    _add_if_missing("field_officers", "last_login",    sa.DateTime())
+    _add_if_missing("field_officers", "is_admin",      sa.Boolean())
+
+    # ── login_logs ────────────────────────────────────────────────
+    _add_if_missing("login_logs", "logged_out_at",     sa.DateTime())
+    _add_if_missing("login_logs", "session_minutes",   sa.Integer())
+
+    # ── notifications — create table if absent ────────────────────
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    if "notifications" not in inspector.get_table_names():
+        op.create_table(
+            "notifications",
+            sa.Column("id",           sa.Integer(), primary_key=True, nullable=False),
+            sa.Column("user_id",      sa.Integer(), sa.ForeignKey("users.id"), nullable=True),
+            sa.Column("complaint_id", sa.String(20), nullable=True),
+            sa.Column("type",         sa.String(50), nullable=True),
+            sa.Column("title",        sa.String(200), nullable=True),
+            sa.Column("message",      sa.Text(), nullable=True),
+            sa.Column("is_read",      sa.Boolean(), nullable=True, server_default=sa.false()),
+            sa.Column("created_at",   sa.DateTime(), nullable=True,
+                      server_default=sa.text("CURRENT_TIMESTAMP")),
+        )
+        op.create_index("ix_notifications_id", "notifications", ["id"], unique=False)
+
+
+def downgrade() -> None:
+    # Downgrade is intentionally a no-op for additive migrations.
+    pass

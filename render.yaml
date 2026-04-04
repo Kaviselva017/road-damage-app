@@ -1,39 +1,83 @@
+# render.yaml — RoadWatch deployment manifest
+# Deploy steps:
+#   1. Push this file to GitHub
+#   2. In Render dashboard: New → Blueprint → connect your repo
+#   3. Set all `sync: false` vars in the Render dashboard (they are secrets)
+#   4. Render will create both the web service and the PostgreSQL database
+
 services:
   - type: web
     name: roadwatch-api
     env: python
+    region: oregon
+    plan: free
     buildCommand: pip install -r backend/requirements.txt
     startCommand: cd backend && bash start.sh
+    healthCheckPath: /healthz
     envVars:
+      # ── Application ──────────────────────────────────────────
       - key: APP_ENV
         value: production
+
+      # ── Database ─────────────────────────────────────────────
+      # For production use the Render PostgreSQL add-on (see databases section
+      # below).  The DATABASE_URL is injected automatically via fromDatabase.
+      # Remove the sqlite fallback line once you add a real DB.
       - key: DATABASE_URL
-        value: sqlite:///./road_damage.db
+        value: sqlite:///./road_damage.db   # REPLACE with fromDatabase ref below
+
+      # ── Security ──────────────────────────────────────────────
       - key: SECRET_KEY
-        sync: false          # Set in Render Dashboard → paste a strong random string
+        sync: false          # REQUIRED — paste a strong random string in dashboard
+                             # Generate one: python -c "import secrets; print(secrets.token_hex(32))"
       - key: ALGORITHM
         value: HS256
       - key: ACCESS_TOKEN_EXPIRE_MINUTES
-        value: "10080"
+        value: "10080"       # 7 days
+
+      # ── CORS ──────────────────────────────────────────────────
+      # Add every frontend origin, comma-separated.
+      # Include both the static HTML path and the React dashboard origin.
       - key: CORS_ORIGINS
-        value: https://road-damage-appsystem.onrender.com
+        value: "https://road-damage-appsystem.onrender.com,https://roadwatch-dashboard.onrender.com"
+
+      # ── File storage ──────────────────────────────────────────
       - key: UPLOAD_DIR
         value: uploads
       - key: YOLO_MODEL_PATH
-        value: ai_model/road_damage_yolov8.pt
+        value: ../ai_model/road_damage_yolov8.pt
+
+      # ── Email — Gmail SMTP ────────────────────────────────────
       - key: SMTP_SERVER
         value: smtp.gmail.com
       - key: SMTP_PORT
         value: "587"
       - key: SMTP_USER
-        sync: false          # Set in Render Dashboard: kaviselvakumar2005@gmail.com
+        sync: false          # your Gmail address
       - key: SMTP_PASS
-        sync: false          # Set in Render Dashboard: your 16-char Gmail app password
+        sync: false          # 16-char Gmail App Password (no spaces)
       - key: EMAIL_FROM
-        sync: false          # Same as SMTP_USER
+        sync: false          # same as SMTP_USER
       - key: ADMIN_EMAIL
-        sync: false          # Same as SMTP_USER
+        sync: false          # receives high-severity alerts
+
+      # ── Notification links ─────────────────────────────────────
       - key: BASE_URL
         value: https://road-damage-appsystem.onrender.com
+
+      # ── Email fallback — Resend ────────────────────────────────
       - key: RESEND_API_KEY
-        sync: false          # Optional — Resend fallback if Gmail fails
+        sync: false          # optional — only needed if Gmail SMTP fails
+
+# ── PostgreSQL database (uncomment to use a real DB on Render free tier) ──
+# databases:
+#   - name: roadwatch-db
+#     databaseName: roadwatch
+#     user: roadwatch
+#     plan: free
+#
+# Then replace the DATABASE_URL env var above with:
+#   - key: DATABASE_URL
+#     fromDatabase:
+#       name: roadwatch-db
+#       property: connectionString

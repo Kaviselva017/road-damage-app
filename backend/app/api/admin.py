@@ -14,12 +14,16 @@ Verified from admin.html source:
                     .created_at, .image_url
   chart/daily    → [{date, count}]
 """
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
-from typing import Optional
+from typing import List, Optional
 from passlib.context import CryptContext
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+from fpdf import FPDF
+import io
+import os
 
 from app.database import get_db
 from app.models.models import User, FieldOfficer, Complaint
@@ -47,21 +51,21 @@ def dashboard_stats(
     db: Session = Depends(get_db),
     _: FieldOfficer = Depends(get_current_admin),
 ):
-    all_c    = db.query(Complaint).all()
-    total    = len(all_c)
-    pending  = sum(1 for c in all_c if c.status == "pending")
-    assigned = sum(1 for c in all_c if c.status == "assigned")
-    in_prog  = sum(1 for c in all_c if c.status == "in_progress")
-    done     = sum(1 for c in all_c if c.status == "completed")
-    high     = sum(1 for c in all_c if c.severity == "high")
-    medium   = sum(1 for c in all_c if c.severity == "medium")
-    low      = sum(1 for c in all_c if c.severity == "low")
-    week_ago = datetime.utcnow() - timedelta(days=7)
-    recent   = sum(1 for c in all_c if c.created_at and c.created_at >= week_ago)
+    from sqlalchemy import func
+    _cnt = lambda *filters: db.query(func.count(Complaint.id)).filter(*filters).scalar() or 0
+    total    = db.query(func.count(Complaint.id)).scalar() or 0
+    pending  = _cnt(Complaint.status == "pending")
+    assigned = _cnt(Complaint.status == "assigned")
+    in_prog  = _cnt(Complaint.status == "in_progress")
+    done     = _cnt(Complaint.status == "completed")
+    high     = _cnt(Complaint.severity == "high")
+    medium   = _cnt(Complaint.severity == "medium")
+    low      = _cnt(Complaint.severity == "low")
+    week_ago = datetime.now(timezone.utc) - timedelta(days=7)
+    recent   = _cnt(Complaint.created_at >= week_ago)
     rate     = round(done / total * 100, 1) if total else 0
 
     return {
-        # exact field names admin.html uses:
         "total":           total,
         "pending":         pending + assigned,
         "in_progress":     in_prog,
@@ -69,8 +73,8 @@ def dashboard_stats(
         "high":            high,
         "medium":          medium,
         "low":             low,
-        "total_officers":  db.query(FieldOfficer).filter(FieldOfficer.is_admin == False).count(),
-        "total_citizens":  db.query(User).count(),
+        "total_officers":  db.query(func.count(FieldOfficer.id)).filter(FieldOfficer.is_admin == False).scalar() or 0,
+        "total_citizens":  db.query(func.count(User.id)).scalar() or 0,
         "resolution_rate": rate,
         "recent_7days":    recent,
         "total_complaints": total,
@@ -306,10 +310,10 @@ def chart_daily(
     _: FieldOfficer = Depends(get_current_admin),
 ):
     result = []
-    today = datetime.utcnow().date()
+    today = datetime.now(timezone.utc).date()
     for i in range(6, -1, -1):
         day   = today - timedelta(days=i)
-        start = datetime(day.year, day.month, day.day)
+        start = datetime(day.year, day.month, day.day, tzinfo=timezone.utc)
         end   = start + timedelta(days=1)
         count = db.query(Complaint).filter(
             Complaint.created_at >= start,
@@ -317,3 +321,153 @@ def chart_daily(
         ).count()
         result.append({"date": day.strftime("%b %d"), "count": count})
     return result
+
+
+# ── PDF Report Generation ───────────────────────────────────────────────────
+
+class RoadWatchPDF(FPDF):
+    def header(self):
+        self.set_fill_color(10, 12, 16) # Dark background for header
+        self.rect(0, 0, 210, 30, 'F')
+        self.set_font("helvetica", "B", 20)
+        self.set_text_color(245, 166, 35) # Accent orange
+        self.cell(0, 20, "ROADWATCH SYSTEM REPORT", align="C", ln=True)
+        self.set_font("helvetica", "I", 10)
+        self.set_text_color(107, 118, 148) # Muted text
+        self.cell(0, -5, f"Generated on: {datetime.now(timezone.utc).strftime('%d %b %Y, %H:%M %Z')}", align="C", ln=True)
+        self.ln(15)
+
+    def footer(self):
+        self.set_y(-15)
+        self.set_font("helvetica", "I", 8)
+        self.set_text_color(128)
+        self.cell(0, 10, f"Page {self.page_no()} / {{nb}} — Confidential RoadWatch Internal Document", align="C")
+
+@router.get("/reports/download")
+def download_pdf_report(
+    status: Optional[str] = Query(None),
+    severity: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+    _: FieldOfficer = Depends(get_current_admin),
+):
+    query = db.query(Complaint)
+    if status and status != "all":
+        query = query.filter(Complaint.status == status)
+    if severity and severity != "all":
+        query = query.filter(Complaint.severity == severity)
+    
+    complaints = query.order_by(Complaint.created_at.desc()).all()
+    
+    pdf = RoadWatchPDF()
+    pdf.set_auto_page_break(auto=True, margin=15)
+    pdf.add_page()
+    
+    if not complaints:
+        pdf.set_font("helvetica", "B", 14)
+        pdf.cell(0, 20, "No complaints found matching current filters.", align="C")
+    else:
+        for c in complaints:
+            # Check if we need a new page for image + info
+            if pdf.get_y() > 200:
+                pdf.add_page()
+
+            # ID Row
+            pdf.set_fill_color(24, 29, 39)
+            pdf.rect(10, pdf.get_y(), 190, 10, 'F')
+            pdf.set_font("helvetica", "B", 12)
+            pdf.set_text_color(255, 255, 255)
+            cid = c.complaint_id or f"RD-{c.id:06d}"
+            pdf.cell(100, 10, f"  COMPLAINT: {cid}", ln=False)
+            
+            # Status badge color
+            pdf.set_font("helvetica", "B", 9)
+            if c.status == "completed": pdf.set_text_color(62, 207, 178)
+            elif c.status == "rejected": pdf.set_text_color(224, 92, 92)
+            else: pdf.set_text_color(245, 166, 35)
+            pdf.cell(90, 10, f"STATUS: {str(c.status).upper()}   ", align="R", ln=True)
+
+            pdf.ln(2)
+            y_start = pdf.get_y()
+
+            # Image logic
+            img_drawn = False
+            if c.image_url:
+                # Local path for images
+                img_path = "." + c.image_url # Assuming /uploads/...
+                if os.path.exists(img_path):
+                    try:
+                        pdf.image(img_path, x=10, y=y_start, w=70)
+                        img_drawn = True
+                    except Exception: pass
+            
+            x_offset = 85 if img_drawn else 15
+            pdf.set_text_color(50)
+            
+            # Data Grid
+            pdf.set_xy(x_offset, y_start)
+            pdf.set_font("helvetica", "B", 10)
+            pdf.cell(30, 6, "Damage Type:")
+            pdf.set_font("helvetica", "", 10)
+            pdf.cell(0, 6, str(c.damage_type).title(), ln=True)
+
+            pdf.set_x(x_offset)
+            pdf.set_font("helvetica", "B", 10)
+            pdf.cell(30, 6, "Severity:")
+            pdf.set_font("helvetica", "B", 10)
+            if c.severity == "high": pdf.set_text_color(224, 92, 92)
+            else: pdf.set_text_color(100)
+            pdf.cell(0, 6, str(c.severity).upper(), ln=True)
+            pdf.set_text_color(50)
+
+            pdf.set_x(x_offset)
+            pdf.set_font("helvetica", "B", 10)
+            pdf.cell(30, 6, "Created On:")
+            pdf.set_font("helvetica", "", 10)
+            ts = c.created_at.strftime('%d %b %Y, %I:%M %p') if c.created_at else "N/A"
+            pdf.cell(0, 6, ts, ln=True)
+
+            pdf.set_x(x_offset)
+            pdf.set_font("helvetica", "B", 10)
+            pdf.cell(30, 6, "GPS Coordinates:")
+            pdf.set_font("helvetica", "", 10)
+            pdf.cell(0, 6, f"{c.latitude:.5f}, {c.longitude:.5f}", ln=True)
+
+            # Address - multi-line
+            pdf.set_x(x_offset)
+            pdf.set_font("helvetica", "B", 10)
+            pdf.cell(30, 6, "Location:")
+            pdf.set_font("helvetica", "", 9)
+            pdf.multi_cell(0, 5, c.address or "No address provided")
+
+            # Officer Info
+            pdf.ln(2)
+            pdf.set_x(x_offset)
+            pdf.set_font("helvetica", "B", 10)
+            pdf.cell(30, 6, "Officer:")
+            pdf.set_font("helvetica", "I", 10)
+            off_name = "Unassigned"
+            if c.officer_id:
+                off = db.query(FieldOfficer).filter(FieldOfficer.id == c.officer_id).first()
+                if off: off_name = off.name
+            pdf.cell(0, 6, off_name, ln=True)
+
+            pdf.ln(10)
+            if pdf.get_y() < y_start + 50 and img_drawn:
+                pdf.set_y(y_start + 55)
+            
+            # Divider
+            pdf.set_draw_color(230)
+            pdf.line(10, pdf.get_y(), 200, pdf.get_y())
+            pdf.ln(5)
+
+    buffer = io.BytesIO()
+    pdf_out = pdf.output()
+    buffer.write(pdf_out)
+    buffer.seek(0)
+    
+    filename = f"RoadWatch_Report_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf"
+    return StreamingResponse(
+        buffer,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )

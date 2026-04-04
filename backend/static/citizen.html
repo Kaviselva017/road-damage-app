@@ -374,7 +374,7 @@ const API=(window.location.hostname==='localhost'?'http://localhost:8000':window
 let token=localStorage.getItem('citizen_token');
 let userName=localStorage.getItem('citizen_name');
 let currentLat=null,currentLng=null,currentAddr='',currentArea='residential';
-let selectedFile=null,miniMap=null,miniMarker=null,detailMap=null;
+let selectedFile=null,nearbyData="",miniMap=null,miniMarker=null,detailMap=null;
 
 function init(){
   const p=new URLSearchParams(window.location.search);
@@ -605,6 +605,7 @@ async function detectNearby(lat, lng) {
           <span class="nbadge ${isHigh?'nbadge-high':'nbadge-med'}">${isHigh?'HIGH':'MED'}</span>
         </div>`;
       }).join('');
+      nearbyData = items.map(el => `${el.tags?.name||el.tags?.amenity||'Facility'} (${el.tags?.amenity||''})`).join(', ');
     }
   } catch(e) {
     list.innerHTML = '<div style="font-size:.75rem;color:var(--muted)">⚠ Could not fetch nearby data. Check connection.</div>';
@@ -646,6 +647,7 @@ async function submitComplaint(){
     form.append('latitude',currentLat||11.0168);
     form.append('longitude',currentLng||76.9558);
     form.append('address',currentAddr||`${currentLat},${currentLng}`);
+    form.append('nearby_sensitive', nearbyData || "");
     form.append('image',selectedFile);
     const res=await fetch(`${API}/complaints/submit`,{method:'POST',headers:{Authorization:`Bearer ${token}`},body:form});
     if(res.status===401){token=null;localStorage.removeItem('citizen_token');localStorage.removeItem('citizen_name');document.getElementById('user-bar').classList.remove('show');showPage('login');return;}
@@ -713,7 +715,7 @@ async function loadComplaints(){
           <div class="complaint-id">${c.complaint_id}<span class="p-score-chip ${psCls}" style="background:var(--card);border:1px solid var(--border)">P${ps}</span></div>
           <div class="status-badge status-${c.status}">${(c.status||'pending').replace('_',' ')}</div>
         </div>
-        <div class="complaint-meta">${(c.damage_type||'').replace('_',' ')} · ${(c.severity||'').toUpperCase()} · ${_fd(c.created_at)}</div>
+        <div class="complaint-meta">${(c.damage_type||'').replace('_',' ')} · ${(c.severity||'').toUpperCase()} · ${_fdt(c.created_at)}</div>
         ${c.area_type?`<div class="complaint-meta" style="margin-top:2px">${AREA_ICONS[c.area_type]||'📍'} ${c.area_type}</div>`:''}
         ${c.address?`<div class="complaint-meta" style="margin-top:3px;font-size:.72rem">${c.address.substring(0,55)}...</div>`:''}
         ${buildProgressSteps(c.status)}
@@ -881,9 +883,10 @@ function _sd(s){
   var d=new Date(String(s).replace(' ','T').replace(/Z?$/,'Z'));
   return isNaN(d)?new Date():d;
 }
-function _fd(s){return _sd(s).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric',timeZone:'Asia/Kolkata'});}
+const DATE_FORMATTER = new Intl.DateTimeFormat('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true });
+function _fd(s){return DATE_FORMATTER.format(_sd(s));}
 function _fdt(s){return _sd(s).toLocaleString('en-IN',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:true,timeZone:'Asia/Kolkata'});}
-function _ft(s){return _sd(s).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true,timeZone:'Asia/Kolkata'});}
+function _ft(s){return _sd(s).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true,timeZone:'Asia/Kolkata',timeStyle:'short'});}
 
 
 async function fetchUserProfile(){

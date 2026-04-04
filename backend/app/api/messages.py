@@ -45,7 +45,7 @@ def send_citizen(complaint_id: str, data: MessageSend,
     if not c: raise HTTPException(404, "Complaint not found")
     msg = Message(complaint_id=complaint_id, sender_id=user.id,
                   sender_role="citizen", message=data.message,
-                  created_at=datetime.utcnow())
+                  created_at=datetime.now(timezone.utc))
     db.add(msg); db.commit(); db.refresh(msg)
     return _m(msg)
 
@@ -57,6 +57,6 @@ def send_officer(complaint_id: str, data: MessageSend,
     if not c: raise HTTPException(404, "Complaint not found")
     msg = Message(complaint_id=complaint_id, sender_id=officer.id,
                   sender_role="officer", message=data.message,
-                  created_at=datetime.utcnow())
+                  created_at=datetime.now(timezone.utc))
     db.add(msg); db.commit(); db.refresh(msg)
     return _m(msg)

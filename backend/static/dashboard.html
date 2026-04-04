@@ -344,7 +344,7 @@ body{
 const BASE = window.location.origin;
 const API = `${BASE}/api`;
 const INDIA_TIMEZONE = 'Asia/Kolkata';
-const DATE_FORMATTER = new Intl.DateTimeFormat('en-IN', { timeZone: INDIA_TIMEZONE, day: '2-digit', month: 'short', year: 'numeric' });
+const DATE_FORMATTER = new Intl.DateTimeFormat('en-IN', { timeZone: INDIA_TIMEZONE, day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true });
 const _up = new URLSearchParams(window.location.search);
 if (_up.get('tk')) { localStorage.setItem('officer_token', _up.get('tk')); localStorage.setItem('officer_name', _up.get('nm') || 'officer'); window.history.replaceState({}, '', '/static/dashboard.html'); }
 let token = localStorage.getItem('officer_token');

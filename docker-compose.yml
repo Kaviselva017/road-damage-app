@@ -1,9 +1,19 @@
 version: '3.9'
 
+# Local development stack
+# Usage:
+#   docker-compose up --build
+#
+# Services:
+#   db        → PostgreSQL 15 (persisted in named volume)
+#   backend   → FastAPI on :8000
+#   dashboard → React/Vite on :3000
+
 services:
+
   db:
-    image: postgres:15
-    restart: always
+    image: postgres:15-alpine
+    restart: unless-stopped
     environment:
       POSTGRES_USER: road_user
       POSTGRES_PASSWORD: road_pass
@@ -12,38 +22,54 @@ services:
       - postgres_data:/var/lib/postgresql/data
     ports:
       - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U road_user -d road_damage_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
   backend:
-    build: ./backend
-    restart: always
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
     ports:
-      - "8000:8000"
+      - "8000:10000"
     environment:
       APP_ENV: development
+      PORT: "10000"
       DATABASE_URL: postgresql://road_user:road_pass@db:5432/road_damage_db
-      SECRET_KEY: ${SECRET_KEY:-change-me-in-production}
-      CORS_ORIGINS: http://localhost:3000,http://127.0.0.1:3000,http://localhost:8000,http://127.0.0.1:8000
+      SECRET_KEY: ${SECRET_KEY:-change-me-in-production-use-secrets-token-hex-32}
+      ALGORITHM: HS256
+      ACCESS_TOKEN_EXPIRE_MINUTES: "10080"
+      CORS_ORIGINS: "http://localhost:3000,http://127.0.0.1:3000,http://localhost:8000,http://127.0.0.1:8000"
       UPLOAD_DIR: /app/uploads
       YOLO_MODEL_PATH: /app/ai_model/road_damage_yolov8.pt
-      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      BASE_URL: http://localhost:8000
+      # Optional email — set these in a .env file
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASS: ${SMTP_PASS:-}
-      EMAIL_FROM: "${EMAIL_FROM:-RoadWatch <noreply@roadwatch.app>}"
-      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@roadwatch.app}
-      BASE_URL: ${BASE_URL:-http://localhost:8000}
+      EMAIL_FROM: ${EMAIL_FROM:-}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
     volumes:
       - uploads_data:/app/uploads
-      - ./ai_model:/app/ai_model
+      - ./ai_model:/app/ai_model:ro
     depends_on:
-      - db
+      db:
+        condition: service_healthy
 
   dashboard:
-    build: ./dashboard
-    restart: always
+    build:
+      context: ./dashboard
+      dockerfile: Dockerfile
+    restart: unless-stopped
     ports:
       - "3000:80"
     environment:
       VITE_API_URL: http://localhost:8000/api
+    depends_on:
+      - backend
 
 volumes:
   postgres_data:

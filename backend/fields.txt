@@ -1,0 +1,1 @@
+['id', 'name', 'email', 'phone', 'hashed_password', 'points', 'is_active', 'created_at']

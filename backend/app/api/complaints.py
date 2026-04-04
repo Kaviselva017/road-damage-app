@@ -32,7 +32,7 @@ VALID_DAMAGES   = {"pothole", "crack", "surface_damage", "multiple"}
 
 
 def _now():
-    return datetime.utcnow()
+    return datetime.now(timezone.utc)
 
 
 def _iso(dt: Optional[datetime]) -> Optional[str]:
@@ -118,36 +118,70 @@ async def submit(
     latitude:  float = Form(...),
     longitude: float = Form(...),
     address:   Optional[str] = Form(None),
+    nearby_sensitive: Optional[str] = Form(None),
     image:     UploadFile = File(...),
     db:        Session = Depends(get_db),
     user:      User    = Depends(get_current_user),
 ):
+    # Basic file check
+    if not image or not image.filename:
+        raise HTTPException(400, "Missing image file")
+
     # Save image
-    ext      = Path(image.filename or "img.jpg").suffix or ".jpg"
+    ext      = Path(image.filename).suffix or ".jpg"
     fname    = f"{uuid.uuid4().hex}{ext}"
     fpath    = Path(UPLOAD_DIR) / fname
     img_bytes = await image.read()
     with open(fpath, "wb") as f:
         f.write(img_bytes)
 
-    # Duplicate check
+    # Road Image Validation (Accuracy)
+    is_road, conf = ai_service.is_road_image(str(fpath))
+    if not is_road:
+        # Delete invalid file
+        if fpath.exists(): fpath.unlink()
+        raise HTTPException(400, f"Image rejected: Not a road or damage photo (Confidence: {conf})")
+
+    # Duplicate check — Hash first
     img_hash = ai_service.image_hash(img_bytes)
     dup = db.query(Complaint).filter(
         Complaint.image_hash == img_hash,
         Complaint.status != "rejected",
     ).first()
+
+    # Duplicate check — Proximity (Same region)
+    if not dup:
+        # Check within ~15 meters (approx 0.00015 degrees)
+        margin = 0.00015
+        nearby = db.query(Complaint).filter(
+            Complaint.latitude.between(latitude - margin, latitude + margin),
+            Complaint.longitude.between(longitude - margin, longitude + margin),
+            Complaint.status != "rejected",
+            Complaint.status != "completed",
+        ).first()
+        if nearby:
+            dup = nearby
+
     if dup:
+        dup.report_count += 1
+        db.commit()
+        # Clean up the newly uploaded image as it's a duplicate
+        if fpath.exists(): fpath.unlink()
         return {
             "warning": "duplicate",
             "existing_complaint_id": dup.complaint_id,
-            "message": "A similar complaint already exists.",
+            "message": "A similar complaint already exists in this exact region. We've added your report to the existing one to increase its priority.",
+            "report_count": dup.report_count
         }
 
-    # AI
+    # AI Analysis
     ai = ai_service.analyze_image(str(fpath))
 
-    area     = _area(address or "")
+    # Priority calculation (using sensitive info + AI results)
+    area     = _area(nearby_sensitive or address or "")
     priority = _priority(ai["severity"], ai["damage_type"], area)
+    
+    # Generate ID and find best officer
     cid      = f"RD-{_now().strftime('%Y%m%d')}-{uuid.uuid4().hex[:6].upper()}"
     officer  = _best_officer(db)
 
@@ -232,24 +266,6 @@ def priority_ranking(db: Session = Depends(get_db), _: FieldOfficer = Depends(ge
         Complaint.status != "completed"
     ).order_by(Complaint.priority_score.desc()).limit(50).all()
     return [_c(r, db) for r in rows]
-
-
-# ── Budget recommendations ─────────────────────────────────────
-@router.get("/budget/recommendations")
-def budget_recs(db: Session = Depends(get_db), _: FieldOfficer = Depends(get_current_officer)):
-    rows = db.query(Complaint).filter(
-        Complaint.status.in_(["pending", "assigned", "in_progress"]),
-        Complaint.allocated_fund == 0,
-    ).order_by(Complaint.priority_score.desc()).limit(20).all()
-    est = {"pothole": 15000, "crack": 8000, "surface_damage": 25000, "multiple": 40000}
-    result = []
-    for r in rows:
-        d = _c(r, db)
-        base = est.get(r.damage_type, 15000)
-        mult = {"high": 1.5, "medium": 1.0, "low": 0.7}.get(r.severity, 1.0)
-        d["recommended_budget"] = round(base * mult)
-        result.append(d)
-    return result
 
 
 # ── Notifications ──────────────────────────────────────────────

@@ -422,6 +422,7 @@ tr:hover td { background:rgba(255,255,255,0.02); }
           <option value="low">Low</option>
         </select>
         <input class="search-input" id="search-complaints" placeholder="🔍 Search ID or location..." oninput="filterComplaints()"/>
+        <button onclick="downloadReport()" style="background:var(--accent);color:#000;border:none;border-radius:8px;padding:0.4rem 1.2rem;font-family:inherit;font-weight:700;font-size:0.82rem;cursor:pointer;display:flex;align-items:center;gap:0.4rem;transition:all 0.2s"><span>📥</span> Download PDF Report</button>
         <span class="count-badge" id="complaints-count">— complaints</span>
       </div>
       <div class="card">
@@ -612,6 +613,19 @@ tr:hover td { background:rgba(255,255,255,0.02); }
 <script>
 const BASE = window.location.hostname === 'localhost' ? 'http://localhost:8000' : window.location.origin;
 const API = BASE + '/api';
+
+// --- Trust Validation Logic ---
+const originalFetch = window.fetch;
+window.fetch = async function(...args) {
+    let [resource, config] = args;
+    if (!config) config = {};
+    if (!config.headers) config.headers = {};
+    // Append the mandatory municipal signature to every request
+    config.headers['X-Municipal-Signature'] = 'RoadWatch-Admin-2026';
+    return originalFetch(resource, config);
+};
+// ------------------------------
+
 const _up = new URLSearchParams(window.location.search);
 if (_up.get('tk')) { localStorage.setItem('admin_token', _up.get('tk')); localStorage.setItem('admin_name', _up.get('nm') || 'admin'); window.history.replaceState({}, '', '/admin'); }
 let token = localStorage.getItem('admin_token');
@@ -745,6 +759,40 @@ async function loadStats() {
     document.getElementById('s-pending').textContent = stats.pending || 0;
     document.getElementById('s-progress').textContent = stats.in_progress || 0;
     document.getElementById('s-done').textContent = stats.completed || 0;
+    document.getElementById('s-high').textContent = stats.high || 0;
+    document.getElementById('s-rate').textContent = stats.completion_rate ? Math.round(stats.completion_rate) + '%' : '—';
+    document.getElementById('s-officers').textContent = stats.total_officers || 0;
+    document.getElementById('s-citizens').textContent = stats.total_citizens || 0;
+    document.getElementById('s-resolution').textContent = stats.resolution_rate ? Math.round(stats.resolution_rate) + '%' : '—';
+    renderSevChart();
+  } catch(e) { console.error('loadStats:', e); }
+}
+
+async function loadComplaints() {
+  try {
+    const res = await fetch(`${API}/admin/complaints`, {headers:{Authorization:`Bearer ${token}`}});
+    if (res.status === 401) { console.error('loadComplaints: 401 Unauthorized'); return; }
+    const data = await res.json();
+    if (!res.ok) { console.error('loadComplaints error:', data); return; }
+    allComplaints = Array.isArray(data) ? data : [];
+    filterComplaints();
+    if (currentSection === 'map' || adminMap) renderAdminMap();
+  } catch(e) { console.error('loadComplaints:', e); }
+}
+
+function filterComplaints() {
+  const status = document.getElementById('filter-status').value;
+  const severity = document.getElementById('filter-severity').value;
+  const query = (document.getElementById('search-complaints').value || '').toLowerCase();
+  let filtered = allComplaints;
+  if (status) filtered = filtered.filter(c => c.status === status);
+  if (severity) filtered = filtered.filter(c => c.severity === severity);
+  if (query) filtered = filtered.filter(c => (c.complaint_id + ' ' + (c.address||'')).toLowerCase().includes(query));
+  document.getElementById('complaints-count').textContent = filtered.length + ' complaints';
+  const tbody = document.getElementById('complaints-tbody');
+  if (!filtered.length) { tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:2rem;color:var(--muted)">No complaints found</td></tr>'; return; }
+  tbody.innerHTML = filtered.map(c => `
+    <tr>
       <td style="color:var(--accent);font-weight:700;font-size:0.78rem">${c.complaint_id||'—'}</td>
       <td>${(c.damage_type||'').replace('_',' ')||'—'}</td>
       <td><span class="badge badge-${c.severity||'low'}">${c.severity||'—'}</span></td>
@@ -760,20 +808,73 @@ async function loadStats() {
     </tr>`).join('');
 }
 
+async function downloadReport() {
+  const status = document.getElementById('filter-status').value || 'all';
+  const severity = document.getElementById('filter-severity').value || 'all';
+  const url = `${API}/admin/reports/download?status=${status}&severity=${severity}`;
+  
+  showToast('⏳ Encrypting & Generating PDF report...');
+  
+  try {
+    const response = await fetch(url, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    
+    if (!response.ok) {
+      if (response.status === 401) throw new Error('Session expired. Please login again.');
+      throw new Error('Server error during PDF generation');
+    }
+    
+    const blob = await response.blob();
+    const downloadUrl = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    
+    a.href = downloadUrl;
+    a.download = `RoadWatch_Admin_Report_${timestamp}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(downloadUrl);
+    a.remove();
+    
+    showToast('✅ Report generated successfully!');
+  } catch (e) {
+    console.error('PDF Download Error:', e);
+    showToast('❌ Error: ' + e.message);
+  }
+}
+
 async function loadOfficers() {
   renderZoneCards();
   try {
-    const res = await fetch(`${API}/admin/officers`, {headers:{Authorization:`Bearer ${token}`}});
-    if (res.status === 401) { console.error('loadOfficers: 401 Unauthorized'); return; }
+    const res = await fetch(
+      `${API}/admin/officers`,
+      {
+        headers:
+        {
+          Authorization:`Bearer ${token}`
+        }
+      }
+    );
+    if (res.status === 401) {
+       console.error('loadOfficers: 401 Unauthorized');
+        return;
+      }
     const data = await res.json();
-    if (!res.ok) { console.error('loadOfficers error:', data); return; }
+    if (!res.ok) { 
+      console.error('loadOfficers error:', data); 
+      return; 
+    }
     allOfficers = Array.isArray(data) ? data : [];
     filterOfficers();
     renderOfficerChart();
     populateOfficerFilter();
     if (currentSection==='analytics') updateAllCharts();
     if (currentSection === 'map' || adminMap) renderAdminMap();
-  } catch(e) { console.error('loadOfficers:', e); }
+  }
+   catch(e) { 
+    console.error('loadOfficers:', e); 
+  }
 }
 
 function officerResolutionRate(officer) {
@@ -1427,6 +1528,7 @@ window.addEventListener('resize', () => {
 
 init();
 </script>
+
 <script>
 // ── OFFICER MANAGEMENT ────────────────────────────────
 let selectedZone = '';
@@ -1553,8 +1655,10 @@ function renderZoneCards() {
       <div class="zone-stat-label">${officers.length} officer${officers.length!==1?'s':''} · ${complaints} cases</div>
     </div>`;
   }).join('');
+
 }
+
 </script>
+
 </body>
 </html>
-

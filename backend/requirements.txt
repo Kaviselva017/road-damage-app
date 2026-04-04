@@ -1,12 +1,33 @@
+# RoadWatch backend dependencies
+# Keep this list minimal — no heavy ML packages unless YOLO is actually used.
+
+# ── Web framework ─────────────────────────────────────────────────
 fastapi==0.111.0
 uvicorn[standard]==0.29.0
+
+# ── Database ──────────────────────────────────────────────────────
 sqlalchemy==2.0.30
 alembic==1.13.1
+psycopg2-binary==2.9.9
+
+# ── Auth / security ───────────────────────────────────────────────
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
-python-multipart==0.0.9
-python-dotenv==1.0.1
-Pillow==10.4.0
-pydantic[email]==2.7.1
-aiofiles==23.2.1
 bcrypt==4.0.1
+
+# ── Request parsing ───────────────────────────────────────────────
+python-multipart==0.0.9
+pydantic[email]==2.7.1
+
+# ── Config ────────────────────────────────────────────────────────
+python-dotenv==1.0.1
+
+# ── File / image handling ─────────────────────────────────────────
+Pillow==10.4.0
+aiofiles==23.2.1
+fpdf2==2.7.9
+
+# ── Optional: uncomment to enable real YOLOv8 inference ───────────
+ultralytics==8.2.0
+torch==2.3.0
+torchvision==0.18.0
