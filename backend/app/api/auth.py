@@ -2,7 +2,7 @@
 RoadWatch Auth API
 Endpoints used by login.html, citizen.html, admin.html — matched exactly.
 """
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import Optional
@@ -10,7 +10,7 @@ from passlib.context import CryptContext
 from datetime import datetime, timezone
 
 from app.database import get_db
-from app.models.models import User, FieldOfficer
+from app.models.models import User, FieldOfficer, LoginLog
 from app.dependencies import get_current_user, get_current_admin
 from app.services.auth_service import create_access_token
 
@@ -20,6 +20,14 @@ pwd_ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 def _now():
     return datetime.now(timezone.utc)
+
+
+def _iso(dt):
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.isoformat().replace("+00:00", "Z")
 
 
 def _make_token(data: dict) -> str:
@@ -73,7 +81,7 @@ def citizen_register(payload: CitizenRegister, db: Session = Depends(get_db)):
         db.add(user)
         db.commit()
         db.refresh(user)
-        token = _make_token({"sub": user.id, "role": "citizen"})
+        token = _make_token({"sub": str(user.id), "role": "citizen"})
         return {"access_token": token, "token_type": "bearer", "name": user.name}
     except Exception as e:
         import logging
@@ -84,14 +92,21 @@ def citizen_register(payload: CitizenRegister, db: Session = Depends(get_db)):
 # ── Citizen Login ─────────────────────────────────────────────────────────────
 
 @router.post("/login")
-def citizen_login(payload: CitizenLogin, db: Session = Depends(get_db)):
+def citizen_login(payload: CitizenLogin, request: Request, db: Session = Depends(get_db)):
     """POST /api/auth/login — login.html & citizen.html"""
     user = db.query(User).filter(User.email == payload.email).first()
     if not user or not pwd_ctx.verify(payload.password, user.hashed_password):
         raise HTTPException(status_code=401, detail="Invalid credentials")
     if not user.is_active:
         raise HTTPException(status_code=403, detail="Account inactive")
-    token = _make_token({"sub": user.id, "role": "citizen"})
+    token = _make_token({"sub": str(user.id), "role": "citizen"})
+    # Log the login
+    db.add(LoginLog(
+        email=payload.email, role="citizen",
+        ip_address=request.client.host if request.client else None,
+        logged_in_at=_now(),
+    ))
+    db.commit()
     return {
         "access_token": token,
         "token_type": "bearer",
@@ -103,7 +118,7 @@ def citizen_login(payload: CitizenLogin, db: Session = Depends(get_db)):
 # ── Officer / Admin Login ─────────────────────────────────────────────────────
 
 @router.post("/officer/login")
-def officer_login(payload: OfficerLogin, db: Session = Depends(get_db)):
+def officer_login(payload: OfficerLogin, request: Request, db: Session = Depends(get_db)):
     """POST /api/auth/officer/login — login.html (officer+admin) & admin.html doLogin()"""
     officer = db.query(FieldOfficer).filter(FieldOfficer.email == payload.email).first()
     if not officer or not pwd_ctx.verify(payload.password, officer.hashed_password):
@@ -111,9 +126,15 @@ def officer_login(payload: OfficerLogin, db: Session = Depends(get_db)):
     if not officer.is_active:
         raise HTTPException(status_code=403, detail="Account inactive")
     officer.last_login = _now()
-    db.commit()
     role = "admin" if officer.is_admin else "officer"
-    token = _make_token({"sub": officer.id, "role": role})
+    # Log the login
+    db.add(LoginLog(
+        email=payload.email, role=role,
+        ip_address=request.client.host if request.client else None,
+        logged_in_at=_now(),
+    ))
+    db.commit()
+    token = _make_token({"sub": str(officer.id), "role": role})
     return {
         "access_token": token,
         "token_type": "bearer",
@@ -168,3 +189,23 @@ def get_admin_me(current_admin: FieldOfficer = Depends(get_current_admin)):
         "name": current_admin.name,
         "email": current_admin.email,
     }
+
+
+# ── Login Logs (admin only) ──────────────────────────────────────────────────
+
+@router.get("/logs")
+def get_login_logs(
+    db: Session = Depends(get_db),
+    _: FieldOfficer = Depends(get_current_admin),
+):
+    """GET /api/auth/logs — returns all login logs (admin only)"""
+    rows = db.query(LoginLog).order_by(LoginLog.logged_in_at.desc()).limit(200).all()
+    return [{
+        "id": r.id,
+        "email": r.email,
+        "role": r.role,
+        "ip_address": r.ip_address,
+        "logged_in_at": _iso(r.logged_in_at),
+        "logged_out_at": _iso(r.logged_out_at),
+        "session_minutes": r.session_minutes,
+    } for r in rows]

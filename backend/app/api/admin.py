@@ -26,7 +26,7 @@ import io
 import os
 
 from app.database import get_db
-from app.models.models import User, FieldOfficer, Complaint
+from app.models.models import User, FieldOfficer, Complaint, LoginLog
 from app.dependencies import get_current_admin
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -42,6 +42,13 @@ class OfficerEdit(BaseModel):
 
 class ReassignPayload(BaseModel):
     officer_id: int
+
+class CitizenEdit(BaseModel):
+    name: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    points: Optional[int] = None
+    password: Optional[str] = None
 
 
 # ── Stats ─────────────────────────────────────────────────────────────────────
@@ -126,15 +133,14 @@ def list_complaints(
 
 @router.patch("/complaints/{complaint_id}/reassign")
 def reassign_complaint(
-    complaint_id: int,
+    complaint_id: str,
     payload: ReassignPayload,
     db: Session = Depends(get_db),
     _: FieldOfficer = Depends(get_current_admin),
 ):
-    complaint = (
-        db.query(Complaint).filter(Complaint.id == complaint_id).first() or
-        db.query(Complaint).filter(Complaint.complaint_id == str(complaint_id)).first()
-    )
+    complaint = db.query(Complaint).filter(Complaint.complaint_id == complaint_id).first()
+    if not complaint and complaint_id.isdigit():
+        complaint = db.query(Complaint).filter(Complaint.id == int(complaint_id)).first()
     if not complaint:
         raise HTTPException(status_code=404, detail="Complaint not found")
     officer = db.query(FieldOfficer).filter(FieldOfficer.id == payload.officer_id).first()
@@ -288,6 +294,32 @@ def toggle_citizen(
     return {"message": "Toggled", "is_active": u.is_active}
 
 
+@router.patch("/citizens/{citizen_id}")
+def edit_citizen(
+    citizen_id: int,
+    payload: CitizenEdit,
+    db: Session = Depends(get_db),
+    _: FieldOfficer = Depends(get_current_admin),
+):
+    u = db.query(User).filter(User.id == citizen_id).first()
+    if not u:
+        raise HTTPException(status_code=404, detail="Citizen not found")
+    
+    if payload.name is not None:
+        u.name = payload.name
+    if payload.email is not None:
+        u.email = payload.email
+    if payload.phone is not None:
+        u.phone = payload.phone
+    if payload.points is not None:
+        u.points = payload.points
+    if payload.password is not None and payload.password.strip() != "":
+        u.hashed_password = pwd_ctx.hash(payload.password)
+        
+    db.commit()
+    return {"message": "Updated"}
+
+
 @router.post("/citizens/{citizen_id}/block")
 def block_citizen(
     citizen_id: int,
@@ -300,6 +332,34 @@ def block_citizen(
     u.is_active = False
     db.commit()
     return {"message": "Blocked"}
+
+
+# ── Login Logs ────────────────────────────────────────────────────────────────
+
+def _iso_dt(dt):
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.isoformat().replace("+00:00", "Z")
+
+
+@router.get("/login-logs")
+def admin_login_logs(
+    db: Session = Depends(get_db),
+    _: FieldOfficer = Depends(get_current_admin),
+):
+    """GET /api/admin/login-logs — returns all login logs"""
+    rows = db.query(LoginLog).order_by(LoginLog.logged_in_at.desc()).limit(200).all()
+    return [{
+        "id": r.id,
+        "email": r.email,
+        "role": r.role,
+        "ip_address": r.ip_address,
+        "logged_in_at": _iso_dt(r.logged_in_at),
+        "logged_out_at": _iso_dt(r.logged_out_at),
+        "session_minutes": r.session_minutes,
+    } for r in rows]
 
 
 # ── Chart ─────────────────────────────────────────────────────────────────────
@@ -341,12 +401,14 @@ class RoadWatchPDF(FPDF):
         self.set_y(-15)
         self.set_font("helvetica", "I", 8)
         self.set_text_color(128)
-        self.cell(0, 10, f"Page {self.page_no()} / {{nb}} — Confidential RoadWatch Internal Document", align="C")
+        self.cell(0, 10, f"Page {self.page_no()} / {{nb}} -- Confidential RoadWatch Internal Document", align="C")
 
 @router.get("/reports/download")
 def download_pdf_report(
     status: Optional[str] = Query(None),
     severity: Optional[str] = Query(None),
+    date_from: Optional[str] = Query(None, description="Start date YYYY-MM-DD"),
+    date_to: Optional[str] = Query(None, description="End date YYYY-MM-DD"),
     db: Session = Depends(get_db),
     _: FieldOfficer = Depends(get_current_admin),
 ):
@@ -355,6 +417,18 @@ def download_pdf_report(
         query = query.filter(Complaint.status == status)
     if severity and severity != "all":
         query = query.filter(Complaint.severity == severity)
+    if date_from:
+        try:
+            dt_from = datetime.strptime(date_from, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+            query = query.filter(Complaint.created_at >= dt_from)
+        except ValueError:
+            pass
+    if date_to:
+        try:
+            dt_to = datetime.strptime(date_to, "%Y-%m-%d").replace(hour=23, minute=59, second=59, tzinfo=timezone.utc)
+            query = query.filter(Complaint.created_at <= dt_to)
+        except ValueError:
+            pass
     
     complaints = query.order_by(Complaint.created_at.desc()).all()
     
@@ -362,103 +436,118 @@ def download_pdf_report(
     pdf.set_auto_page_break(auto=True, margin=15)
     pdf.add_page()
     
-    if not complaints:
-        pdf.set_font("helvetica", "B", 14)
-        pdf.cell(0, 20, "No complaints found matching current filters.", align="C")
-    else:
-        for c in complaints:
-            # Check if we need a new page for image + info
-            if pdf.get_y() > 200:
-                pdf.add_page()
+    try:
+        if not complaints:
+            pdf.set_font("helvetica", "B", 14)
+            pdf.cell(0, 20, "No complaints found matching current filters.", align="C")
+        else:
+            for c in complaints:
+                # Check if we need a new page for image + info
+                if pdf.get_y() > 200:
+                    pdf.add_page()
 
-            # ID Row
-            pdf.set_fill_color(24, 29, 39)
-            pdf.rect(10, pdf.get_y(), 190, 10, 'F')
-            pdf.set_font("helvetica", "B", 12)
-            pdf.set_text_color(255, 255, 255)
-            cid = c.complaint_id or f"RD-{c.id:06d}"
-            pdf.cell(100, 10, f"  COMPLAINT: {cid}", ln=False)
-            
-            # Status badge color
-            pdf.set_font("helvetica", "B", 9)
-            if c.status == "completed": pdf.set_text_color(62, 207, 178)
-            elif c.status == "rejected": pdf.set_text_color(224, 92, 92)
-            else: pdf.set_text_color(245, 166, 35)
-            pdf.cell(90, 10, f"STATUS: {str(c.status).upper()}   ", align="R", ln=True)
+                # ID Row
+                pdf.set_fill_color(24, 29, 39)
+                pdf.rect(10, pdf.get_y(), 190, 10, 'F')
+                pdf.set_font("helvetica", "B", 12)
+                pdf.set_text_color(255, 255, 255)
+                cid = c.complaint_id or f"RD-{c.id:06d}"
+                pdf.cell(100, 10, f"  COMPLAINT: {cid}", ln=False)
+                
+                # Status badge color
+                pdf.set_font("helvetica", "B", 9)
+                if c.status == "completed": pdf.set_text_color(62, 207, 178)
+                elif c.status == "rejected": pdf.set_text_color(224, 92, 92)
+                else: pdf.set_text_color(245, 166, 35)
+                pdf.cell(90, 10, f"STATUS: {str(c.status).upper()}   ", align="R", ln=True)
 
-            pdf.ln(2)
-            y_start = pdf.get_y()
+                pdf.ln(2)
+                y_start = pdf.get_y()
 
-            # Image logic
-            img_drawn = False
-            if c.image_url:
-                # Local path for images
-                img_path = "." + c.image_url # Assuming /uploads/...
-                if os.path.exists(img_path):
-                    try:
-                        pdf.image(img_path, x=10, y=y_start, w=70)
-                        img_drawn = True
-                    except Exception: pass
-            
-            x_offset = 85 if img_drawn else 15
-            pdf.set_text_color(50)
-            
-            # Data Grid
-            pdf.set_xy(x_offset, y_start)
-            pdf.set_font("helvetica", "B", 10)
-            pdf.cell(30, 6, "Damage Type:")
-            pdf.set_font("helvetica", "", 10)
-            pdf.cell(0, 6, str(c.damage_type).title(), ln=True)
+                # Image logic
+                img_drawn = False
+                if c.image_url:
+                    # Local path for images
+                    img_path = "." + c.image_url # Assuming /uploads/...
+                    if os.path.exists(img_path):
+                        try:
+                            pdf.image(img_path, x=10, y=y_start, w=70)
+                            img_drawn = True
+                        except Exception as img_err:
+                            print(f"PDF Image Error: {img_err}")
+                
+                x_offset = 85 if img_drawn else 15
+                pdf.set_text_color(50)
+                
+                # Data Grid
+                pdf.set_xy(x_offset, y_start)
+                pdf.set_font("helvetica", "B", 10)
+                pdf.cell(30, 6, "Damage Type:")
+                pdf.set_font("helvetica", "", 10)
+                pdf.cell(0, 6, str(c.damage_type).title(), ln=True)
 
-            pdf.set_x(x_offset)
-            pdf.set_font("helvetica", "B", 10)
-            pdf.cell(30, 6, "Severity:")
-            pdf.set_font("helvetica", "B", 10)
-            if c.severity == "high": pdf.set_text_color(224, 92, 92)
-            else: pdf.set_text_color(100)
-            pdf.cell(0, 6, str(c.severity).upper(), ln=True)
-            pdf.set_text_color(50)
+                pdf.set_x(x_offset)
+                pdf.set_font("helvetica", "B", 10)
+                pdf.cell(30, 6, "Severity:")
+                pdf.set_font("helvetica", "B", 10)
+                if c.severity == "high": pdf.set_text_color(224, 92, 92)
+                else: pdf.set_text_color(100)
+                pdf.cell(0, 6, str(c.severity).upper(), ln=True)
+                pdf.set_text_color(50)
 
-            pdf.set_x(x_offset)
-            pdf.set_font("helvetica", "B", 10)
-            pdf.cell(30, 6, "Created On:")
-            pdf.set_font("helvetica", "", 10)
-            ts = c.created_at.strftime('%d %b %Y, %I:%M %p') if c.created_at else "N/A"
-            pdf.cell(0, 6, ts, ln=True)
+                pdf.set_x(x_offset)
+                pdf.set_font("helvetica", "B", 10)
+                pdf.cell(30, 6, "Created On:")
+                pdf.set_font("helvetica", "", 10)
+                ts = c.created_at.strftime('%d %b %Y, %I:%M %p') if c.created_at else "N/A"
+                pdf.cell(0, 6, ts, ln=True)
 
-            pdf.set_x(x_offset)
-            pdf.set_font("helvetica", "B", 10)
-            pdf.cell(30, 6, "GPS Coordinates:")
-            pdf.set_font("helvetica", "", 10)
-            pdf.cell(0, 6, f"{c.latitude:.5f}, {c.longitude:.5f}", ln=True)
+                pdf.set_x(x_offset)
+                pdf.set_font("helvetica", "B", 10)
+                pdf.cell(30, 6, "GPS Coordinates:")
+                pdf.set_font("helvetica", "", 10)
+                pdf.cell(0, 6, f"{c.latitude:.5f}, {c.longitude:.5f}", ln=True)
 
-            # Address - multi-line
-            pdf.set_x(x_offset)
-            pdf.set_font("helvetica", "B", 10)
-            pdf.cell(30, 6, "Location:")
-            pdf.set_font("helvetica", "", 9)
-            pdf.multi_cell(0, 5, c.address or "No address provided")
+                # Address - multi-line
+                pdf.set_x(x_offset)
+                pdf.set_font("helvetica", "B", 10)
+                pdf.cell(30, 6, "Location:")
+                pdf.set_font("helvetica", "", 9)
+                addr_text = (c.address or "No address provided").encode("ascii", "ignore").decode("ascii")
+                pdf.multi_cell(0, 5, addr_text)
 
-            # Officer Info
-            pdf.ln(2)
-            pdf.set_x(x_offset)
-            pdf.set_font("helvetica", "B", 10)
-            pdf.cell(30, 6, "Officer:")
-            pdf.set_font("helvetica", "I", 10)
-            off_name = "Unassigned"
-            if c.officer_id:
-                off = db.query(FieldOfficer).filter(FieldOfficer.id == c.officer_id).first()
-                if off: off_name = off.name
-            pdf.cell(0, 6, off_name, ln=True)
+                # Description - multi-line
+                pdf.set_x(x_offset)
+                pdf.set_font("helvetica", "B", 10)
+                pdf.cell(30, 6, "Description:")
+                pdf.set_font("helvetica", "", 9)
+                desc_text = (c.description or "No description provided").encode("ascii", "ignore").decode("ascii")
+                pdf.multi_cell(0, 5, desc_text)
 
-            pdf.ln(10)
-            if pdf.get_y() < y_start + 50 and img_drawn:
-                pdf.set_y(y_start + 55)
-            
-            # Divider
-            pdf.set_draw_color(230)
-            pdf.line(10, pdf.get_y(), 200, pdf.get_y())
-            pdf.ln(5)
+                # Officer Info
+                pdf.ln(2)
+                pdf.set_x(x_offset)
+                pdf.set_font("helvetica", "B", 10)
+                pdf.cell(30, 6, "Officer:")
+                pdf.set_font("helvetica", "I", 10)
+                off_name = "Unassigned"
+                if c.officer_id:
+                    off = db.query(FieldOfficer).filter(FieldOfficer.id == c.officer_id).first()
+                    if off: off_name = off.name
+                pdf.cell(0, 6, off_name.encode("ascii", "ignore").decode("ascii"), ln=True)
+
+                pdf.ln(10)
+                if pdf.get_y() < y_start + 50 and img_drawn:
+                    pdf.set_y(y_start + 55)
+                
+                # Divider
+                pdf.set_draw_color(230)
+                pdf.line(10, pdf.get_y(), 200, pdf.get_y())
+                pdf.ln(5)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"PDF Error: {str(e)}")
 
     buffer = io.BytesIO()
     pdf_out = pdf.output()

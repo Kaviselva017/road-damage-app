@@ -1,0 +1,141 @@
+﻿
+============================================================
+  RoadWatch Full System Test Suite
+  05 Apr 2026 02:16:53
+============================================================
+
+[DB] URL: sqlite:///./road_damage.db
+[DB] CWD: D:\python\road-damage-app\backend
+ΓöÇΓöÇ 1. SERVER HEALTH ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+Γ£à PASS | Server is running
+Γ£à PASS | Login portal served
+Γ£à PASS | Citizen portal served
+Γ£à PASS | Officer dashboard served
+Γ£à PASS | Admin panel served
+
+ΓöÇΓöÇ 2. CITIZEN AUTH ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+Γ£à PASS | Register new citizen
+Γ£à PASS | Citizen login
+Γ£à PASS | Citizen token received
+Γ£à PASS | Wrong password rejected
+Γ£à PASS | Existing citizen login
+
+ΓöÇΓöÇ 3. OFFICER AUTH ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+Γ£à PASS | Admin login
+Γ£à PASS | Admin token received
+Γ£à PASS | Admin creates officer
+Γ£à PASS | Officer login
+Γ£à PASS | Officer token received
+
+ΓöÇΓöÇ 4. COMPLAINT SUBMISSION ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+Γ£à PASS | Test image created
+Γ£à PASS | Submit complaint
+Γ£à PASS | Complaint ID returned
+Γ£à PASS | Severity returned
+Γ£à PASS | Damage type returned
+Γ£à PASS | created_at returned
+Γ£à PASS | created_at not None
+Γ£à PASS | Priority score > 0
+Γ£à PASS | IST compatible date
+Γ£à PASS | created_at has timezone
+Γ£à PASS | Submit without auth rejected
+
+ΓöÇΓöÇ 5. MY COMPLAINTS ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+Γ£à PASS | Get my complaints
+Γ£à PASS | Returns list
+Γ£à PASS | created_at in complaint
+Γ£à PASS | created_at not null
+Γ£à PASS | complaint created_at has timezone
+Γ£à PASS | address in complaint
+Γ£à PASS | severity in complaint
+Γ£à PASS | damage_type in complaint
+Γ£à PASS | status in complaint
+Γ£à PASS | complaint_id in complaint
+Γ£à PASS | latitude in complaint
+Γ£à PASS | longitude in complaint
+
+ΓöÇΓöÇ 6. OFFICER ENDPOINTS ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+Γ£à PASS | Officer get all complaints
+Γ£à PASS | Complaints sorted by priority
+Γ£à PASS | New complaint visible to officer
+Γ£à PASS | Update status to in_progress
+Γ£à PASS | Allocate fund
+Γ£à PASS | Priority ranking endpoint
+Γ£à PASS | Priority ranking returns list
+Γ£à PASS | Budget recommendations endpoint
+
+ΓöÇΓöÇ 7. NOTIFICATIONS ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+Γ£à PASS | Get notifications
+Γ£à PASS | Notifications is list
+Γ£à PASS | Notification has type
+Γ£à PASS | Notification has message
+Γ£à PASS | Notification has created_at
+Γ£à PASS | created_at not null
+Γ£à PASS | notification created_at has timezone
+Γ£à PASS | Mark all read
+
+ΓöÇΓöÇ 8. ADMIN ENDPOINTS ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+Γ£à PASS | Admin stats
+Γ£à PASS | Stats has total
+Γ£à PASS | Stats has pending
+Γ£à PASS | Stats has completed
+Γ£à PASS | Stats has high
+Γ£à PASS | Stats total_officers > 0
+Γ£à PASS | Stats total_citizens > 0
+Γ£à PASS | Admin get complaints
+Γ£à PASS | Admin get officers
+Γ£à PASS | Officers list not empty
+Γ£à PASS | Admin get citizens
+Γ£à PASS | Citizens list not empty
+Γ£à PASS | Citizen has total_reports
+Γ£à PASS | Citizen has high_severity
+Γ£à PASS | Citizen has fixed/completed
+Γ£à PASS | Admin login logs
+Γ£à PASS | Login logs returns list
+Γ£à PASS | Login log has logged_in_at
+Γ£à PASS | logged_in_at not null
+Γ£à PASS | logged_in_at has timezone
+Γ£à PASS | Admin endpoint login logs
+Γ£à PASS | Admin endpoint login logs returns list
+Γ£à PASS | Admin endpoint log has logged_in_at
+Γ£à PASS | Admin endpoint logged_in_at not null
+Γ£à PASS | Admin endpoint logged_in_at has timezone
+
+ΓöÇΓöÇ 9. MESSAGES ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+Γ£à PASS | Get messages
+Γ£à PASS | Messages returns list
+Γ£à PASS | Send citizen message
+Γ£à PASS | Sent message has created_at
+Γ£à PASS | sent message created_at has timezone
+
+ΓöÇΓöÇ 10. AI SERVICE ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+ΓÜá WARN | AI model file exists
+         Expected: file exists
+         Got:      not found
+Γ£à PASS | AI confidence > 0
+Γ£à PASS | AI damage_type set
+Γ£à PASS | AI severity set
+Γ£à PASS | AI description set
+
+ΓöÇΓöÇ 11. STATIC FILES ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+Γ£à PASS | Citizen HTML loads
+Γ£à PASS | Leaflet in citizen
+Γ£à PASS | No Google Maps in citizen
+Γ£à PASS | Dashboard HTML loads
+Γ£à PASS | Leaflet in dashboard
+Γ£à PASS | No Google Maps API key in dashboard
+Γ£à PASS | Admin HTML loads
+
+============================================================
+  TEST RESULTS ΓÇö 05 Apr 2026 02:17
+============================================================
+  Γ£à PASSED:  95/96
+  Γ¥î FAILED:  0/96
+  ΓÜá  WARNINGS: 1/96
+  Score: 99.0%
+============================================================
+
+ΓÜá  WARNINGS:
+  ΓÜá WARN | AI model file exists
+         Expected: file exists
+         Got:      not found

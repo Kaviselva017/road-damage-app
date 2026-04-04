@@ -5,7 +5,7 @@ import time
 import hashlib
 from typing import Dict, List
 
-API_BASE = "http://localhost:8000/api"
+API_BASE = "http://127.0.0.1:8000/api"
 
 # Test data generators
 LOCATIONS = [
@@ -19,16 +19,10 @@ DAMAGES = ["pothole", "crack", "surface_damage", "multiple"]
 SENSITIVE = ["Hospital Area", "School Zone", "College Campus", "Main Highway", "Market Street", ""]
 
 def create_fake_image(color=(255, 0, 0)):
-    from PIL import Image
-    import io
-    img = Image.new('RGB', (100, 100), color=color)
-    # Add some noise to make it look unique (prevents duplicate hash)
-    from PIL import ImageDraw
-    draw = ImageDraw.Draw(img)
-    draw.point((random.randint(0,99), random.randint(0,99)), fill=(255,255,255))
-    buf = io.BytesIO()
-    img.save(buf, format='JPEG')
-    return buf.getvalue()
+    import os
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "backend", "uploads", "81da090e1a864842af48e408c043d284.jpg")
+    with open(path, "rb") as f:
+        return f.read() + os.urandom(10)
 
 def run_unlimited_tests(count=20):
     print(f"🚀 Code Rabbit starting {count} unlimited test cases...")
@@ -49,6 +43,7 @@ def run_unlimited_tests(count=20):
     dups_count = 0
     errors = []
 
+    latest_img = None
     for i in range(count):
         lat, lon, addr = random.choice(LOCATIONS)
         lat += random.uniform(-0.005, 0.005)
@@ -56,7 +51,11 @@ def run_unlimited_tests(count=20):
         
         # Randomly decide if we send an existing image to test duplicate detection
         is_duplicate = random.random() < 0.2
-        img_bytes = b"fake-repeat" if is_duplicate else create_fake_image((random.randint(0,255), 0, 0))
+        if is_duplicate and latest_img:
+            img_bytes = latest_img
+        else:
+            img_bytes = create_fake_image()
+            latest_img = img_bytes
         
         files = {"image": ("test.jpg", img_bytes, "image/jpeg")}
         data = {
@@ -103,7 +102,7 @@ def run_unlimited_tests(count=20):
 if __name__ == "__main__":
     # Ensure server is running or at least attempt health check
     try:
-        requests.get("http://localhost:8000/healthz", timeout=2)
+        requests.get("http://127.0.0.1:8000/healthz", timeout=2)
         run_unlimited_tests(20)
     except Exception:
-        print("❌ Server is NOT running at http://localhost:8000. Please start it first.")
+        print("❌ Server is NOT running at http://127.0.0.1:8000. Please start it first.")

@@ -422,6 +422,8 @@ tr:hover td { background:rgba(255,255,255,0.02); }
           <option value="low">Low</option>
         </select>
         <input class="search-input" id="search-complaints" placeholder="🔍 Search ID or location..." oninput="filterComplaints()"/>
+        <input type="date" class="filter-select" id="filter-date-from" title="Date From" style="font-size:0.78rem;color:var(--text);"/>
+        <input type="date" class="filter-select" id="filter-date-to" title="Date To" style="font-size:0.78rem;color:var(--text);"/>
         <button onclick="downloadReport()" style="background:var(--accent);color:#000;border:none;border-radius:8px;padding:0.4rem 1.2rem;font-family:inherit;font-weight:700;font-size:0.82rem;cursor:pointer;display:flex;align-items:center;gap:0.4rem;transition:all 0.2s"><span>📥</span> Download PDF Report</button>
         <span class="count-badge" id="complaints-count">— complaints</span>
       </div>
@@ -528,6 +530,41 @@ tr:hover td { background:rgba(255,255,255,0.02); }
             </thead>
             <tbody id="citizens-tbody"></tbody>
           </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- EDIT CITIZEN MODAL -->
+    <div class="modal-overlay" id="citizen-modal">
+      <div class="modal" style="width:460px">
+        <h3 id="citizen-modal-title">Edit Citizen</h3>
+        <input type="hidden" id="citizen-edit-id"/>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.8rem;margin-bottom:1rem">
+          <div>
+            <label style="font-size:0.72rem;color:var(--muted);text-transform:uppercase;display:block;margin-bottom:0.3rem">Full Name</label>
+            <input id="cit-name" placeholder="Citizen Name" style="width:100%;background:var(--s3);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:0.55rem 0.75rem;font-family:inherit;font-size:0.85rem"/>
+          </div>
+          <div>
+            <label style="font-size:0.72rem;color:var(--muted);text-transform:uppercase;display:block;margin-bottom:0.3rem">Phone</label>
+            <input id="cit-phone" placeholder="9876543210" style="width:100%;background:var(--s3);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:0.55rem 0.75rem;font-family:inherit;font-size:0.85rem"/>
+          </div>
+          <div>
+            <label style="font-size:0.72rem;color:var(--muted);text-transform:uppercase;display:block;margin-bottom:0.3rem">Email</label>
+            <input id="cit-email" type="email" placeholder="citizen@road.com" style="width:100%;background:var(--s3);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:0.55rem 0.75rem;font-family:inherit;font-size:0.85rem"/>
+          </div>
+          <div>
+            <label style="font-size:0.72rem;color:var(--muted);text-transform:uppercase;display:block;margin-bottom:0.3rem">Points</label>
+            <input id="cit-points" type="number" placeholder="0" style="width:100%;background:var(--s3);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:0.55rem 0.75rem;font-family:inherit;font-size:0.85rem"/>
+          </div>
+        </div>
+        <div style="margin-bottom:1rem">
+            <label style="font-size:0.72rem;color:var(--muted);text-transform:uppercase;display:block;margin-bottom:0.3rem">Reset Password (Optional)</label>
+            <input id="cit-password" type="password" placeholder="Leave blank to keep current" style="width:100%;background:var(--s3);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:0.55rem 0.75rem;font-family:inherit;font-size:0.85rem"/>
+        </div>
+        <div id="citizen-modal-err" style="color:var(--red);font-size:0.82rem;margin-bottom:0.8rem;display:none"></div>
+        <div class="modal-btns">
+          <button class="btn-modal secondary" onclick="closeCitizenModal()">Cancel</button>
+          <button class="btn-modal primary" id="citizen-save-btn" onclick="saveCitizen()">Save Changes</button>
         </div>
       </div>
     </div>
@@ -811,7 +848,11 @@ function filterComplaints() {
 async function downloadReport() {
   const status = document.getElementById('filter-status').value || 'all';
   const severity = document.getElementById('filter-severity').value || 'all';
-  const url = `${API}/admin/reports/download?status=${status}&severity=${severity}`;
+  const dateFrom = document.getElementById('filter-date-from').value || '';
+  const dateTo = document.getElementById('filter-date-to').value || '';
+  let url = `${API}/admin/reports/download?status=${status}&severity=${severity}`;
+  if (dateFrom) url += `&date_from=${dateFrom}`;
+  if (dateTo) url += `&date_to=${dateTo}`;
   
   showToast('⏳ Encrypting & Generating PDF report...');
   
@@ -944,6 +985,7 @@ function filterCitizens() {
       <td><span style="color:var(--yellow);font-weight:700">${c.points||0} pts</span></td>
       <td><span class="badge ${c.is_active!==false?'badge-active':'badge-inactive'}">${c.is_active!==false?'Active':'Blocked'}</span></td>
       <td style="display:flex;gap:4px">
+        <button class="act-btn" onclick="openEditCitizen(${c.id})">✏️ Edit</button>
         <button class="act-btn ${c.is_active!==false?'danger':'success'}" onclick="toggleCitizen(${c.id})">${c.is_active!==false?'Block':'Unblock'}</button>
         <button class="act-btn danger" onclick="deleteCitizen(${c.id},'${c.name}')" style="background:rgba(239,68,68,0.15);border-color:rgba(239,68,68,0.4)">🗑</button>
       </td>
@@ -1656,6 +1698,55 @@ function renderZoneCards() {
     </div>`;
   }).join('');
 
+}
+
+// ── CITIZEN MANAGEMENT ────────────────────────────────
+
+let editingCitizenId = null;
+
+function openEditCitizen(id) {
+  const c = allCitizens.find(x=>x.id===id);
+  if (!c) return;
+  editingCitizenId = id;
+  document.getElementById('cit-name').value = c.name;
+  document.getElementById('cit-email').value = c.email;
+  document.getElementById('cit-phone').value = c.phone || '';
+  document.getElementById('cit-points').value = c.points || 0;
+  document.getElementById('cit-password').value = '';
+  document.getElementById('citizen-modal-err').style.display = 'none';
+  document.getElementById('citizen-modal').classList.add('open');
+}
+
+function closeCitizenModal() {
+  document.getElementById('citizen-modal').classList.remove('open');
+}
+
+async function saveCitizen() {
+  const name = document.getElementById('cit-name').value.trim();
+  const email = document.getElementById('cit-email').value.trim();
+  const phone = document.getElementById('cit-phone').value.trim();
+  const points = parseInt(document.getElementById('cit-points').value) || 0;
+  const password = document.getElementById('cit-password').value;
+  const errEl = document.getElementById('citizen-modal-err');
+  errEl.style.display = 'none';
+
+  if (!name || !email) { errEl.textContent='Name and email are required'; errEl.style.display='block'; return; }
+
+  const btn = document.getElementById('citizen-save-btn');
+  btn.innerHTML = '<span class="spinner"></span>Saving...'; btn.disabled = true;
+
+  try {
+    const body = {name, email, phone, points};
+    if (password) body.password = password;
+    await fetch(`${API}/admin/citizens/${editingCitizenId}`, {
+      method:'PATCH', headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},
+      body: JSON.stringify(body)
+    });
+    showToast('✅ Citizen updated!');
+    closeCitizenModal();
+    await loadCitizens();
+  } catch(e) { errEl.textContent = e.message; errEl.style.display='block'; }
+  btn.innerHTML = 'Save Changes'; btn.disabled = false;
 }
 
 </script>
