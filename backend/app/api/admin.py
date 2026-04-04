@@ -312,7 +312,7 @@ def edit_citizen(
     if payload.phone is not None:
         u.phone = payload.phone
     if payload.points is not None:
-        u.points = payload.points
+        u.reward_points = payload.points
     if payload.password is not None and payload.password.strip() != "":
         u.hashed_password = pwd_ctx.hash(payload.password)
         

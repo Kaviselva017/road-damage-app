@@ -60,6 +60,9 @@ def upgrade() -> None:
     _add_if_missing("login_logs", "logged_out_at",     sa.DateTime())
     _add_if_missing("login_logs", "session_minutes",   sa.Integer())
 
+    # ── users ─────────────────────────────────────────────────────
+    _add_if_missing("users", "reward_points",         sa.Integer())
+
     # ── notifications — create table if absent ────────────────────
     bind = op.get_bind()
     inspector = sa.inspect(bind)
