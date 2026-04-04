@@ -46,6 +46,7 @@ def upgrade() -> None:
     _add_if_missing("complaints", "weather_condition", sa.String(100))
     _add_if_missing("complaints", "resolved_at",       sa.DateTime())
     _add_if_missing("complaints", "image_hash",        sa.String(64))
+    _add_if_missing("complaints", "after_image_url",   sa.String(255))
     # damage_size_score and sub-scores used by the priority display
     _add_if_missing("complaints", "damage_size_score",     sa.Float())
     _add_if_missing("complaints", "traffic_density_score", sa.Float())
