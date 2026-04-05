@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, BackgroundTasks
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -135,6 +135,7 @@ def _c(c: Complaint, db: Session) -> dict:
 # ── Submit ─────────────────────────────────────────────────────
 @router.post("/submit")
 async def submit(
+    background_tasks: BackgroundTasks,
     latitude:  float = Form(...),
     longitude: float = Form(...),
     address:   Optional[str] = Form(None),
@@ -248,17 +249,19 @@ async def submit(
         base_url = os.getenv('BASE_URL', 'https://road-damage-appsystem.onrender.com')
         full_img_url = f"{base_url}{c.image_url}" if c.image_url else ""
         
-        # 1. Notify Citizen
-        notify_complaint_submitted(
+        # 1. Notify Citizen (Background)
+        background_tasks.add_task(
+            notify_complaint_submitted,
             to_email=user.email, citizen_name=user.name,
             complaint_id=cid, damage_type=ai["damage_type"],
             severity=ai["severity"], priority_score=priority, area_type=area,
             image_url=full_img_url, location=address, nearby_places=nearby_sensitive
         )
         
-        # 2. Notify Officer (if assigned)
+        # 2. Notify Officer (Background)
         if officer:
-            notify_officer_assignment(
+            background_tasks.add_task(
+                notify_officer_assignment,
                 to_email=officer.email, officer_name=officer.name,
                 complaint_id=cid, damage_type=ai["damage_type"],
                 severity=ai["severity"], priority_score=priority, area_type=area,
@@ -267,19 +270,20 @@ async def submit(
                 nearby_places=nearby_sensitive
             )
     except Exception as e:
-        logger.warning(f"[Email] submit/assign: {e}")
+        logger.warning(f"[Email Background] submit/assign trigger error: {e}")
 
     if ai["severity"] == "high":
         try:
             from app.services.notification_service import notify_admin_emergency
-            notify_admin_emergency(
+            background_tasks.add_task(
+                notify_admin_emergency,
                 complaint_id=cid, severity=ai["severity"],
                 damage_type=ai["damage_type"], address=address or "",
                 priority_score=priority, latitude=latitude, longitude=longitude,
                 image_url=full_img_url
             )
         except Exception as e:
-            logger.warning(f"[Email] admin alert: {e}")
+            logger.warning(f"[Email Background] admin alert trigger error: {e}")
 
     try:
         await manager.broadcast_new_complaint(c)
@@ -406,6 +410,7 @@ def get_complaint(
 async def update_status(
     complaint_id: str,
     data:    StatusUpdate,
+    background_tasks: BackgroundTasks,
     db:      Session      = Depends(get_db),
     officer: FieldOfficer = Depends(get_current_officer),
 ):
@@ -442,14 +447,15 @@ async def update_status(
             if user:
                 base_url = os.getenv('BASE_URL', 'https://road-damage-appsystem.onrender.com')
                 full_img_url = f"{base_url}{c.image_url}" if c.image_url else ""
-                notify_status_update(
+                background_tasks.add_task(
+                    notify_status_update,
                     to_email=user.email, citizen_name=user.name,
                     complaint_id=complaint_id, new_status=data.status,
                     officer_notes=data.officer_notes or "", officer_name=officer.name,
                     image_url=full_img_url
                 )
         except Exception as e:
-            logger.warning(f"[Email] status update: {e}")
+            logger.warning(f"[Email Background] status update trigger error: {e}")
     else:
         db.commit()
 

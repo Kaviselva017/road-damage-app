@@ -189,6 +189,8 @@ nav{display:flex;align-items:center;justify-content:space-around;padding:.8rem;b
     #bg-canvas{position:fixed;top:0;left:0;width:100%;height:100%;z-index:0;pointer-events:none;}
     body>*:not(#bg-canvas){position:relative;z-index:1;}
     @keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+    .ai-hint-bar{background:rgba(10,12,18,0.85);backdrop-filter:blur(10px);border:1px solid rgba(0,229,255,0.25);border-radius:12px;padding:.6rem 1rem;font-size:.78rem;color:var(--text);display:flex;align-items:center;gap:.6rem;margin-bottom:.8rem;z-index:1001;position:relative;animation:fadeUp .3s ease;box-shadow:0 10px 30px rgba(0,0,0,0.5);}
+    .spinner-small{width:14px;height:14px;border:2px solid rgba(0,229,255,0.2);border-top-color:var(--accent);border-radius:50%;animation:spin .6s linear infinite;}
 
     </style>
 </head>
@@ -579,14 +581,23 @@ async function detectNearby(lat, lng) {
       'https://z.overpass-api.de/api/interpreter'
     ];
     
-    // 🔥 Parallel 'Race' Strategy: Fetch from all servers and wait for the FIRST SUCCESSFUL responder
-    const data = await Promise.any(servers.map(srv => 
-      fetch(srv, { method: 'POST', body: 'data=' + encodeURIComponent(q) })
-        .then(res => {
-          if(!res.ok) throw new Error('SRV FAIL');
-          return res.json();
-        })
-    ));
+    // 🔥 Parallel 'Race' Strategy with 6s Hard Timeout
+    const data = await Promise.any(servers.map(srv => {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 6000);
+      return fetch(srv, { 
+        method: 'POST', 
+        body: 'data=' + encodeURIComponent(q),
+        signal: controller.signal 
+      }).then(res => {
+        clearTimeout(timeout);
+        if(!res.ok) throw new Error('SRV FAIL');
+        return res.json();
+      }).catch(err => {
+        clearTimeout(timeout);
+        throw err;
+      });
+    }));
 
     const items = (data.elements || []).map(el => {
       const elat = el.lat || el.center?.lat || lat;
