@@ -33,6 +33,13 @@ router = APIRouter(prefix="/admin", tags=["admin"])
 pwd_ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
+class OfficerCreate(BaseModel):
+    name: str
+    email: str
+    password: str
+    phone: Optional[str] = None
+    zone: Optional[str] = None
+
 class OfficerEdit(BaseModel):
     name: Optional[str] = None
     phone: Optional[str] = None
@@ -184,6 +191,37 @@ def list_officers(
             "performance":      rate,
         })
     return result
+
+
+@router.post("/officers")
+def create_officer(
+    payload: OfficerCreate,
+    db: Session = Depends(get_db),
+    _: FieldOfficer = Depends(get_current_admin),
+):
+    email = payload.email.strip().lower()
+    if not email or "@" not in email:
+        raise HTTPException(status_code=400, detail="Invalid email format")
+    if not payload.name.strip():
+        raise HTTPException(status_code=400, detail="Name cannot be empty")
+    if len(payload.password) < 6:
+        raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
+        
+    if db.query(FieldOfficer).filter(FieldOfficer.email == email).first():
+        raise HTTPException(status_code=400, detail="Email already registered")
+    
+    hashed_password = pwd_ctx.hash(payload.password)
+    new_officer = FieldOfficer(
+        name=payload.name.strip(),
+        email=email,
+        phone=payload.phone,
+        zone=payload.zone,
+        hashed_password=hashed_password,
+        is_admin=False,
+    )
+    db.add(new_officer)
+    db.commit()
+    return {"message": "Officer created successfully"}
 
 
 @router.patch("/officers/{officer_id}")

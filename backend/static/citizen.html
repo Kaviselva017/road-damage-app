@@ -7,11 +7,11 @@
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <style>
-:root{--bg:#0a0c10;--surface:#12151c;--card:#181d27;--border:#232a38;--accent:#f5a623;--accent2:#3ecfb2;--danger:#e05c5c;--blue:#3b82f6;--text:#e8eaf0;--muted:#6b7694;}
+:root{--bg:#050508;--surface:rgba(15,18,25,0.45);--card:rgba(20,24,35,0.55);--border:rgba(255,255,255,0.1);--accent:#00e5ff;--accent2:#b148d2;--danger:#ff3366;--blue:#3b82f6;--text:#f0f2f8;--muted:#8b9bb4;--glass:rgba(255,255,255,0.03);}
 *{box-sizing:border-box;margin:0;padding:0;}
-body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min-height:100vh;}
-nav{display:flex;align-items:center;justify-content:space-between;padding:1rem 1.5rem;border-bottom:1px solid var(--border);background:var(--surface);position:sticky;top:0;z-index:100;}
-.logo{font-family:'Bebas Neue',sans-serif;font-size:1.4rem;letter-spacing:.05em;color:var(--accent);}
+body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min-height:100vh;padding-bottom:70px;}
+nav{display:flex;align-items:center;justify-content:space-around;padding:.8rem;border-top:1px solid var(--border);background:var(--surface);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);position:fixed;bottom:0;width:100%;z-index:1000;}
+.logo{display:none;}
 .nav-links{display:flex;gap:.4rem;}
 .nav-btn{background:transparent;border:1px solid var(--border);color:var(--muted);padding:.4rem .9rem;border-radius:6px;cursor:pointer;font-family:inherit;font-size:.82rem;transition:all .2s;position:relative;}
 .nav-btn:hover,.nav-btn.active{border-color:var(--accent);color:var(--accent);}
@@ -19,7 +19,7 @@ nav{display:flex;align-items:center;justify-content:space-between;padding:1rem 1
 .notif-badge.show{display:flex;}
 .page{display:none;padding:1.5rem;max-width:520px;margin:0 auto;}
 .page.active{display:block;}
-.user-bar{background:var(--surface);border-bottom:1px solid var(--border);padding:.5rem 1.5rem;display:none;align-items:center;justify-content:space-between;}
+.user-bar{background:rgba(10,12,18,0.75);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border-bottom:1px solid var(--border);padding:.5rem 1.5rem;display:none;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:900;}
 .user-bar.show{display:flex;}
 .user-name{font-size:.82rem;color:var(--muted);}
 .user-name span{color:var(--accent2);font-weight:600;}
@@ -30,7 +30,7 @@ nav{display:flex;align-items:center;justify-content:space-between;padding:1rem 1
 .auth-header{text-align:center;padding:2rem 0 1.5rem;}
 .auth-header h1{font-family:'Bebas Neue',sans-serif;font-size:2.2rem;color:var(--accent);letter-spacing:.05em;}
 .auth-header p{color:var(--muted);font-size:.9rem;margin-top:.4rem;}
-.form-card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:1.5rem;}
+.form-card{background:var(--card);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid var(--border);border-radius:20px;padding:1.8rem;box-shadow:0 8px 32px 0 rgba(0,0,0,0.37);transform:translateZ(0);}
 .form-group{margin-bottom:1rem;}
 .form-group label{display:block;font-size:.78rem;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.06em;margin-bottom:.4rem;}
 .form-group input{width:100%;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:.7rem 1rem;font-family:inherit;font-size:.95rem;transition:border-color .2s;}
@@ -46,8 +46,8 @@ nav{display:flex;align-items:center;justify-content:space-between;padding:1rem 1
 /* REPORT */
 .page-title{font-family:'Bebas Neue',sans-serif;font-size:1.8rem;letter-spacing:.04em;margin-bottom:1.2rem;}
 .page-title span{color:var(--accent);}
-.capture-zone{background:var(--card);border:2px dashed var(--border);border-radius:16px;overflow:hidden;position:relative;margin-bottom:1rem;cursor:pointer;transition:border-color .2s;}
-.capture-zone:hover{border-color:var(--accent);}
+.capture-zone{background:var(--card);backdrop-filter:blur(10px);border:2px dashed var(--border);border-radius:20px;overflow:hidden;position:relative;margin-bottom:1rem;cursor:pointer;transition:all .3s ease;box-shadow:0 4px 15px rgba(0,0,0,0.2);}
+.capture-zone:hover{border-color:var(--accent);transform:translateY(-3px);box-shadow:0 8px 25px rgba(0,229,255,0.15);}
 .capture-zone img{width:100%;display:block;max-height:280px;object-fit:cover;}
 .capture-placeholder{display:flex;flex-direction:column;align-items:center;justify-content:center;height:220px;gap:.8rem;}
 .capture-placeholder .icon{font-size:3rem;}
@@ -58,7 +58,7 @@ nav{display:flex;align-items:center;justify-content:space-between;padding:1rem 1
 /* AI badge */
 .ai-badge{display:inline-flex;align-items:center;gap:5px;background:rgba(170,100,255,.1);border:1px solid rgba(170,100,255,.3);color:#c084fc;padding:.3rem .7rem;border-radius:20px;font-size:.72rem;font-weight:600;margin-bottom:.8rem;}
 /* GPS */
-.gps-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:1rem 1.2rem;margin-bottom:1rem;display:flex;align-items:center;gap:1rem;}
+.gps-card{background:var(--card);backdrop-filter:blur(10px);border:1px solid var(--border);border-radius:16px;padding:1rem 1.2rem;margin-bottom:1rem;display:flex;align-items:center;gap:1rem;box-shadow:0 6px 20px rgba(0,0,0,0.25);}
 .gps-icon{font-size:1.6rem;}
 .gps-info{flex:1;}
 .gps-label{font-size:.75rem;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.06em;}
@@ -91,12 +91,12 @@ nav{display:flex;align-items:center;justify-content:space-between;padding:1rem 1
 .ps-medium{background:rgba(245,166,35,.15);color:var(--accent);}
 .ps-low{background:rgba(62,207,178,.15);color:var(--accent2);}
 /* MY COMPLAINTS */
-.complaint-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:1rem 1.2rem;margin-bottom:.8rem;cursor:pointer;transition:border-color .2s;position:relative;overflow:hidden;}
-.complaint-card::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;border-radius:4px 0 0 4px;}
+.complaint-card{background:var(--card);backdrop-filter:blur(10px);border:1px solid var(--border);border-radius:16px;padding:1rem 1.2rem;margin-bottom:1rem;cursor:pointer;transition:all .3s ease;position:relative;overflow:hidden;box-shadow:0 4px 16px rgba(0,0,0,0.2);}
+.complaint-card::before{content:'';position:absolute;left:0;top:0;bottom:0;width:4px;}
 .complaint-card.high::before{background:var(--danger);}
 .complaint-card.medium::before{background:var(--accent);}
 .complaint-card.low::before{background:var(--accent2);}
-.complaint-card:hover{border-color:var(--accent);}
+.complaint-card:hover{border-color:var(--accent);transform:translateY(-3px);box-shadow:0 8px 24px rgba(0,229,255,0.15);}
 .complaint-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:.6rem;}
 .complaint-id{font-weight:700;font-size:.9rem;color:var(--accent);}
 .status-badge{font-size:.7rem;font-weight:700;text-transform:uppercase;padding:.2rem .6rem;border-radius:20px;}
@@ -160,9 +160,9 @@ nav{display:flex;align-items:center;justify-content:space-between;padding:1rem 1
 
     /* Camera/Gallery */
     .photo-source-grid{display:grid;grid-template-columns:1fr 1fr;gap:.8rem;margin-bottom:1rem;}
-    .source-card{background:rgba(255,255,255,.04);border:2px solid rgba(255,255,255,.08);border-radius:16px;padding:1.3rem 1rem;text-align:center;cursor:pointer;transition:all .25s;}
-    .source-card:hover{transform:translateY(-3px);border-color:rgba(255,255,255,.2);}
-    .source-card.sel-camera{border-color:#f5a623;background:rgba(245,166,35,.08);box-shadow:0 0 30px rgba(245,166,35,.2);}
+    .source-card{background:var(--glass);backdrop-filter:blur(8px);border:1px solid var(--border);border-radius:16px;padding:1.3rem 1rem;text-align:center;cursor:pointer;transition:all .3s ease;box-shadow:0 4px 15px rgba(0,0,0,0.2);}
+    .source-card:hover{transform:translateY(-4px);border-color:rgba(255,255,255,0.3);box-shadow:0 8px 25px rgba(0,0,0,0.4);}
+    .source-card.sel-camera{border-color:var(--accent);background:rgba(0,229,255,0.08);box-shadow:0 0 30px rgba(0,229,255,0.2);}
     .source-card.sel-gallery{border-color:#3ecfb2;background:rgba(62,207,178,.08);box-shadow:0 0 30px rgba(62,207,178,.2);}
     .src-icon{font-size:2.2rem;margin-bottom:.5rem;}
     .src-title{font-weight:700;font-size:1rem;}
@@ -304,7 +304,7 @@ nav{display:flex;align-items:center;justify-content:space-between;padding:1rem 1
       </div>
       <div class="impact-desc" id="impact-desc">Analysing nearby locations...</div>
     </div>
-    <div class="nearby-title">📍 Nearby Sensitive Locations (within 1km)</div>
+    <div class="nearby-title">📍 Nearby Sensitive Locations (within 2km)</div>
     <div id="nearby-list"><div style="font-size:.75rem;color:var(--muted)">Scanning...</div></div>
   </div>
   <div class="gps-card">
@@ -561,9 +561,9 @@ async function detectNearby(lat, lng) {
   list.innerHTML = '<div style="font-size:.75rem;color:var(--muted)">🔍 Scanning nearby locations...</div>';
   
   try {
-    const q = `[out:json][timeout:15];(
-      node["amenity"~"hospital|school|clinic|college|university|pharmacy"](around:1000,${lat},${lng});
-      way["amenity"~"hospital|school|clinic|college|university|hospital"](around:1000,${lat},${lng});
+    const q = `[out:json][timeout:25];(
+      node["amenity"~"hospital|school|clinic|college|university|pharmacy"](around:2000,${lat},${lng});
+      way["amenity"~"hospital|school|clinic|college|university|pharmacy"](around:2000,${lat},${lng});
     );out center 10;`;
     const res = await fetch('https://overpass-api.de/api/interpreter', {
       method:'POST', body:'data='+encodeURIComponent(q)
@@ -584,14 +584,14 @@ async function detectNearby(lat, lng) {
     const totalScore = Math.min(100, 30 + highCount*18 + items.length*5);
 
     // Score circle color
-    if(totalScore>=70){circle.className='score-circle score-high';desc.innerHTML=`<strong style="color:#ef4444">URGENT PRIORITY</strong> — ${items.length} sensitive location${items.length!==1?'s':''} within 1km.<br><small style="color:#ef4444">⚠ ${highCount} hospital/clinic nearby — immediate attention needed.</small>`;}
+    if(totalScore>=70){circle.className='score-circle score-high';desc.innerHTML=`<strong style="color:#ef4444">URGENT PRIORITY</strong> — ${items.length} sensitive location${items.length!==1?'s':''} within 2km.<br><small style="color:#ef4444">⚠ ${highCount} hospital/clinic nearby — immediate attention needed.</small>`;}
     else if(totalScore>=45){circle.className='score-circle score-med';desc.innerHTML=`<strong style="color:#f59e0b">HIGH PRIORITY</strong> — ${items.length} sensitive locations nearby.<br><small style="color:var(--muted)">Medical/educational facility proximity detected.</small>`;}
-    else if(items.length>0){circle.className='score-circle score-low';desc.innerHTML=`<strong style="color:#3ecfb2">STANDARD PRIORITY</strong> — ${items.length} location${items.length!==1?'s':''} within 1km.`;}
+    else if(items.length>0){circle.className='score-circle score-low';desc.innerHTML=`<strong style="color:#3ecfb2">STANDARD PRIORITY</strong> — ${items.length} location${items.length!==1?'s':''} within 2km.`;}
     else{circle.className='score-circle score-low';desc.innerHTML=`<strong style="color:#3ecfb2">STANDARD AREA</strong> — No sensitive locations detected nearby.`;}
     scoreNum.textContent = totalScore;
 
     if(!items.length){
-      list.innerHTML='<div style="font-size:.75rem;color:var(--muted);padding:.3rem 0">No hospitals/schools found within 1km of this location.</div>';
+      list.innerHTML='<div style="font-size:.75rem;color:var(--muted);padding:.3rem 0">No hospitals/schools found within 2km of this location.</div>';
     } else {
       list.innerHTML = items.map(el => {
         const name = el.tags?.name || (el.tags?.amenity?.charAt(0).toUpperCase()+el.tags?.amenity?.slice(1)) || 'Facility';

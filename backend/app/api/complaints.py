@@ -142,8 +142,9 @@ async def submit(
         if fpath.exists(): fpath.unlink()
         raise HTTPException(400, f"Image rejected: Not a road or damage photo (Confidence: {conf})")
 
-    # Duplicate check — Hash first
     img_hash = ai_service.image_hash(img_bytes)
+
+    # Duplicate check — Hash first
     dup = db.query(Complaint).filter(
         Complaint.image_hash == img_hash,
         Complaint.status != "rejected",
@@ -151,16 +152,17 @@ async def submit(
 
     # Duplicate check — Proximity (Same region)
     if not dup:
-        # Check within ~15 meters (approx 0.00015 degrees)
         margin = 0.00015
-        nearby = db.query(Complaint).filter(
+        nearby_candidates = db.query(Complaint).filter(
             Complaint.latitude.between(latitude - margin, latitude + margin),
             Complaint.longitude.between(longitude - margin, longitude + margin),
             Complaint.status != "rejected",
             Complaint.status != "completed",
-        ).first()
-        if nearby:
-            dup = nearby
+        ).all()
+        for cand in nearby_candidates:
+            if (cand.latitude - latitude)**2 + (cand.longitude - longitude)**2 <= margin**2:
+                dup = cand
+                break
 
     if dup:
         dup.report_count += 1
@@ -220,16 +222,32 @@ async def submit(
     ))
     db.commit()
 
-    # Email (non-blocking)
+    # Email Notifications (non-blocking)
     try:
-        from app.services.notification_service import notify_complaint_submitted
+        from app.services.notification_service import notify_complaint_submitted, notify_officer_assignment
+        base_url = os.getenv('BASE_URL', 'https://road-damage-appsystem.onrender.com')
+        full_img_url = f"{base_url}{c.image_url}" if c.image_url else ""
+        
+        # 1. Notify Citizen
         notify_complaint_submitted(
             to_email=user.email, citizen_name=user.name,
             complaint_id=cid, damage_type=ai["damage_type"],
             severity=ai["severity"], priority_score=priority, area_type=area,
+            image_url=full_img_url, location=address, nearby_places=nearby_sensitive
         )
+        
+        # 2. Notify Officer (if assigned)
+        if officer:
+            notify_officer_assignment(
+                to_email=officer.email, officer_name=officer.name,
+                complaint_id=cid, damage_type=ai["damage_type"],
+                severity=ai["severity"], priority_score=priority, area_type=area,
+                location=address, coords=f"{latitude}, {longitude}",
+                image_url=full_img_url, notes=ai["description"],
+                nearby_places=nearby_sensitive
+            )
     except Exception as e:
-        logger.warning(f"[Email] submit: {e}")
+        logger.warning(f"[Email] submit/assign: {e}")
 
     if ai["severity"] == "high":
         try:
@@ -238,6 +256,7 @@ async def submit(
                 complaint_id=cid, severity=ai["severity"],
                 damage_type=ai["damage_type"], address=address or "",
                 priority_score=priority, latitude=latitude, longitude=longitude,
+                image_url=full_img_url
             )
         except Exception as e:
             logger.warning(f"[Email] admin alert: {e}")
@@ -401,10 +420,13 @@ async def update_status(
             from app.services.notification_service import notify_status_update
             user = db.query(User).filter(User.id == c.user_id).first()
             if user:
+                base_url = os.getenv('BASE_URL', 'https://road-damage-appsystem.onrender.com')
+                full_img_url = f"{base_url}{c.image_url}" if c.image_url else ""
                 notify_status_update(
                     to_email=user.email, citizen_name=user.name,
                     complaint_id=complaint_id, new_status=data.status,
                     officer_notes=data.officer_notes or "", officer_name=officer.name,
+                    image_url=full_img_url
                 )
         except Exception as e:
             logger.warning(f"[Email] status update: {e}")
