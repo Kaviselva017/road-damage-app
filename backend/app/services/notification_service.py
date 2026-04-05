@@ -252,6 +252,7 @@ def notify_officer_assignment(
 def notify_status_update(
     to_email: str, citizen_name: str, complaint_id: str,
     new_status: str, officer_notes: str = "", officer_name: str = "",
+    image_url: str = "",
 ) -> bool:
     labels = {
         "assigned":    ("Officer Assigned",   "#f5a623", "A field officer has been assigned."),

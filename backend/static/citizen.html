@@ -570,21 +570,15 @@ async function detectNearby(lat, lng) {
       'https://lz4.overpass-api.de/api/interpreter',
       'https://z.overpass-api.de/api/interpreter'
     ];
-    let data;
-    let success = false;
-    for (const srv of servers) {
-      try {
-        const res = await fetch(srv, {
-          method: 'POST', body: 'data=' + encodeURIComponent(q), signal: AbortController ? new AbortController().signal : null
-        });
-        if (res.ok) {
-          data = await res.json();
-          success = true;
-          break;
-        }
-      } catch (e) { continue; }
-    }
-    if (!success) throw new Error('All Overpass servers failed');
+    
+    // 🔥 Parallel 'Race' Strategy: Fetch from all servers and wait for the FIRST SUCCESSFUL responder
+    const data = await Promise.any(servers.map(srv => 
+      fetch(srv, { method: 'POST', body: 'data=' + encodeURIComponent(q) })
+        .then(res => {
+          if(!res.ok) throw new Error('SRV FAIL');
+          return res.json();
+        })
+    ));
 
     const items = (data.elements || []).map(el => {
       const elat = el.lat || el.center?.lat || lat;
@@ -605,6 +599,10 @@ async function detectNearby(lat, lng) {
     else if (totalScore >= 45) { circle.className = 'score-circle score-med'; desc.innerHTML = `<strong style="color:#f59e0b">HIGH PRIORITY</strong> — ${items.length} sensitive locations nearby.<br><small style="color:var(--muted)">Medical/educational facility proximity detected.</small>`; }
     else if (items.length > 0) { circle.className = 'score-circle score-low'; desc.innerHTML = `<strong style="color:#3ecfb2">STANDARD PRIORITY</strong> — ${items.length} location${items.length !== 1 ? 's' : '' } within 2km.`; }
     else { circle.className = 'score-circle score-low'; desc.innerHTML = `<strong style="color:#3ecfb2">STANDARD AREA</strong> — No sensitive locations detected nearby.`; }
+    // Finalize score display with a professional 'AI Pulse' animation
+    scoreNum.classList.add('pulse-anim');
+    setTimeout(() => scoreNum.classList.remove('pulse-anim'), 1000);
+    
     scoreNum.textContent = totalScore;
 
     if (!items.length) {
@@ -625,7 +623,11 @@ async function detectNearby(lat, lng) {
       nearbyData = items.map(el => `${el.tags?.name || el.tags?.amenity || 'Facility'} (${el.tags?.amenity || ''})`).join(', ');
     }
   } catch (e) {
-    list.innerHTML = `<div style="font-size:.75rem;color:var(--muted)">⚠ Service unavailable. <button onclick="detectNearby(${lat},${lng})" style="background:none;border:none;color:var(--accent);text-decoration:underline;padding:0;cursor:pointer">Retry Analysis</button></div>`;
+    // If all servers fail, we still provide a localized estimate based on the address zone
+    const baseScore = currentArea === 'hospital' ? 65 : currentArea === 'school' ? 55 : 35;
+    scoreNum.textContent = baseScore;
+    desc.innerHTML = `<strong style="color:var(--accent)">ESTIMATED PRIORITY</strong> — Analysis via zone matching (Server busy).`;
+    list.innerHTML = `<div style="font-size:.75rem;color:var(--muted)">⚠ Map service slow. Using zone-based priority. <button onclick="detectNearby(${lat},${lng})" style="background:none;border:none;color:var(--accent);text-decoration:underline;padding:0;cursor:pointer">Retry High-Res Scan</button></div>`;
     console.warn('detectNearby error:', e);
   }
 }

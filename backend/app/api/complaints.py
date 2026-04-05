@@ -62,14 +62,34 @@ def _priority(sev: str, dmg: str, area: str) -> float:
     return min(float(s + d + a + t + r), 100.0)
 
 
-def _best_officer(db: Session) -> Optional[FieldOfficer]:
+def _best_officer(db: Session, address: str = "") -> Optional[FieldOfficer]:
+    """
+    Advanced Load Balancing & Zone-Aware Assignment:
+    1. Filter: Active, non-admin officers.
+    2. Zone Match: If officer.zone (e.g. 'Zone A') is in address, prioritize them.
+    3. Load Balance: Pick the officer with the fewest 'pending' or 'assigned' cases.
+    """
     officers = db.query(FieldOfficer).filter(
         FieldOfficer.is_active == True,
-        FieldOfficer.is_admin  == False,
+        FieldOfficer.is_admin == False,
     ).all()
     if not officers:
         return None
-    return min(officers, key=lambda o: db.query(Complaint).filter(
+
+    addr_lower = (address or "").lower()
+    
+    # Try to find officers in the matching zone first
+    zone_matches = []
+    if addr_lower:
+        for o in officers:
+            if o.zone and o.zone.lower() in addr_lower:
+                zone_matches.append(o)
+    
+    # Target pool: Use zone matches if any, else use all officers
+    target_pool = zone_matches if zone_matches else officers
+    
+    # Pick the one with the lowest current workload in the target pool
+    return min(target_pool, key=lambda o: db.query(Complaint).filter(
         Complaint.officer_id == o.id,
         Complaint.status.in_(["pending", "assigned"]),
     ).count())
@@ -183,9 +203,9 @@ async def submit(
     area     = _area(nearby_sensitive or address or "")
     priority = _priority(ai["severity"], ai["damage_type"], area)
     
-    # Generate ID and find best officer
+    # Generate ID and find best localized officer
     cid      = f"RD-{_now().strftime('%Y%m%d')}-{uuid.uuid4().hex[:6].upper()}"
-    officer  = _best_officer(db)
+    officer  = _best_officer(db, address or "")
 
     c = Complaint(
         complaint_id   = cid,
