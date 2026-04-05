@@ -421,32 +421,55 @@ def chart_daily(
     return result
 
 
-# ── PDF Report Generation ───────────────────────────────────────────────────
+# ── PDF Report Generation ─────────────────────────────────────────────────────
 
 class RoadWatchPDF(FPDF):
     def header(self):
-        self.set_fill_color(10, 12, 16) # Dark background for header
-        self.rect(0, 0, 210, 30, 'F')
-        self.set_font("helvetica", "B", 20)
-        self.set_text_color(245, 166, 35) # Accent orange
-        self.cell(0, 20, "ROADWATCH SYSTEM REPORT", align="C", ln=True)
-        self.set_font("helvetica", "I", 10)
-        self.set_text_color(107, 118, 148) # Muted text
-        self.cell(0, -5, f"Generated on: {datetime.now(timezone.utc).strftime('%d %b %Y, %H:%M %Z')}", align="C", ln=True)
-        self.ln(15)
+        # Header Background
+        self.set_fill_color(15, 23, 42) # Deep Slate
+        self.rect(0, 0, 210, 35, 'F')
+        
+        # Title
+        self.set_font("helvetica", "B", 22)
+        self.set_text_color(245, 166, 35) # Amber
+        self.set_xy(0, 10)
+        self.cell(0, 12, "ROADWATCH SYSTEM REPORT", align="C", ln=True)
+        
+        # Subtitle / Date
+        self.set_font("helvetica", "I", 9)
+        self.set_text_color(148, 163, 184) # Muted text
+        ts = datetime.now(timezone.utc).strftime('%d %b %Y, %H:%M UTC')
+        self.cell(0, 5, f"Official Document · Generated on: {ts}", align="C", ln=True)
+        self.ln(18)
+        
+        # Watermark (Traffic Light)
+        self.draw_watermark()
+
+    def draw_watermark(self):
+        with self.local_context(fill_opacity=0.04): # Extremely subtle
+            # Frame
+            self.set_fill_color(100, 100, 100)
+            self.rect(85, 90, 40, 100, 'F', round_corners=True)
+            # Lights
+            self.set_fill_color(220, 38, 38) # Red
+            self.circle(105, 108, 12, 'F')
+            self.set_fill_color(245, 158, 11) # Amber
+            self.circle(105, 140, 12, 'F')
+            self.set_fill_color(16, 185, 129) # Green
+            self.circle(105, 172, 12, 'F')
 
     def footer(self):
         self.set_y(-15)
         self.set_font("helvetica", "I", 8)
-        self.set_text_color(128)
-        self.cell(0, 10, f"Page {self.page_no()} / {{nb}} -- Confidential RoadWatch Internal Document", align="C")
+        self.set_text_color(148, 163, 184)
+        self.cell(0, 10, f"Page {self.page_no()} / {{nb}} · RoadWatch Municipal Infrastructure Integrity Report · Confidential", align="C")
 
 @router.get("/reports/download")
 def download_pdf_report(
     status: Optional[str] = Query(None),
     severity: Optional[str] = Query(None),
-    date_from: Optional[str] = Query(None, description="Start date YYYY-MM-DD"),
-    date_to: Optional[str] = Query(None, description="End date YYYY-MM-DD"),
+    date_from: Optional[str] = Query(None),
+    date_to: Optional[str] = Query(None),
     db: Session = Depends(get_db),
     _: FieldOfficer = Depends(get_current_admin),
 ):
@@ -459,142 +482,122 @@ def download_pdf_report(
         try:
             dt_from = datetime.strptime(date_from, "%Y-%m-%d").replace(tzinfo=timezone.utc)
             query = query.filter(Complaint.created_at >= dt_from)
-        except ValueError:
-            pass
+        except: pass
     if date_to:
         try:
             dt_to = datetime.strptime(date_to, "%Y-%m-%d").replace(hour=23, minute=59, second=59, tzinfo=timezone.utc)
             query = query.filter(Complaint.created_at <= dt_to)
-        except ValueError:
-            pass
+        except: pass
     
     complaints = query.order_by(Complaint.created_at.desc()).all()
     
     pdf = RoadWatchPDF()
-    pdf.set_auto_page_break(auto=True, margin=15)
+    pdf.set_auto_page_break(auto=True, margin=20)
     pdf.add_page()
     
     try:
         if not complaints:
             pdf.set_font("helvetica", "B", 14)
-            pdf.cell(0, 20, "No complaints found matching current filters.", align="C")
+            pdf.set_text_color(100)
+            pdf.cell(0, 40, "No records found matching the specified filters.", align="C")
         else:
             for c in complaints:
-                # Check if we need a new page for image + info
-                if pdf.get_y() > 200:
+                if pdf.get_y() > 220:
                     pdf.add_page()
 
-                # ID Row
-                pdf.set_fill_color(24, 29, 39)
+                # Record Header
+                pdf.set_fill_color(30, 41, 59) # Slate 800
                 pdf.rect(10, pdf.get_y(), 190, 10, 'F')
-                pdf.set_font("helvetica", "B", 12)
+                pdf.set_font("helvetica", "B", 11)
                 pdf.set_text_color(255, 255, 255)
                 cid = c.complaint_id or f"RD-{c.id:06d}"
-                pdf.cell(100, 10, f"  COMPLAINT: {cid}", ln=False)
+                pdf.set_x(15)
+                pdf.cell(100, 10, f"COMPLAINT: {cid}", ln=False, align="L")
                 
-                # Status badge color
                 pdf.set_font("helvetica", "B", 9)
-                if c.status == "completed": pdf.set_text_color(62, 207, 178)
-                elif c.status == "rejected": pdf.set_text_color(224, 92, 92)
-                else: pdf.set_text_color(245, 166, 35)
-                pdf.cell(90, 10, f"STATUS: {str(c.status).upper()}   ", align="R", ln=True)
+                st = (c.status or "PENDING").upper().replace("_", " ")
+                if c.status == "completed": pdf.set_text_color(52, 211, 153)
+                elif c.status == "rejected": pdf.set_text_color(248, 113, 113)
+                else: pdf.set_text_color(251, 191, 36)
+                pdf.cell(80, 10, f"STATUS: {st}   ", ln=True, align="R")
 
-                pdf.ln(2)
-                y_start = pdf.get_y()
+                pdf.ln(4)
+                y_anchor = pdf.get_y()
 
-                # Image logic
-                img_drawn = False
-                if c.image_url:
-                    # Local path for images
-                    img_path = "." + c.image_url # Assuming /uploads/...
-                    if os.path.exists(img_path):
-                        try:
-                            pdf.image(img_path, x=10, y=y_start, w=70)
-                            img_drawn = True
-                        except Exception as img_err:
-                            print(f"PDF Image Error: {img_err}")
+                img_path = "." + c.image_url if c.image_url else ""
+                data_x = 15
+                if img_path and os.path.exists(img_path):
+                    try:
+                        pdf.image(img_path, x=12, y=y_anchor, w=75)
+                        data_x = 92
+                    except: pass
                 
-                x_offset = 85 if img_drawn else 15
-                pdf.set_text_color(50)
+                pdf.set_xy(data_x, y_anchor)
                 
-                # Data Grid
-                pdf.set_xy(x_offset, y_start)
-                pdf.set_font("helvetica", "B", 10)
-                pdf.cell(30, 6, "Damage Type:")
-                pdf.set_font("helvetica", "", 10)
-                pdf.cell(0, 6, str(c.damage_type).title(), ln=True)
+                def draw_field(label, value, color=(30, 41, 59), bold_val=False, accent=None):
+                    pdf.set_x(data_x)
+                    pdf.set_font("helvetica", "B", 9)
+                    pdf.set_text_color(100, 116, 139) # Muted label
+                    pdf.cell(32, 6, label)
+                    
+                    pdf.set_font("helvetica", "B" if bold_val else "", 9)
+                    if accent: pdf.set_text_color(*accent)
+                    else: pdf.set_text_color(*color)
+                    pdf.cell(0, 6, str(value), ln=True)
 
-                pdf.set_x(x_offset)
-                pdf.set_font("helvetica", "B", 10)
-                pdf.cell(30, 6, "Severity:")
-                pdf.set_font("helvetica", "B", 10)
-                if c.severity == "high": pdf.set_text_color(224, 92, 92)
-                else: pdf.set_text_color(100)
-                pdf.cell(0, 6, str(c.severity).upper(), ln=True)
-                pdf.set_text_color(50)
+                draw_field("Damage Type:", (c.damage_type or "Unknown").replace("_", " ").title())
+                sev = str(c.severity or "medium").upper()
+                s_color = (185, 28, 28) if sev == "HIGH" else (30, 41, 59)
+                draw_field("Severity:", sev, accent=s_color, bold_val=True)
+                ts = c.created_at.strftime('%d %b %Y, %I:%M %p') if c.created_at else "Now"
+                draw_field("Reported On:", ts)
+                draw_field("Coordinates:", f"{c.latitude:.5f}, {c.longitude:.5f}")
+                
+                pdf.set_x(data_x)
+                pdf.set_font("helvetica", "B", 9)
+                pdf.set_text_color(100, 116, 139)
+                pdf.cell(32, 6, "Location:")
+                pdf.set_font("helvetica", "", 8.5)
+                pdf.set_text_color(30, 41, 59)
+                addr = (c.address or "Detected via GPS").encode("ascii", "ignore").decode("ascii")
+                pdf.multi_cell(0, 5, addr)
 
-                pdf.set_x(x_offset)
-                pdf.set_font("helvetica", "B", 10)
-                pdf.cell(30, 6, "Created On:")
-                pdf.set_font("helvetica", "", 10)
-                ts = c.created_at.strftime('%d %b %Y, %I:%M %p') if c.created_at else "N/A"
-                pdf.cell(0, 6, ts, ln=True)
+                pdf.ln(3)
+                pdf.set_x(15)
+                pdf.set_font("helvetica", "B", 9)
+                pdf.set_text_color(100, 116, 139)
+                pdf.cell(30, 5, "Description:")
+                pdf.set_font("helvetica", "I", 8.5)
+                pdf.set_text_color(51, 65, 85)
+                desc = (c.description or "No additional description.").encode("ascii", "ignore").decode("ascii")
+                pdf.multi_cell(0, 5, desc)
 
-                pdf.set_x(x_offset)
-                pdf.set_font("helvetica", "B", 10)
-                pdf.cell(30, 6, "GPS Coordinates:")
-                pdf.set_font("helvetica", "", 10)
-                pdf.cell(0, 6, f"{c.latitude:.5f}, {c.longitude:.5f}", ln=True)
-
-                # Address - multi-line
-                pdf.set_x(x_offset)
-                pdf.set_font("helvetica", "B", 10)
-                pdf.cell(30, 6, "Location:")
-                pdf.set_font("helvetica", "", 9)
-                addr_text = (c.address or "No address provided").encode("ascii", "ignore").decode("ascii")
-                pdf.multi_cell(0, 5, addr_text)
-
-                # Description - multi-line
-                pdf.set_x(x_offset)
-                pdf.set_font("helvetica", "B", 10)
-                pdf.cell(30, 6, "Description:")
-                pdf.set_font("helvetica", "", 9)
-                desc_text = (c.description or "No description provided").encode("ascii", "ignore").decode("ascii")
-                pdf.multi_cell(0, 5, desc_text)
-
-                # Officer Info
-                pdf.ln(2)
-                pdf.set_x(x_offset)
-                pdf.set_font("helvetica", "B", 10)
-                pdf.cell(30, 6, "Officer:")
-                pdf.set_font("helvetica", "I", 10)
-                off_name = "Unassigned"
+                pdf.set_x(15)
+                pdf.set_font("helvetica", "B", 9)
+                pdf.set_text_color(100, 116, 139)
+                pdf.cell(30, 6, "Assigned To:")
+                pdf.set_font("helvetica", "B", 9)
+                pdf.set_text_color(245, 158, 11) # Amber
+                
+                off_name = "UNASSIGNED"
                 if c.officer_id:
                     off = db.query(FieldOfficer).filter(FieldOfficer.id == c.officer_id).first()
-                    if off: off_name = off.name
-                pdf.cell(0, 6, off_name.encode("ascii", "ignore").decode("ascii"), ln=True)
+                    if off: off_name = off.name.upper()
+                pdf.cell(0, 6, off_name, ln=True)
 
-                pdf.ln(10)
-                if pdf.get_y() < y_start + 50 and img_drawn:
-                    pdf.set_y(y_start + 55)
-                
-                # Divider
-                pdf.set_draw_color(230)
+                pdf.ln(6)
+                pdf.set_draw_color(226, 232, 240)
                 pdf.line(10, pdf.get_y(), 200, pdf.get_y())
-                pdf.ln(5)
+                pdf.ln(8)
+
     except Exception as e:
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"PDF Error: {str(e)}")
 
-    buffer = io.BytesIO()
-    pdf_out = pdf.output()
-    buffer.write(pdf_out)
-    buffer.seek(0)
-    
-    filename = f"RoadWatch_Report_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf"
+    pdf_bytes = pdf.output()
     return StreamingResponse(
-        buffer,
+        io.BytesIO(pdf_bytes),
         media_type="application/pdf",
-        headers={"Content-Disposition": f"attachment; filename={filename}"}
+        headers={"Content-Disposition": f"attachment; filename=RoadWatch_Report_{datetime.now().strftime('%Y%m%d')}.pdf"}
     )

@@ -25,7 +25,7 @@ def create_fake_image(color=(255, 0, 0)):
         return f.read() + os.urandom(10)
 
 def run_unlimited_tests(count=20):
-    print(f"🚀 Code Rabbit starting {count} unlimited test cases...")
+    print(f"🚀 Con starting {count} unlimited test cases...")
     
     # 1. Register/Login as Citizen
     email = f"rabbit_{random.randint(1000, 9999)}@test.com"
@@ -96,7 +96,7 @@ def run_unlimited_tests(count=20):
         print("\nTOP ERRORS:")
         for e in errors[:3]: print(f" - {e}")
     else:
-        print("\n💎 ALL CODE RABBIT TESTS PASSED WITH 100% STABILITY")
+        print("\n💎 ALL CON TESTS PASSED WITH 100% STABILITY")
     print("="*40)
 
 if __name__ == "__main__":
