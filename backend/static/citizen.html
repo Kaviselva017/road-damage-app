@@ -479,8 +479,16 @@ function initMiniMap(lat,lng){
   if(miniMap){miniMap.remove();}
   const el=document.getElementById('mini-map');
   el.innerHTML='';
-  miniMap=L.map('mini-map',{zoomControl:true,attributionControl:false}).setView([lat,lng],16);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(miniMap);
+  miniMap=L.map('mini-map',{zoomControl:true,attributionControl:false,fadeAnimation:true,zoomAnimation:true}).setView([lat,lng],17);
+  
+  // 🛰️ High-Resolution Satellite + Street Labels Hybrid (Esri + Carto)
+  const satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+    attribution: 'Tiles &copy; Esri'
+  }).addTo(miniMap);
+
+  const labels = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png', {
+    pane: 'shadowPane' // Ensure labels sit above imagery
+  }).addTo(miniMap);
   // Draggable pin marker
   miniMarker=L.marker([lat,lng],{
     draggable:true,

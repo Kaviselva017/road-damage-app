@@ -1302,12 +1302,23 @@ function getMapFilteredComplaints() {
 
 function initAdminMap() {
   if (adminMap || !document.getElementById('admin-map')) return;
-  adminMap = L.map('admin-map', {zoomControl:true}).setView([11.0168, 76.9558], 12);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution:'© OpenStreetMap',
-    maxZoom:19,
+  adminMap = L.map('admin-map', {zoomControl:true,fadeAnimation:true}).setView([11.0168, 76.9558], 13);
+  
+  // 🛰️ High-Resolution Satellite Hybrid for Peak Accuracy
+  L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+    attribution: 'Esri'
   }).addTo(adminMap);
-  document.getElementById('admin-map').style.filter = 'invert(1) hue-rotate(180deg) brightness(0.88) contrast(1.08)';
+
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png', {
+    pane: 'shadowPane'
+  }).addTo(adminMap);
+
+  // Clear dark filters to allow authentic road-damage visualization
+  const mapEl = document.getElementById('admin-map');
+  if (mapEl) {
+    mapEl.style.filter = 'none';
+    mapEl.style.borderRadius = '12px';
+  }
 }
 
 function makeAdminMapIcon(complaint, active = false, rank = null) {

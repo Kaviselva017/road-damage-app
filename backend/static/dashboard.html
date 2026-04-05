@@ -569,12 +569,20 @@ function setFilter(f, el) {
 // ── Leaflet Map ───────────────────────────────────────
 function initMap() {
   if (map) return;
-  map = L.map('map', {zoomControl:true}).setView([11.0168, 76.9558], 12);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution:'© OpenStreetMap', maxZoom:19
+  map = L.map('map', {zoomControl:true,fadeAnimation:true}).setView([11.0168, 76.9558], 13);
+  
+  // 🛰️ High-Resolution Satellite Hybrid
+  L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+    attribution: 'Esri'
   }).addTo(map);
-  // Dark overlay filter via CSS
-  document.getElementById('map').style.filter = 'invert(1) hue-rotate(180deg) brightness(0.85) contrast(1.1)';
+
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png', {
+    pane: 'shadowPane'
+  }).addTo(map);
+
+  // Remove dark filter for better road-damage color visibility
+  document.getElementById('map').style.filter = 'none';
+  document.getElementById('map').style.borderRadius = '12px';
 }
 
 function markerColor(c) {
