@@ -565,50 +565,67 @@ async function detectNearby(lat, lng) {
       node["amenity"~"hospital|school|clinic|college|university|pharmacy"](around:2000,${lat},${lng});
       way["amenity"~"hospital|school|clinic|college|university|pharmacy"](around:2000,${lat},${lng});
     );out center 10;`;
-    const res = await fetch('https://overpass-api.de/api/interpreter', {
-      method:'POST', body:'data='+encodeURIComponent(q)
-    });
-    const data = await res.json();
-    const items = (data.elements||[]).map(el => {
-      const elat = el.lat||el.center?.lat||lat;
-      const elng = el.lon||el.center?.lon||lng;
-      const dist = Math.round(Math.sqrt(
-        Math.pow((elat-lat)*111000,2) + Math.pow((elng-lng)*111000*Math.cos(lat*Math.PI/180),2)
-      ));
-      return {...el, dist, elat, elng};
-    }).sort((a,b) => a.dist-b.dist).slice(0,6);
+    const servers = [
+      'https://overpass-api.de/api/interpreter',
+      'https://lz4.overpass-api.de/api/interpreter',
+      'https://z.overpass-api.de/api/interpreter'
+    ];
+    let data;
+    let success = false;
+    for (const srv of servers) {
+      try {
+        const res = await fetch(srv, {
+          method: 'POST', body: 'data=' + encodeURIComponent(q), signal: AbortController ? new AbortController().signal : null
+        });
+        if (res.ok) {
+          data = await res.json();
+          success = true;
+          break;
+        }
+      } catch (e) { continue; }
+    }
+    if (!success) throw new Error('All Overpass servers failed');
 
-    const ICONS = {hospital:'🏥',school:'🏫',clinic:'🏥',college:'🎓',university:'🎓',pharmacy:'💊'};
-    const HIGH = ['hospital','clinic','pharmacy'];
-    const highCount = items.filter(e=>HIGH.includes(e.tags?.amenity)).length;
-    const totalScore = Math.min(100, 30 + highCount*18 + items.length*5);
+    const items = (data.elements || []).map(el => {
+      const elat = el.lat || el.center?.lat || lat;
+      const elng = el.lon || el.center?.lon || lng;
+      const dist = Math.round(Math.sqrt(
+        Math.pow((elat - lat) * 111000, 2) + Math.pow((elng - lng) * 111000 * Math.cos(lat * Math.PI / 180), 2)
+      ));
+      return { ...el, dist, elat, elng };
+    }).sort((a, b) => a.dist - b.dist).slice(0, 6);
+
+    const ICONS = { hospital: '🏥', school: '🏫', clinic: '🏥', college: '🎓', university: '🎓', pharmacy: '💊' };
+    const HIGH = ['hospital', 'clinic', 'pharmacy'];
+    const highCount = items.filter(e => HIGH.includes(e.tags?.amenity)).length;
+    const totalScore = Math.min(100, 30 + highCount * 18 + items.length * 5);
 
     // Score circle color
-    if(totalScore>=70){circle.className='score-circle score-high';desc.innerHTML=`<strong style="color:#ef4444">URGENT PRIORITY</strong> — ${items.length} sensitive location${items.length!==1?'s':''} within 2km.<br><small style="color:#ef4444">⚠ ${highCount} hospital/clinic nearby — immediate attention needed.</small>`;}
-    else if(totalScore>=45){circle.className='score-circle score-med';desc.innerHTML=`<strong style="color:#f59e0b">HIGH PRIORITY</strong> — ${items.length} sensitive locations nearby.<br><small style="color:var(--muted)">Medical/educational facility proximity detected.</small>`;}
-    else if(items.length>0){circle.className='score-circle score-low';desc.innerHTML=`<strong style="color:#3ecfb2">STANDARD PRIORITY</strong> — ${items.length} location${items.length!==1?'s':''} within 2km.`;}
-    else{circle.className='score-circle score-low';desc.innerHTML=`<strong style="color:#3ecfb2">STANDARD AREA</strong> — No sensitive locations detected nearby.`;}
+    if (totalScore >= 70) { circle.className = 'score-circle score-high'; desc.innerHTML = `<strong style="color:#ef4444">URGENT PRIORITY</strong> — ${items.length} sensitive location${items.length !== 1 ? 's' : '' } within 2km.<br><small style="color:#ef4444">⚠ ${highCount} hospital/clinic nearby — immediate attention needed.</small>`; }
+    else if (totalScore >= 45) { circle.className = 'score-circle score-med'; desc.innerHTML = `<strong style="color:#f59e0b">HIGH PRIORITY</strong> — ${items.length} sensitive locations nearby.<br><small style="color:var(--muted)">Medical/educational facility proximity detected.</small>`; }
+    else if (items.length > 0) { circle.className = 'score-circle score-low'; desc.innerHTML = `<strong style="color:#3ecfb2">STANDARD PRIORITY</strong> — ${items.length} location${items.length !== 1 ? 's' : '' } within 2km.`; }
+    else { circle.className = 'score-circle score-low'; desc.innerHTML = `<strong style="color:#3ecfb2">STANDARD AREA</strong> — No sensitive locations detected nearby.`; }
     scoreNum.textContent = totalScore;
 
-    if(!items.length){
-      list.innerHTML='<div style="font-size:.75rem;color:var(--muted);padding:.3rem 0">No hospitals/schools found within 2km of this location.</div>';
+    if (!items.length) {
+      list.innerHTML = '<div style="font-size:.75rem;color:var(--muted);padding:.3rem 0">No hospitals/schools found within 2km of this location.</div>';
     } else {
       list.innerHTML = items.map(el => {
-        const name = el.tags?.name || (el.tags?.amenity?.charAt(0).toUpperCase()+el.tags?.amenity?.slice(1)) || 'Facility';
-        const type = el.tags?.amenity||'';
-        const icon = ICONS[type]||'📍';
+        const name = el.tags?.name || (el.tags?.amenity?.charAt(0).toUpperCase() + el.tags?.amenity?.slice(1)) || 'Facility';
+        const type = el.tags?.amenity || '';
+        const icon = ICONS[type] || '📍';
         const isHigh = HIGH.includes(type);
         return `<div class="nearby-item">
           <span style="font-size:1.1rem">${icon}</span>
           <span style="flex:1;font-weight:500">${name}</span>
           <span class="nearby-dist">${el.dist}m</span>
-          <span class="nbadge ${isHigh?'nbadge-high':'nbadge-med'}">${isHigh?'HIGH':'MED'}</span>
+          <span class="nbadge ${isHigh ? 'nbadge-high' : 'nbadge-med' }">${isHigh ? 'HIGH' : 'MED' }</span>
         </div>`;
       }).join('');
-      nearbyData = items.map(el => `${el.tags?.name||el.tags?.amenity||'Facility'} (${el.tags?.amenity||''})`).join(', ');
+      nearbyData = items.map(el => `${el.tags?.name || el.tags?.amenity || 'Facility'} (${el.tags?.amenity || ''})`).join(', ');
     }
-  } catch(e) {
-    list.innerHTML = '<div style="font-size:.75rem;color:var(--muted)">⚠ Could not fetch nearby data. Check connection.</div>';
+  } catch (e) {
+    list.innerHTML = `<div style="font-size:.75rem;color:var(--muted)">⚠ Service unavailable. <button onclick="detectNearby(${lat},${lng})" style="background:none;border:none;color:var(--accent);text-decoration:underline;padding:0;cursor:pointer">Retry Analysis</button></div>`;
     console.warn('detectNearby error:', e);
   }
 }

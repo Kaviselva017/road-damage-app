@@ -26,6 +26,7 @@ python-dotenv==1.0.1
 Pillow==10.4.0
 aiofiles==23.2.1
 fpdf2==2.7.9
+numpy<2.0.0
 
 # ── Optional: uncomment to enable real YOLOv8 inference ───────────
 ultralytics==8.2.0
