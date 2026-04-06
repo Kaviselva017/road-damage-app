@@ -677,6 +677,7 @@ let charts = {};
 let adminMap = null;
 let adminMapMarkers = [];
 let selectedMapComplaintId = null;
+let _adminPollInterval = null;
 
 const MAP_SEVERITY_COLORS = { high:'#ef4444', medium:'#f59e0b', low:'#10b981' };
 const MAP_STATUS_COLORS = {
@@ -743,7 +744,7 @@ function init() {
     document.getElementById('login-overlay').style.display = 'none';
     document.getElementById('admin-name').textContent = adminName || 'Admin';
     loadAll();
-    setInterval(loadAll, 30000);
+    if (!_adminPollInterval) _adminPollInterval = setInterval(loadAll, 30000);
   }
 }
 
@@ -763,7 +764,7 @@ async function doLogin() {
     document.getElementById('login-overlay').style.display = 'none';
     document.getElementById('admin-name').textContent = adminName;
     loadAll();
-    setInterval(loadAll, 30000);
+    if (!_adminPollInterval) _adminPollInterval = setInterval(loadAll, 30000);
   } catch(e) {
     document.getElementById('login-err').textContent = e.message;
     document.getElementById('login-err').style.display = 'block';
@@ -1304,13 +1305,10 @@ function initAdminMap() {
   if (adminMap || !document.getElementById('admin-map')) return;
   adminMap = L.map('admin-map', {zoomControl:true,fadeAnimation:true}).setView([11.0168, 76.9558], 13);
   
-  // 🛰️ High-Resolution Satellite Hybrid for Peak Accuracy
-  L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-    attribution: 'Esri'
-  }).addTo(adminMap);
-
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png', {
-    pane: 'shadowPane'
+  // 🌎 High-Speed Free Standard OSM Map
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    attribution: '&copy; OpenStreetMap contributors'
   }).addTo(adminMap);
 
   // Clear dark filters to allow authentic road-damage visualization
@@ -1653,10 +1651,12 @@ async function saveOfficer() {
     if (editingOfficerId) {
       const body = {name, phone, zone: selectedZone};
       if (password) body.password = password;
-      await fetch(`${API}/admin/officers/${editingOfficerId}`, {
+      const res = await fetch(`${API}/admin/officers/${editingOfficerId}`, {
         method:'PATCH', headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},
         body: JSON.stringify(body)
       });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Update failed');
       showToast('✅ Officer updated!');
     } else {
       const res = await fetch(`${API}/admin/officers`, {
@@ -1752,10 +1752,12 @@ async function saveCitizen() {
   try {
     const body = {name, email, phone, points};
     if (password) body.password = password;
-    await fetch(`${API}/admin/citizens/${editingCitizenId}`, {
+    const res = await fetch(`${API}/admin/citizens/${editingCitizenId}`, {
       method:'PATCH', headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},
       body: JSON.stringify(body)
     });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Update failed');
     showToast('✅ Citizen updated!');
     closeCitizenModal();
     await loadCitizens();

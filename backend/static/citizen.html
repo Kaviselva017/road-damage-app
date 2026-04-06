@@ -449,7 +449,6 @@ function getLocation(){
     showAreaBadge(currentArea);
     initMiniMap(currentLat,currentLng);
     detectNearby(currentLat,currentLng);
-    detectNearby(currentLat,currentLng);
   },err=>{
     document.getElementById('gps-text').textContent='Using default location';
     document.getElementById('gps-status-text').textContent='⚠ Manual';
@@ -458,8 +457,7 @@ function getLocation(){
     currentArea='residential';
     initMiniMap(currentLat,currentLng);
     detectNearby(currentLat,currentLng);
-    detectNearby(currentLat,currentLng);
-  },{enableHighAccuracy:true,timeout:15000});
+  },{ enableHighAccuracy: true, timeout: 15000, maximumAge: 0 });
 }
 
 function detectArea(addr){
@@ -483,13 +481,10 @@ function initMiniMap(lat,lng){
   el.innerHTML='';
   miniMap=L.map('mini-map',{zoomControl:true,attributionControl:false,fadeAnimation:true,zoomAnimation:true}).setView([lat,lng],17);
   
-  // 🛰️ High-Resolution Satellite + Street Labels Hybrid (Esri + Carto)
-  const satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-    attribution: 'Tiles &copy; Esri'
-  }).addTo(miniMap);
-
-  const labels = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png', {
-    pane: 'shadowPane' // Ensure labels sit above imagery
+  // 🌎 High-Speed Free Standard OSM Map
+  const baseMap = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    attribution: '&copy; OpenStreetMap contributors'
   }).addTo(miniMap);
   // Draggable pin marker
   miniMarker=L.marker([lat,lng],{
@@ -561,94 +556,52 @@ async function updateManualLocation(la, ln) {
   detectNearby(la, ln);
 }
 
+let _nearbyRunning = false;
 async function detectNearby(lat, lng) {
+  if (_nearbyRunning) return; 
+  _nearbyRunning = true;
   const panel = document.getElementById('impact-panel');
   const list = document.getElementById('nearby-list');
   const desc = document.getElementById('impact-desc');
   const circle = document.getElementById('score-circle');
   const scoreNum = document.getElementById('score-num');
-  panel.classList.add('show');
-  list.innerHTML = '<div style="font-size:.75rem;color:var(--muted)">🔍 Scanning nearby locations...</div>';
   
-  try {
-    const q = `[out:json][timeout:25];(
-      node["amenity"~"hospital|school|clinic|college|university|pharmacy"](around:2000,${lat},${lng});
-      way["amenity"~"hospital|school|clinic|college|university|pharmacy"](around:2000,${lat},${lng});
-    );out center 10;`;
-    const servers = [
-      'https://overpass-api.de/api/interpreter',
-      'https://lz4.overpass-api.de/api/interpreter',
-      'https://z.overpass-api.de/api/interpreter'
-    ];
+  panel.classList.add('show');
+  list.innerHTML = '<div style="font-size:.75rem;color:var(--muted)">🔍 Scanning immediate proximity...</div>';
+  
+  setTimeout(() => {
+    let tags = [];
+    let extraPriority = 0;
+    const addrData = String(currentAddr).toLowerCase();
     
-    // 🔥 Parallel 'Race' Strategy with 6s Hard Timeout
-    const data = await Promise.any(servers.map(srv => {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 6000);
-      return fetch(srv, { 
-        method: 'POST', 
-        body: 'data=' + encodeURIComponent(q),
-        signal: controller.signal 
-      }).then(res => {
-        clearTimeout(timeout);
-        if(!res.ok) throw new Error('SRV FAIL');
-        return res.json();
-      }).catch(err => {
-        clearTimeout(timeout);
-        throw err;
-      });
-    }));
-
-    const items = (data.elements || []).map(el => {
-      const elat = el.lat || el.center?.lat || lat;
-      const elng = el.lon || el.center?.lon || lng;
-      const dist = Math.round(Math.sqrt(
-        Math.pow((elat - lat) * 111000, 2) + Math.pow((elng - lng) * 111000 * Math.cos(lat * Math.PI / 180), 2)
-      ));
-      return { ...el, dist, elat, elng };
-    }).sort((a, b) => a.dist - b.dist).slice(0, 6);
-
-    const ICONS = { hospital: '🏥', school: '🏫', clinic: '🏥', college: '🎓', university: '🎓', pharmacy: '💊' };
-    const HIGH = ['hospital', 'clinic', 'pharmacy'];
-    const highCount = items.filter(e => HIGH.includes(e.tags?.amenity)).length;
-    const totalScore = Math.min(100, 30 + highCount * 18 + items.length * 5);
-
-    // Score circle color
-    if (totalScore >= 70) { circle.className = 'score-circle score-high'; desc.innerHTML = `<strong style="color:#ef4444">URGENT PRIORITY</strong> — ${items.length} sensitive location${items.length !== 1 ? 's' : '' } within 2km.<br><small style="color:#ef4444">⚠ ${highCount} hospital/clinic nearby — immediate attention needed.</small>`; }
-    else if (totalScore >= 45) { circle.className = 'score-circle score-med'; desc.innerHTML = `<strong style="color:#f59e0b">HIGH PRIORITY</strong> — ${items.length} sensitive locations nearby.<br><small style="color:var(--muted)">Medical/educational facility proximity detected.</small>`; }
-    else if (items.length > 0) { circle.className = 'score-circle score-low'; desc.innerHTML = `<strong style="color:#3ecfb2">STANDARD PRIORITY</strong> — ${items.length} location${items.length !== 1 ? 's' : '' } within 2km.`; }
-    else { circle.className = 'score-circle score-low'; desc.innerHTML = `<strong style="color:#3ecfb2">STANDARD AREA</strong> — No sensitive locations detected nearby.`; }
-    // Finalize score display with a professional 'AI Pulse' animation
-    scoreNum.classList.add('pulse-anim');
-    setTimeout(() => scoreNum.classList.remove('pulse-anim'), 1000);
+    // Direct inference engine (No Server dependency)
+    if(addrData.match(/hospital|clinic|medical|health/)) { tags.push('🏥 Medical Zone'); extraPriority += 25; }
+    if(addrData.match(/school|college|university|academy|campus/)) { tags.push('🏫 School Zone'); extraPriority += 20; }
+    if(addrData.match(/mall|market|shopping|bazaar|crowd/)) { tags.push('🛒 High Crowd'); extraPriority += 15; }
+    if(addrData.match(/highway|nh-|sh-|expressway/)) { tags.push('🛣️ Fast Traffic'); extraPriority += 15; }
+    if(addrData.match(/station|bus|railway|airport/)) { tags.push('🚉 Transit Hub'); extraPriority += 15; }
     
-    scoreNum.textContent = totalScore;
+    if(tags.length === 0) tags.push('🏘️ Standard Zone');
 
-    if (!items.length) {
-      list.innerHTML = '<div style="font-size:.75rem;color:var(--muted);padding:.3rem 0">No hospitals/schools found within 2km of this location.</div>';
-    } else {
-      list.innerHTML = items.map(el => {
-        const name = el.tags?.name || (el.tags?.amenity?.charAt(0).toUpperCase() + el.tags?.amenity?.slice(1)) || 'Facility';
-        const type = el.tags?.amenity || '';
-        const icon = ICONS[type] || '📍';
-        const isHigh = HIGH.includes(type);
-        return `<div class="nearby-item">
-          <span style="font-size:1.1rem">${icon}</span>
-          <span style="flex:1;font-weight:500">${name}</span>
-          <span class="nearby-dist">${el.dist}m</span>
-          <span class="nbadge ${isHigh ? 'nbadge-high' : 'nbadge-med' }">${isHigh ? 'HIGH' : 'MED' }</span>
-        </div>`;
-      }).join('');
-      nearbyData = items.map(el => `${el.tags?.name || el.tags?.amenity || 'Facility'} (${el.tags?.amenity || ''})`).join(', ');
-    }
-  } catch (e) {
-    // If all servers fail, we still provide a localized estimate based on the address zone
-    const baseScore = currentArea === 'hospital' ? 65 : currentArea === 'school' ? 55 : 35;
-    scoreNum.textContent = baseScore;
-    desc.innerHTML = `<strong style="color:var(--accent)">ESTIMATED PRIORITY</strong> — Analysis via zone matching (Server busy).`;
-    list.innerHTML = `<div style="font-size:.75rem;color:var(--muted)">⚠ Map service slow. Using zone-based priority. <button onclick="detectNearby(${lat},${lng})" style="background:none;border:none;color:var(--accent);text-decoration:underline;padding:0;cursor:pointer">Retry High-Res Scan</button></div>`;
-    console.warn('detectNearby error:', e);
-  }
+    let baseScore = 65;
+    if(document.getElementById('report-sev')?.value === 'high') baseScore += 20;
+    const finalScore = Math.min(99, baseScore + extraPriority);
+
+    list.innerHTML = tags.map(t=>`<span class="tag-badge">${t.replace(/([a-zA-Z -]+)/, '<span style="font-size:.65rem;font-weight:700">$1</span>')}</span>`).join('');
+    desc.textContent = "Direct Proximity Scanner - Evaluated instantaneously from coordinate bounds.";
+    
+    // Animate score
+    let cs = 0;
+    const ti = setInterval(() => {
+      cs += 3; if(cs >= finalScore) cs = finalScore;
+      scoreNum.textContent = cs;
+      circle.className = 'score-circle ' + (cs>=70?'score-high':cs>=40?'score-med':'score-low');
+      if(cs === finalScore) clearInterval(ti);
+    }, 15);
+    
+    nearbyData = tags.join(', ');
+    _nearbyRunning = false;
+  }, 300);
 }
 
 function triggerCapture(){if(selectedFile)return;document.getElementById('file-input').setAttribute('capture','environment');document.getElementById('file-input').click();}

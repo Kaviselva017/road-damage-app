@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'screens/splash_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/report_screen.dart';
@@ -33,8 +34,11 @@ class RoadDamageApp extends StatelessWidget {
         useMaterial3: true,
         fontFamily: 'Roboto',
       ),
-      initialRoute: '/login',
+      // Start at splash screen which checks auth state
+      // No more forced login every time — if token exists, go straight to home
+      initialRoute: '/',
       routes: {
+        '/': (_) => const SplashScreen(),
         '/login': (_) => const LoginScreen(),
         '/home': (_) => const HomeScreen(),
         '/report': (_) => const ReportScreen(),

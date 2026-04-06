@@ -47,6 +47,12 @@ class ApiService {
     await _storage.delete(key: 'token');
   }
 
+  /// Check if a valid token exists (user already logged in)
+  Future<bool> isLoggedIn() async {
+    final token = await _storage.read(key: 'token');
+    return token != null && token.isNotEmpty;
+  }
+
   // --- Complaints ---
   Future<Map<String, dynamic>> submitComplaint({
     required double latitude,
@@ -70,26 +76,6 @@ class ApiService {
     });
     final res = await _dio.post('/complaints/submit', data: formData);
     return res.data;
-  }
-
-  Future<Map<String, dynamic>> previewPriority({
-    required double latitude,
-    required double longitude,
-    String? address,
-    String? areaType,
-    double? impactScore,
-    int? sensitiveLocationCount,
-  }) async {
-    final res = await _dio.get('/complaints/priority/preview', queryParameters: {
-      'latitude': latitude,
-      'longitude': longitude,
-      if (address != null) 'address': address,
-      if (areaType != null) 'area_type': areaType,
-      if (impactScore != null) 'impact_score': impactScore,
-      if (sensitiveLocationCount != null)
-        'sensitive_location_count': sensitiveLocationCount,
-    });
-    return Map<String, dynamic>.from(res.data as Map);
   }
 
   Future<List<dynamic>> getMyComplaints() async {

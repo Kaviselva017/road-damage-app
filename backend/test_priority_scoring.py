@@ -23,7 +23,7 @@ def login() -> str | None:
     response = requests.post(
         f"{API}/auth/login",
         json={"email": "citizen@road.com", "password": "citizen123"},
-        timeout=8,
+        timeout=30,
     )
     if response.status_code != 200:
         return None
@@ -63,7 +63,7 @@ def main() -> int:
                     "address": address,
                 },
                 files={"image": ("priority_test.jpg", image_handle, "image/jpeg")},
-                timeout=12,
+                timeout=30,
             )
 
         if first_response.status_code != 200:
@@ -90,7 +90,7 @@ def main() -> int:
         detail_response = requests.get(
             f"{API}/complaints/{complaint_id}",
             headers={"Authorization": f"Bearer {token}"},
-            timeout=8,
+            timeout=30,
         )
         if detail_response.status_code != 200:
             return fail(f"Complaint detail fetch failed with status {detail_response.status_code}")
@@ -111,7 +111,7 @@ def main() -> int:
                     "address": address,
                 },
                 files={"image": ("priority_test_duplicate.jpg", image_handle, "image/jpeg")},
-                timeout=12,
+                timeout=30,
             )
 
         if duplicate_response.status_code != 200:

@@ -31,6 +31,29 @@ export default function Dashboard() {
     setLoading(false);
   };
 
+  const downloadPDF = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`${api.baseUrl}/complaints/report/download`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!res.ok) throw new Error('PDF download failed');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `RoadWatch_Report_${new Date().toISOString().slice(0,10)}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error(e);
+      alert('Failed to download PDF');
+    }
+    setLoading(false);
+  };
+
   useEffect(() => { load(); }, [filter]);
 
   const stats = {
@@ -50,6 +73,9 @@ export default function Dashboard() {
           <p style={styles.subtitle}>Road Damage Complaint Management</p>
         </div>
         <div style={{ display: 'flex', gap: 12 }}>
+          <button onClick={downloadPDF} style={styles.btnPdf} disabled={loading}>
+            {loading ? 'Processing...' : '📄 PDF Report'}
+          </button>
           <button onClick={() => navigate('/map')} style={styles.btnOutline}>🗺 Map View</button>
           <button onClick={logout} style={styles.btnOutline}>Sign Out</button>
         </div>
@@ -158,4 +184,5 @@ const styles = {
   btnPrimary: { background: '#f5a623', color: '#000', border: 'none', borderRadius: 8, padding: '8px 18px', fontWeight: 700, cursor: 'pointer' },
   btnOutline: { background: 'transparent', color: '#e8eaf0', border: '1px solid #252b38', borderRadius: 8, padding: '8px 16px', cursor: 'pointer', fontSize: 14 },
   btnSmall: { background: '#252b38', color: '#e8eaf0', border: 'none', borderRadius: 6, padding: '6px 14px', cursor: 'pointer', fontSize: 13 },
+  btnPdf: { background: 'linear-gradient(135deg, #10b981, #059669)', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 16px', cursor: 'pointer', fontSize: 14, fontWeight: 700, display: 'flex', alignItems: 'center', gap: '6px' },
 };

@@ -53,13 +53,22 @@ def _area(addr: str) -> str:
     return "residential"
 
 
-def _priority(sev: str, dmg: str, area: str) -> float:
+def _priority(sev: str, dmg: str, area: str, nearby_sensitive: str = "") -> float:
     s = {"high": 35, "medium": 20, "low": 10}.get(sev, 10)
     d = {"pothole": 5, "multiple": 8, "crack": 3, "surface_damage": 2}.get(dmg, 0)
     a = {"hospital": 30, "school": 25, "highway": 25, "market": 20, "residential": 10}.get(area, 10)
     t = {"hospital": 20, "school": 18, "market": 18, "highway": 16, "residential": 8}.get(area, 8)
     r = {"pothole": 15, "multiple": 14, "crack": 8, "surface_damage": 6}.get(dmg, 6)
-    return min(float(s + d + a + t + r), 100.0)
+    # Nearby sensitive location bonus from POI scan
+    nb = 0
+    if nearby_sensitive:
+        ns = nearby_sensitive.lower()
+        if any(w in ns for w in ["hospital", "clinic", "pharmacy"]): nb += 12
+        if any(w in ns for w in ["school", "college", "university"]): nb += 8
+        if any(w in ns for w in ["fire_station", "police"]): nb += 10
+        if any(w in ns for w in ["bus_station", "station", "railway"]): nb += 6
+        if any(w in ns for w in ["marketplace", "place_of_worship"]): nb += 4
+    return min(float(s + d + a + t + r + nb), 100.0)
 
 
 def _best_officer(db: Session, address: str = "") -> Optional[FieldOfficer]:
@@ -100,9 +109,12 @@ def _c(c: Complaint, db: Session) -> dict:
     if c.officer_id:
         o = db.query(FieldOfficer).filter(FieldOfficer.id == c.officer_id).first()
         oname = o.name if o else None
+    u_email, u_phone = None, None
     if c.user_id:
         u = db.query(User).filter(User.id == c.user_id).first()
         uname = u.name if u else None
+        u_email = u.email if u else None
+        u_phone = u.phone if u else None
     return {
         "id":             c.id,
         "complaint_id":   c.complaint_id,
@@ -110,6 +122,8 @@ def _c(c: Complaint, db: Session) -> dict:
         "officer_id":     c.officer_id,
         "officer_name":   oname,
         "citizen_name":   uname,
+        "citizen_email":  u_email,
+        "citizen_phone":  u_phone,
         "latitude":       c.latitude,
         "longitude":      c.longitude,
         "address":        c.address,
@@ -127,6 +141,7 @@ def _c(c: Complaint, db: Session) -> dict:
         "fund_note":      c.fund_note,
         "is_duplicate":   c.is_duplicate,
         "duplicate_of":   c.duplicate_of,
+        "report_count":   getattr(c, "report_count", 1),
         "created_at":     _iso(c.created_at),
         "resolved_at":    _iso(c.resolved_at),
     }
@@ -187,6 +202,7 @@ async def submit(
 
     if dup:
         dup.report_count += 1
+        dup.priority_score = min(dup.priority_score + 5.0, 100.0)
         db.commit()
         # Clean up the newly uploaded image as it's a duplicate
         if fpath.exists(): fpath.unlink()
@@ -194,7 +210,8 @@ async def submit(
             "warning": "duplicate",
             "existing_complaint_id": dup.complaint_id,
             "message": "A similar complaint already exists in this exact region. We've added your report to the existing one to increase its priority.",
-            "report_count": dup.report_count
+            "report_count": dup.report_count,
+            "priority_score": dup.priority_score
         }
 
     # AI Analysis
@@ -202,7 +219,7 @@ async def submit(
 
     # Priority calculation (using sensitive info + AI results)
     area     = _area(nearby_sensitive or address or "")
-    priority = _priority(ai["severity"], ai["damage_type"], area)
+    priority = _priority(ai["severity"], ai["damage_type"], area, nearby_sensitive or "")
     
     # Generate ID and find best localized officer
     cid      = f"RD-{_now().strftime('%Y%m%d')}-{uuid.uuid4().hex[:6].upper()}"
@@ -383,6 +400,155 @@ def list_complaints(
         q = q.filter(Complaint.severity == severity)
     rows = q.order_by(Complaint.priority_score.desc(), Complaint.created_at.desc()).all()
     return [_c(r, db) for r in rows]
+
+
+# ── Officer PDF Report Download ────────────────────────────────
+# NOTE: Must be registered BEFORE /{complaint_id} to avoid route collision
+@router.get("/report/download")
+def officer_download_report(
+    db: Session = Depends(get_db),
+    officer: FieldOfficer = Depends(get_current_officer),
+):
+    """Generate a PDF report for all complaints assigned to this officer."""
+    import io
+    from fastapi.responses import StreamingResponse
+
+    try:
+        from fpdf import FPDF
+    except ImportError:
+        raise HTTPException(500, "PDF library not available")
+
+    complaints = (
+        db.query(Complaint)
+        .filter(Complaint.officer_id == officer.id)
+        .order_by(Complaint.created_at.desc())
+        .all()
+    )
+
+    class OfficerPDF(FPDF):
+        def header(self):
+            self.set_fill_color(15, 23, 42)
+            self.rect(0, 0, 210, 38, "F")
+            self.set_font("helvetica", "B", 20)
+            self.set_text_color(0, 229, 255)
+            self.set_y(8)
+            self.cell(0, 10, "RoadWatch Officer Report", align="C", ln=True)
+            self.set_font("helvetica", "", 10)
+            self.set_text_color(148, 163, 184)
+            self.cell(0, 6, f"Officer: {officer.name} | Zone: {officer.zone or 'N/A'} | Generated: {_now().strftime('%d %b %Y, %I:%M %p')} UTC", align="C", ln=True)
+            self.ln(10)
+
+        def footer(self):
+            self.set_y(-15)
+            self.set_font("helvetica", "I", 8)
+            self.set_text_color(148, 163, 184)
+            self.cell(0, 10, f"Page {self.page_no()} / {{nb}} - RoadWatch Officer Report - Confidential", align="C")
+
+    pdf = OfficerPDF()
+    pdf.set_auto_page_break(auto=True, margin=20)
+    pdf.add_page()
+
+    if not complaints:
+        pdf.set_font("helvetica", "B", 14)
+        pdf.set_text_color(100)
+        pdf.cell(0, 40, "No complaints assigned to you.", align="C")
+    else:
+        total = len(complaints)
+        done = sum(1 for c in complaints if c.status == "completed")
+        active = sum(1 for c in complaints if c.status in ("assigned", "in_progress"))
+        high = sum(1 for c in complaints if c.severity == "high")
+
+        pdf.set_font("helvetica", "B", 12)
+        pdf.set_text_color(30, 41, 59)
+        pdf.cell(0, 8, f"Summary: {total} Total | {done} Completed | {active} Active | {high} High Severity", ln=True)
+        pdf.ln(4)
+
+        for c in complaints:
+            if pdf.get_y() > 220:
+                pdf.add_page()
+
+            pdf.set_fill_color(30, 41, 59)
+            pdf.rect(10, pdf.get_y(), 190, 10, "F")
+            pdf.set_font("helvetica", "B", 11)
+            pdf.set_text_color(255, 255, 255)
+            cid = c.complaint_id or f"RD-{c.id:06d}"
+            pdf.set_x(15)
+            pdf.cell(100, 10, f"COMPLAINT: {cid}", ln=False, align="L")
+
+            pdf.set_font("helvetica", "B", 9)
+            st = (c.status or "PENDING").upper().replace("_", " ")
+            if c.status == "completed":
+                pdf.set_text_color(52, 211, 153)
+            elif c.status == "rejected":
+                pdf.set_text_color(248, 113, 113)
+            else:
+                pdf.set_text_color(251, 191, 36)
+            pdf.cell(80, 10, f"STATUS: {st}   ", ln=True, align="R")
+            pdf.ln(3)
+
+            pdf.set_x(15)
+            pdf.set_font("helvetica", "B", 9)
+            pdf.set_text_color(100, 116, 139)
+            pdf.cell(32, 6, "Damage:")
+            pdf.set_font("helvetica", "", 9)
+            pdf.set_text_color(30, 41, 59)
+            pdf.cell(0, 6, (c.damage_type or "Unknown").replace("_", " ").title(), ln=True)
+
+            pdf.set_x(15)
+            pdf.set_font("helvetica", "B", 9)
+            pdf.set_text_color(100, 116, 139)
+            pdf.cell(32, 6, "Severity:")
+            pdf.set_font("helvetica", "B", 9)
+            sev = (c.severity or "medium").upper()
+            pdf.set_text_color(185, 28, 28) if sev == "HIGH" else pdf.set_text_color(30, 41, 59)
+            pdf.cell(0, 6, sev, ln=True)
+
+            ts = c.created_at.strftime("%d %b %Y, %I:%M %p") if c.created_at else "N/A"
+            pdf.set_x(15)
+            pdf.set_font("helvetica", "B", 9)
+            pdf.set_text_color(100, 116, 139)
+            pdf.cell(32, 6, "Reported:")
+            pdf.set_font("helvetica", "", 9)
+            pdf.set_text_color(30, 41, 59)
+            pdf.cell(0, 6, ts, ln=True)
+
+            pdf.set_x(15)
+            pdf.set_font("helvetica", "B", 9)
+            pdf.set_text_color(100, 116, 139)
+            pdf.cell(32, 6, "Coords:")
+            pdf.set_font("helvetica", "", 9)
+            pdf.set_text_color(30, 41, 59)
+            pdf.cell(0, 6, f"{c.latitude:.5f}, {c.longitude:.5f}", ln=True)
+
+            pdf.set_x(15)
+            pdf.set_font("helvetica", "B", 9)
+            pdf.set_text_color(100, 116, 139)
+            pdf.cell(32, 6, "Location:")
+            pdf.set_font("helvetica", "", 8.5)
+            pdf.set_text_color(30, 41, 59)
+            addr = (c.address or "GPS Location").encode("ascii", "ignore").decode("ascii")
+            pdf.multi_cell(0, 5, addr[:120])
+
+            if c.allocated_fund and c.allocated_fund > 0:
+                pdf.set_x(15)
+                pdf.set_font("helvetica", "B", 9)
+                pdf.set_text_color(100, 116, 139)
+                pdf.cell(32, 6, "Budget:")
+                pdf.set_font("helvetica", "B", 9)
+                pdf.set_text_color(16, 185, 129)
+                pdf.cell(0, 6, f"Rs. {c.allocated_fund:,.0f}", ln=True)
+
+            pdf.ln(4)
+            pdf.set_draw_color(226, 232, 240)
+            pdf.line(10, pdf.get_y(), 200, pdf.get_y())
+            pdf.ln(6)
+
+    pdf_bytes = pdf.output()
+    return StreamingResponse(
+        io.BytesIO(pdf_bytes),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename=RoadWatch_Officer_{officer.name}_{_now().strftime('%Y%m%d')}.pdf"},
+    )
 
 
 # ── Single complaint ───────────────────────────────────────────
