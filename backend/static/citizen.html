@@ -481,11 +481,12 @@ function initMiniMap(lat,lng){
   el.innerHTML='';
   miniMap=L.map('mini-map',{zoomControl:true,attributionControl:false,fadeAnimation:true,zoomAnimation:true}).setView([lat,lng],17);
   
-  // 🌎 High-Speed Free Standard OSM Map
   const baseMap = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 19,
     attribution: '&copy; OpenStreetMap contributors'
   }).addTo(miniMap);
+  // Optional: Apply a clean filter so the purple markers pop better
+  document.getElementById('mini-map').style.filter = 'contrast(0.95)';
   // Draggable pin marker
   miniMarker=L.marker([lat,lng],{
     draggable:true,
@@ -567,30 +568,53 @@ async function detectNearby(lat, lng) {
   const scoreNum = document.getElementById('score-num');
   
   panel.classList.add('show');
-  list.innerHTML = '<div style="font-size:.75rem;color:var(--muted)">🔍 Scanning immediate proximity...</div>';
+  list.innerHTML = '<div style="font-size:.75rem;color:var(--muted)">🔍 Fast Syncing Real-World POIs via Overpass...</div>';
   
-  setTimeout(() => {
+  // Real Overpass API query for fast, realistic sync
+  try {
+    const q = `[out:json][timeout:10];(node["amenity"~"hospital|clinic|school|college|university|marketplace"](around:2000,${lat},${lng});node["highway"~"motorway|trunk"](around:2000,${lat},${lng});node["shop"~"supermarket|mall"](around:2000,${lat},${lng}););out body 5;`;
+    const res = await fetch(`https://overpass-api.de/api/interpreter`, {
+      method: "POST",
+      body: q
+    });
+    
     let tags = [];
     let extraPriority = 0;
-    const addrData = String(currentAddr).toLowerCase();
     
-    // Direct inference engine (No Server dependency)
-    if(addrData.match(/hospital|clinic|medical|health/)) { tags.push('🏥 Medical Zone'); extraPriority += 25; }
-    if(addrData.match(/school|college|university|academy|campus/)) { tags.push('🏫 School Zone'); extraPriority += 20; }
-    if(addrData.match(/mall|market|shopping|bazaar|crowd/)) { tags.push('🛒 High Crowd'); extraPriority += 15; }
-    if(addrData.match(/highway|nh-|sh-|expressway/)) { tags.push('🛣️ Fast Traffic'); extraPriority += 15; }
-    if(addrData.match(/station|bus|railway|airport/)) { tags.push('🚉 Transit Hub'); extraPriority += 15; }
-    
-    if(tags.length === 0) tags.push('🏘️ Standard Zone');
+    if (res.ok) {
+      const data = await res.json();
+      const elements = data.elements || [];
+      const amenities = elements.map(e => e.tags.name || e.tags.amenity || e.tags.shop).filter(Boolean);
+      
+      elements.forEach(pt => {
+        if (!miniMap || !window.L) return;
+        const iconColor = pt.tags.amenity?.includes('hospital') ? '#ef4444' : pt.tags.amenity?.includes('school') ? '#3b82f6' : '#f5a623';
+        const iconSym = pt.tags.amenity?.includes('hospital') ? '🏥' : pt.tags.amenity?.includes('school') ? '🏫' : '🏪';
+        
+        const i = L.divIcon({
+          html:`<div style="background:${iconColor}22;border:1px solid ${iconColor};border-radius:20px;padding:2px 5px;font-size:10px;white-space:nowrap;color:${iconColor};backdrop-filter:blur(4px);font-weight:700">${iconSym} ${pt.tags.name||''}</div>`,
+          className: '', iconSize: [80, 20], iconAnchor: [40, 10]
+        });
+        L.marker([pt.lat, pt.lon], {icon: i}).addTo(miniMap);
+      });
+      
+      const aStr = amenities.join(" ").toLowerCase();
+      if(aStr.match(/hospital|clinic|medical/)) { tags.push('🏥 Medical Zone'); extraPriority += 25; }
+      if(aStr.match(/school|college|university/)) { tags.push('🏫 School Zone'); extraPriority += 20; }
+      if(aStr.match(/mall|market|supermarket/)) { tags.push('🛒 High Crowd'); extraPriority += 15; }
+      
+      if(elements.length === 0) tags.push('🏘️ Residential Zone');
+    } else {
+      tags.push('🏘️ Standard Zone');
+    }
 
     let baseScore = 65;
     if(document.getElementById('report-sev')?.value === 'high') baseScore += 20;
     const finalScore = Math.min(99, baseScore + extraPriority);
 
-    list.innerHTML = tags.map(t=>`<span class="tag-badge">${t.replace(/([a-zA-Z -]+)/, '<span style="font-size:.65rem;font-weight:700">$1</span>')}</span>`).join('');
-    desc.textContent = "Direct Proximity Scanner - Evaluated instantaneously from coordinate bounds.";
+    list.innerHTML = tags.map(t=>`<span class="tag-badge" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);padding:4px 8px;border-radius:6px;font-size:0.7rem;margin-right:5px;display:inline-block;margin-bottom:5px;">${t}</span>`).join('');
+    desc.textContent = "Live Overpass POI Sync - Evaluated interactively with actual real-world OSM mapping data.";
     
-    // Animate score
     let cs = 0;
     const ti = setInterval(() => {
       cs += 3; if(cs >= finalScore) cs = finalScore;
@@ -600,8 +624,11 @@ async function detectNearby(lat, lng) {
     }, 15);
     
     nearbyData = tags.join(', ');
-    _nearbyRunning = false;
-  }, 300);
+  } catch(e) {
+    list.innerHTML = `<span style="font-size:0.7rem;color:#f59e0b">Nearby POI Sync Timeout — Using default coordinates</span>`;
+  }
+  
+  _nearbyRunning = false;
 }
 
 function triggerCapture(){if(selectedFile)return;document.getElementById('file-input').setAttribute('capture','environment');document.getElementById('file-input').click();}
