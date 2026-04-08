@@ -227,19 +227,6 @@ tr:hover td { background:rgba(255,255,255,0.02); }
 </head>
 <body>
 
-<!-- LOGIN -->
-<div class="login-overlay" id="login-overlay">
-  <div class="login-box">
-    <div style="font-size:2.5rem;margin-bottom:0.8rem">🛡️</div>
-    <h2>Admin Panel</h2>
-    <p>RoadWatch System Administration</p>
-    <div class="login-err" id="login-err"></div>
-    <div class="lf"><label>Email</label><input type="email" id="lo-email" placeholder="admin@road.com"/></div>
-    <div class="lf"><label>Password</label><input type="password" id="lo-pass" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()"/></div>
-    <button class="btn-login" id="login-btn" onclick="doLogin()">Access Admin Panel</button>
-  </div>
-</div>
-
 <!-- REASSIGN MODAL -->
 <div class="modal-overlay" id="reassign-modal">
   <div class="modal">
@@ -740,41 +727,27 @@ function openComplaintPhoto(imageUrl) {
 }
 
 function init() {
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('tk')) {
+    token = params.get('tk');
+    adminName = params.get('nm') || adminName;
+    localStorage.setItem('admin_token', token);
+    localStorage.setItem('admin_name', adminName);
+    window.history.replaceState({}, document.title, window.location.pathname);
+  }
+
   if (token) {
-    document.getElementById('login-overlay').style.display = 'none';
     document.getElementById('admin-name').textContent = adminName || 'Admin';
     loadAll();
     if (!_adminPollInterval) _adminPollInterval = setInterval(loadAll, 30000);
+  } else {
+    window.location.href = '/static/login.html';
   }
-}
-
-async function doLogin() {
-  const email = document.getElementById('lo-email').value;
-  const pass = document.getElementById('lo-pass').value;
-  const btn = document.getElementById('login-btn');
-  btn.innerHTML = '<span class="spinner"></span>Signing in...'; btn.disabled = true;
-  try {
-    const res = await fetch(`${API}/auth/officer/login`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({email,password:pass}) });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.detail || 'Login failed');
-    token = data.access_token;
-    adminName = email.split('@')[0];
-    localStorage.setItem('admin_token', token);
-    localStorage.setItem('admin_name', adminName);
-    document.getElementById('login-overlay').style.display = 'none';
-    document.getElementById('admin-name').textContent = adminName;
-    loadAll();
-    if (!_adminPollInterval) _adminPollInterval = setInterval(loadAll, 30000);
-  } catch(e) {
-    document.getElementById('login-err').textContent = e.message;
-    document.getElementById('login-err').style.display = 'block';
-  }
-  btn.innerHTML = 'Access Admin Panel'; btn.disabled = false;
 }
 
 function logout() {
   token = null; localStorage.removeItem('admin_token'); localStorage.removeItem('admin_name');
-  document.getElementById('login-overlay').style.display = 'flex';
+  window.location.href = '/static/login.html';
 }
 
 async function loadAll() {

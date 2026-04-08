@@ -241,36 +241,6 @@ nav{display:flex;align-items:center;justify-content:space-around;padding:.8rem;b
   <button class="logout-btn" onclick="logout()">Sign Out</button>
 </div>
 
-<!-- LOGIN -->
-<div class="page active" id="page-login">
-  <div class="auth-header">
-    <div style="font-size:3rem;margin-bottom:.5rem">🛣️</div>
-    <h1>RoadWatch</h1><p>Citizen Road Damage Reporting</p>
-  </div>
-  <div class="form-card">
-    <div id="login-error" class="error-msg" style="display:none"></div>
-    <div class="form-group"><label>Email</label><input type="email" id="login-email" placeholder="your@email.com"/></div>
-    <div class="form-group"><label>Password</label><input type="password" id="login-password" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()"/></div>
-    <button class="btn-primary" id="login-btn" onclick="doLogin()">Sign In</button>
-    <div class="switch-link">Don't have an account? <a onclick="showPage('register')">Register here</a></div>
-  </div>
-</div>
-
-<!-- REGISTER -->
-<div class="page" id="page-register">
-  <div class="auth-header"><h1>Join RoadWatch</h1><p>Create your citizen account</p></div>
-  <div class="form-card">
-    <div id="reg-error" class="error-msg" style="display:none"></div>
-    <div id="reg-success" class="success-msg" style="display:none"></div>
-    <div class="form-group"><label>Full Name</label><input type="text" id="reg-name" placeholder="Your name"/></div>
-    <div class="form-group"><label>Email</label><input type="email" id="reg-email" placeholder="your@email.com"/></div>
-    <div class="form-group"><label>Phone</label><input type="tel" id="reg-phone" placeholder="9876543210"/></div>
-    <div class="form-group"><label>Password</label><input type="password" id="reg-password" placeholder="••••••••"/></div>
-    <button class="btn-primary" onclick="doRegister()">Create Account</button>
-    <div class="switch-link">Already have an account? <a onclick="showPage('login')">Sign in</a></div>
-  </div>
-</div>
-
 <!-- REPORT -->
 <div class="page" id="page-report">
   <div class="page-title">Report <span>Road Damage</span></div>
@@ -385,7 +355,7 @@ function init(){
   token=localStorage.getItem('citizen_token');
   userName=localStorage.getItem('citizen_name');
   if(token){showLoggedIn();showPage('report');getLocation();checkNotifications();fetchUserProfile();}
-  else{showPage('login');}
+  else{window.location.href='/';}
 }
 
 function showLoggedIn(){
@@ -393,44 +363,10 @@ function showLoggedIn(){
   document.getElementById('user-name-display').textContent=userName||'Citizen';
 }
 
-async function doLogin(){
-  const email=document.getElementById('login-email').value;
-  const pass=document.getElementById('login-password').value;
-  const btn=document.getElementById('login-btn');
-  btn.innerHTML='<span class="spinner"></span>Signing in...';btn.disabled=true;
-  try{
-    const res=await fetch(`${API}/auth/login`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email,password:pass})});
-    const data=await res.json();
-    if(!res.ok)throw new Error(data.detail||'Login failed');
-    token=data.access_token;
-    userName=data.name||email.split('@')[0];
-    localStorage.setItem('citizen_token',token);
-    localStorage.setItem('citizen_name',userName);
-    showLoggedIn();showPage('report');getLocation();checkNotifications();fetchUserProfile();
-  }catch(e){showError('login-error',e.message);}
-  btn.innerHTML='Sign In';btn.disabled=false;
-}
-
-async function doRegister(){
-  const name=document.getElementById('reg-name').value;
-  const email=document.getElementById('reg-email').value;
-  const phone=document.getElementById('reg-phone').value;
-  const password=document.getElementById('reg-password').value;
-  try{
-    const res=await fetch(`${API}/auth/register`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,email,phone,password})});
-    const data=await res.json();
-    if(!res.ok)throw new Error(data.detail||'Registration failed');
-    document.getElementById('reg-success').textContent='Account created! Please sign in.';
-    document.getElementById('reg-success').style.display='block';
-    setTimeout(()=>showPage('login'),1500);
-  }catch(e){showError('reg-error',e.message);}
-}
-
 function logout(){
   token=null;userName=null;
   localStorage.removeItem('citizen_token');localStorage.removeItem('citizen_name');
-  document.getElementById('user-bar').classList.remove('show');
-  showPage('login');
+  window.location.href='/';
 }
 
 function getLocation(){

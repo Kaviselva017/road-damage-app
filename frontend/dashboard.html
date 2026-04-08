@@ -133,34 +133,12 @@ body { background: var(--bg); color: var(--text); font-family: 'DM Sans', sans-s
 .no-msg { font-size: 0.8rem; color: var(--muted); text-align: center; padding: 0.8rem; }
 .toast { position: fixed; top: 65px; right: 1rem; background: var(--card); border: 1px solid var(--accent2); border-radius: 10px; padding: 0.7rem 1rem; font-size: 0.83rem; color: var(--accent2); z-index: 999; transform: translateX(120%); transition: transform 0.3s; max-width: 280px; }
 .toast.show { transform: translateX(0); }
-.login-overlay { position: fixed; inset: 0; background: var(--bg); display: flex; align-items: center; justify-content: center; z-index: 999; }
-.login-box { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 2rem; width: 340px; }
-.login-box h2 { font-family: 'Syne', sans-serif; font-size: 1.4rem; margin-bottom: 0.3rem; }
-.login-box p { color: var(--muted); font-size: 0.85rem; margin-bottom: 1.5rem; }
-.login-field { margin-bottom: 0.8rem; }
-.login-field label { display: block; font-size: 0.72rem; color: var(--muted); text-transform: uppercase; margin-bottom: 0.3rem; }
-.login-field input { width: 100%; background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 0.65rem 0.9rem; font-family: inherit; font-size: 0.9rem; }
-.login-field input:focus { outline: none; border-color: var(--accent); }
-.login-err { color: var(--danger); font-size: 0.82rem; margin-bottom: 0.8rem; display: none; }
-.btn-login { width: 100%; background: var(--accent); color: #000; border: none; border-radius: 8px; padding: 0.75rem; font-family: inherit; font-weight: 700; font-size: 0.95rem; cursor: pointer; }
 .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid rgba(0,0,0,0.3); border-top-color: #000; border-radius: 50%; animation: spin 0.7s linear infinite; vertical-align: middle; margin-right: 4px; }
 @keyframes spin { to { transform: rotate(360deg) } }
 .no-items { text-align: center; padding: 2rem 1rem; color: var(--muted); font-size: 0.85rem; }
 </style>
 </head>
 <body>
-
-<div class="login-overlay" id="login-overlay">
-  <div class="login-box">
-    <div style="font-size:2rem;margin-bottom:0.5rem">🛣️</div>
-    <h2>Officer Portal</h2>
-    <p>Road Damage Management System</p>
-    <div class="login-err" id="login-err"></div>
-    <div class="login-field"><label>Email</label><input type="email" id="lo-email" placeholder="maran@road.com"/></div>
-    <div class="login-field"><label>Password</label><input type="password" id="lo-pass" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()"/></div>
-    <button class="btn-login" id="login-btn" onclick="doLogin()">Sign In</button>
-  </div>
-</div>
 
 <div class="topbar">
   <div class="logo">Road<span>Watch</span> Officer</div>
@@ -282,39 +260,26 @@ let afterPhotoComplaintId = null;
 const afterPhotos = {};
 
 function init() {
-  if (token) {
-    document.getElementById('login-overlay').style.display = 'none';
-    document.getElementById('officer-display').textContent = officerName || 'Officer';
-    loadComplaints(); startPolling();
-  }
-}
-
-async function doLogin() {
-  const email = document.getElementById('lo-email').value;
-  const pass = document.getElementById('lo-pass').value;
-  const btn = document.getElementById('login-btn');
-  btn.innerHTML = '<span class="spinner"></span>Signing in...'; btn.disabled = true;
-  try {
-    const res = await fetch(`${API}/auth/officer/login`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({email, password: pass}) });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.detail || 'Login failed');
-    token = data.access_token;
-    officerName = email.split('@')[0];
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('tk')) {
+    token = params.get('tk');
+    officerName = params.get('nm') || officerName;
     localStorage.setItem('officer_token', token);
     localStorage.setItem('officer_name', officerName);
-    document.getElementById('login-overlay').style.display = 'none';
-    document.getElementById('officer-display').textContent = officerName;
-    loadComplaints(); startPolling();
-  } catch(e) {
-    document.getElementById('login-err').textContent = e.message;
-    document.getElementById('login-err').style.display = 'block';
+    window.history.replaceState({}, document.title, window.location.pathname);
   }
-  btn.innerHTML = 'Sign In'; btn.disabled = false;
+
+  if (token) {
+    document.getElementById('officer-display').textContent = officerName || 'Officer';
+    loadComplaints(); startPolling();
+  } else {
+    window.location.href = '/static/login.html';
+  }
 }
 
 function logout() {
   token = null; localStorage.removeItem('officer_token'); localStorage.removeItem('officer_name');
-  document.getElementById('login-overlay').style.display = 'flex';
+  window.location.href = '/static/login.html';
 }
 
 async function loadComplaints(silent=false) {
@@ -551,110 +516,146 @@ async function selectComplaint(id) {
 function renderDetailPanel(c, msgs=[]) {
   const BASE = window.location.port === '8443' ? 'https://localhost:8443' : 'http://localhost:8000';
   const hasAfter = afterPhotos[c.complaint_id];
-  document.getElementById('dp-body').innerHTML = `
-    ${c.citizen_name ? `<div class="citizen-info-box">
+  const dpBody = document.getElementById('dp-body');
+  
+  let html = '';
+  
+  // Citizen Box
+  if (c.citizen_name) {
+    html += `<div class="citizen-info-box">
       <div class="cib-title">👤 Citizen Information</div>
       <div class="cib-row"><span class="label">Name</span><span>${c.citizen_name}</span></div>
       <div class="cib-row"><span class="label">Email</span><span>${c.citizen_email||'—'}</span></div>
       <div class="cib-row"><span class="label">Phone</span><span>${c.citizen_phone||'—'}</span></div>
       <div class="cib-row"><span class="label">Reward Points</span><span style="color:var(--accent)">+10 pts earned</span></div>
-    </div>` : ''}
-    <div class="ba-labels"><span>Before</span><span>${hasAfter?'After (drag slider)':'After repair pending'}</span></div>
-    ${hasAfter ? `<div class="ba-wrap" id="ba-wrap">
+    </div>`;
+  }
+
+  // Map / Images
+  html += `<div class="ba-labels"><span>Before</span><span>${hasAfter?'After (drag slider)':'After repair pending'}</span></div>`;
+  if (hasAfter) {
+    html += `<div class="ba-wrap" id="ba-wrap">
       <img class="ba-before" src="${BASE}${c.image_url}"/>
       <div class="ba-after-overlay" id="ba-after" style="width:50%"><img src="${hasAfter}" style="width:200%;height:100%;object-fit:cover"/></div>
       <div class="ba-slider" id="ba-slider"><div class="ba-handle">⟺</div></div>
-    </div>` : `<img class="dp-img" src="${BASE}${c.image_url}"/>
-    <div class="no-after">📸 Upload after-repair photo to enable comparison</div>`}
-    ${['in_progress','completed'].includes(c.status)?`<button class="upload-after-btn" onclick="triggerAfterPhoto('${c.complaint_id}')">📸 ${hasAfter?'Update':'Upload'} After-Repair Photo</button>`:''}
-    <div class="info-grid">
-      <div class="info-cell"><div class="info-label">Type</div><div class="info-value">${(c.damage_type||'').replace('_',' ')}</div></div>
-      <div class="info-cell"><div class="info-label">Severity</div><div class="info-value"><span class="sev-badge sev-${c.severity}">${(c.severity||'').toUpperCase()}</span></div></div>
-      <div class="info-cell"><div class="info-label">AI Confidence</div><div class="info-value">${((c.ai_confidence||0)*100).toFixed(1)}%</div></div>
-      <div class="info-cell"><div class="info-label">Area Type</div><div class="info-value" style="color:#f59e0b;font-weight:700">${(c.area_type||'unknown').toUpperCase()}</div></div>
-      <div class="info-cell"><div class="info-label">Reports</div><div class="info-value">${c.report_count||1} citizen${(c.report_count||1)>1?'s':''}</div></div>
-      <div class="info-cell"><div class="info-label">Reported</div><div class="info-value">${c.created_at ? fmtDate(c.created_at) : '—'}</div></div>
-    </div>
-
-    <!-- Priority Score Breakdown -->
-    <div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:0.8rem;margin-bottom:0.8rem">
-      <div style="font-size:0.72rem;color:var(--muted);text-transform:uppercase;font-weight:700;margin-bottom:0.6rem;display:flex;justify-content:space-between">
-        <span>Priority Score Breakdown</span>
-        <span style="color:${(c.priority_score||0)>=70?'#ef4444':(c.priority_score||0)>=40?'#f59e0b':'#10b981'};font-size:1rem;font-weight:800">${c.priority_score||0}/100</span>
-      </div>
-      ${[
-        ['Damage Size', c.damage_size_score||0, 45],
-        ['Traffic Density', c.traffic_density_score||0, 20],
-        ['Accident Risk', c.accident_risk_score||0, 20],
-        ['Area Criticality', c.area_criticality_score||0, 20],
-      ].map(([label,val,max])=>`
-        <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.35rem">
-          <div style="font-size:0.72rem;color:var(--muted);width:100px;flex-shrink:0">${label}</div>
-          <div style="flex:1;height:6px;background:var(--bg);border-radius:3px;overflow:hidden">
-            <div style="height:100%;width:${Math.min(100,val/max*100)}%;background:linear-gradient(90deg,var(--accent2),var(--accent));border-radius:3px"></div>
-          </div>
-          <div style="font-size:0.72rem;font-weight:700;width:30px;text-align:right;color:var(--text)">${val.toFixed(0)}</div>
-        </div>`).join('')}
-    </div>
-
-    <!-- Fund Allocation -->
-    <div style="background:var(--card);border:1px solid rgba(16,185,129,0.2);border-radius:10px;padding:0.8rem;margin-bottom:0.8rem">
-      <div style="font-size:0.72rem;color:#10b981;text-transform:uppercase;font-weight:700;margin-bottom:0.6rem">Budget Allocation</div>
-      ${c.allocated_fund > 0 ? `
-        <div style="font-size:1.4rem;font-weight:800;color:#10b981">Rs. ${(c.allocated_fund).toLocaleString()}</div>
-        <div style="font-size:0.78rem;color:var(--muted);margin-top:3px">${c.fund_note||''}</div>
-      ` : '<div style="font-size:0.82rem;color:var(--muted)">No budget allocated yet</div>'}
-      <div style="display:flex;gap:0.4rem;margin-top:0.6rem">
-        <input type="number" id="fund-amt-${c.complaint_id}" placeholder="Amount (Rs.)" style="flex:1;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:0.4rem 0.6rem;font-family:inherit;font-size:0.82rem" value="${c.allocated_fund||''}"/>
-        <input type="text" id="fund-note-${c.complaint_id}" placeholder="Note" style="flex:1.5;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:0.4rem 0.6rem;font-family:inherit;font-size:0.82rem" value="${c.fund_note||''}"/>
-        <button onclick="allocateFund('${c.complaint_id}')" style="background:#10b981;color:#000;border:none;border-radius:6px;padding:0.4rem 0.7rem;font-family:inherit;font-weight:700;font-size:0.78rem;cursor:pointer">Allocate</button>
-      </div>
-    </div>
-
-    <div style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:0.7rem;margin-bottom:0.8rem;font-size:0.8rem;color:var(--muted)">${c.description||''}</div>
-    <div style="border-radius:10px;overflow:hidden;margin-bottom:0.8rem;height:130px">
-      <div id="dp-mini-map" style="height:130px;border-radius:8px;overflow:hidden"></div>
-      <script>
-        setTimeout(()=>{
-          const mel=document.getElementById('dp-mini-map');
-          if(mel&&window.L){
-            if(mel._lmap){mel._lmap.remove();}
-            const dm=L.map(mel,{zoomControl:false,attributionControl:false}).setView([${c.latitude},${c.longitude}],16);
-            mel._lmap=dm;
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(dm);
-            L.circleMarker([${c.latitude},${c.longitude}],{radius:10,fillColor:'#f5a623',color:'#fff',weight:2,fillOpacity:.9}).addTo(dm);
-          }
-        },300);
-      </script>
-    </div>
-    <div class="status-form">
-      <label>Update Status</label>
-      <select id="dp-status">
-        <option value="pending" ${c.status==='pending'?'selected':''}>Pending</option>
-        <option value="assigned" ${c.status==='assigned'?'selected':''}>Assigned</option>
-        <option value="in_progress" ${c.status==='in_progress'?'selected':''}>In Progress</option>
-        <option value="completed" ${c.status==='completed'?'selected':''}>Completed</option>
-        <option value="rejected" ${c.status==='rejected'?'selected':''}>Rejected</option>
-      </select>
-      <label>Officer Notes</label>
-      <textarea id="dp-notes" rows="2" placeholder="Add inspection notes...">${c.officer_notes||''}</textarea>
-      <button class="btn-update" onclick="saveStatus('${c.complaint_id}')">Save Update</button>
-      <div class="save-success" id="save-success">✓ Updated!</div>
-    </div>
-    <div class="msg-section">
-      <div class="msg-title">💬 Message Citizen</div>
-      <div class="msg-list" id="msg-list-${c.complaint_id}">
-        ${msgs.length ? msgs.map(m=>`<div class="msg-bubble ${m.sender_role}">
-          <div class="msg-meta">${m.sender_name} · ${fmtTime(m.created_at)}</div>
-          ${m.message}</div>`).join('') : '<div class="no-msg">No messages yet — send an update below</div>'}
-      </div>
-      <div class="msg-input-row">
-        <input class="msg-input" id="msg-input-${c.complaint_id}" placeholder="e.g. Repair scheduled for tomorrow..." onkeydown="if(event.key==='Enter')sendMessage('${c.complaint_id}')"/>
-        <button class="msg-send-btn" onclick="sendMessage('${c.complaint_id}')">Send</button>
-      </div>
     </div>`;
-  if (hasAfter) initBASlider();
+  } else {
+    html += `<img class="dp-img" src="${BASE}${c.image_url}"/>
+             <div class="no-after">📸 Upload after-repair photo to enable comparison</div>`;
+  }
+
+  if (['in_progress','completed'].includes(c.status)) {
+    html += `<button class="upload-after-btn" onclick="triggerAfterPhoto('${c.complaint_id}')">📸 ${hasAfter?'Update':'Upload'} After-Repair Photo</button>`;
+  }
+
+  // Info Grid
+  html += `<div class="info-grid">
+    <div class="info-cell"><div class="info-label">Type</div><div class="info-value">${(c.damage_type||'').replace('_',' ')}</div></div>
+    <div class="info-cell"><div class="info-label">Severity</div><div class="info-value"><span class="sev-badge sev-${c.severity}">${(c.severity||'').toUpperCase()}</span></div></div>
+    <div class="info-cell"><div class="info-label">AI Confidence</div><div class="info-value">${((c.ai_confidence||0)*100).toFixed(1)}%</div></div>
+    <div class="info-cell"><div class="info-label">Area Type</div><div class="info-value" style="color:#f59e0b;font-weight:700">${(c.area_type||'unknown').toUpperCase()}</div></div>
+    <div class="info-cell"><div class="info-label">Reports</div><div class="info-value">${c.report_count||1} citizen${(c.report_count||1)>1?'s':''}</div></div>
+    <div class="info-cell"><div class="info-label">Reported</div><div class="info-value">${c.created_at ? fmtDate(c.created_at) : '—'}</div></div>
+  </div>`;
+
+  // Priority Score
+  html += `<div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:0.8rem;margin-bottom:0.8rem">
+    <div style="font-size:0.72rem;color:var(--muted);text-transform:uppercase;font-weight:700;margin-bottom:0.6rem;display:flex;justify-content:space-between">
+      <span>Priority Score Breakdown</span>
+      <span style="color:${(c.priority_score||0)>=70?'#ef4444':(c.priority_score||0)>=40?'#f59e0b':'#10b981'};font-size:1rem;font-weight:800">${c.priority_score||0}/100</span>
+    </div>`;
+  
+  const factors = [
+    ['Damage Size', c.damage_size_score||0, 45],
+    ['Traffic Density', c.traffic_density_score||0, 20],
+    ['Accident Risk', c.accident_risk_score||0, 20],
+    ['Area Criticality', c.area_criticality_score||0, 20],
+  ];
+  factors.forEach(([label,val,max]) => {
+    html += `<div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.35rem">
+      <div style="font-size:0.72rem;color:var(--muted);width:100px;flex-shrink:0">${label}</div>
+      <div style="flex:1;height:6px;background:var(--bg);border-radius:3px;overflow:hidden">
+        <div style="height:100%;width:${Math.min(100,val/max*100)}%;background:linear-gradient(90deg,var(--accent2),var(--accent));border-radius:3px"></div>
+      </div>
+      <div style="font-size:0.72rem;font-weight:700;width:30px;text-align:right;color:var(--text)">${val.toFixed(0)}</div>
+    </div>`;
+  });
+  html += `</div>`;
+
+  // Funds
+  html += `<div style="background:var(--card);border:1px solid rgba(16,185,129,0.2);border-radius:10px;padding:0.8rem;margin-bottom:0.8rem">
+    <div style="font-size:0.72rem;color:#10b981;text-transform:uppercase;font-weight:700;margin-bottom:0.6rem">Budget Allocation</div>`;
+  if (c.allocated_fund > 0) {
+    html += `<div style="font-size:1.4rem;font-weight:800;color:#10b981">Rs. ${(c.allocated_fund).toLocaleString()}</div>
+             <div style="font-size:0.78rem;color:var(--muted);margin-top:3px">${c.fund_note||''}</div>`;
+  } else {
+    html += `<div style="font-size:0.82rem;color:var(--muted)">No budget allocated yet</div>`;
+  }
+  html += `<div style="display:flex;gap:0.4rem;margin-top:0.6rem">
+      <input type="number" id="fund-amt-${c.complaint_id}" placeholder="Amount (Rs.)" style="flex:1;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:0.4rem 0.6rem;font-family:inherit;font-size:0.82rem" value="${c.allocated_fund||''}"/>
+      <input type="text" id="fund-note-${c.complaint_id}" placeholder="Note" style="flex:1.5;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:0.4rem 0.6rem;font-family:inherit;font-size:0.82rem" value="${c.fund_note||''}"/>
+      <button onclick="allocateFund('${c.complaint_id}')" style="background:#10b981;color:#000;border:none;border-radius:6px;padding:0.4rem 0.7rem;font-family:inherit;font-weight:700;font-size:0.78rem;cursor:pointer">Allocate</button>
+    </div>
+  </div>`;
+
+  // Description & Mini Map
+  html += `<div style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:0.7rem;margin-bottom:0.8rem;font-size:0.8rem;color:var(--muted)">${c.description||''}</div>
+  <div style="border-radius:10px;overflow:hidden;margin-bottom:0.8rem;height:130px">
+    <div id="dp-mini-map" style="height:130px;border-radius:8px;overflow:hidden"></div>
+  </div>`;
+
+  // Status Form
+  html += `<div class="status-form">
+    <label>Update Status</label>
+    <select id="dp-status">
+      <option value="pending" ${c.status==='pending'?'selected':''}>Pending</option>
+      <option value="assigned" ${c.status==='assigned'?'selected':''}>Assigned</option>
+      <option value="in_progress" ${c.status==='in_progress'?'selected':''}>In Progress</option>
+      <option value="completed" ${c.status==='completed'?'selected':''}>Completed</option>
+      <option value="rejected" ${c.status==='rejected'?'selected':''}>Rejected</option>
+    </select>
+    <label>Officer Notes</label>
+    <textarea id="dp-notes" rows="2" placeholder="Add inspection notes...">${c.officer_notes||''}</textarea>
+    <button class="btn-update" onclick="saveStatus('${c.complaint_id}')">Save Update</button>
+    <div class="save-success" id="save-success">✓ Updated!</div>
+  </div>`;
+
+  // Messages
+  html += `<div class="msg-section">
+    <div class="msg-title">💬 Message Citizen</div>
+    <div class="msg-list" id="msg-list-${c.complaint_id}">`;
+  if (msgs.length) {
+    msgs.forEach(m => {
+      html += `<div class="msg-bubble ${m.sender_role}">
+        <div class="msg-meta">${m.sender_name} · ${fmtTime(m.created_at)}</div>
+        ${m.message}</div>`;
+    });
+  } else {
+    html += `<div class="no-msg">No messages yet — send an update below</div>`;
+  }
+  html += `</div>
+    <div class="msg-input-row">
+      <input class="msg-input" id="msg-input-${c.complaint_id}" placeholder="e.g. Repair scheduled for tomorrow..." onkeydown="if(event.key==='Enter')sendMessage('${c.complaint_id}')"/>
+      <button class="msg-send-btn" onclick="sendMessage('${c.complaint_id}')">Send</button>
+    </div>
+  </div>`;
+
+  dpBody.innerHTML = html;
+
+  // Init map & slider after DOM update
+  setTimeout(() => {
+    const mel = document.getElementById('dp-mini-map');
+    if (mel && window.L) {
+      if (mel._lmap) mel._lmap.remove();
+      const dm = L.map(mel, {zoomControl:false, attributionControl:false}).setView([c.latitude, c.longitude], 16);
+      mel._lmap = dm;
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(dm);
+      L.circleMarker([c.latitude, c.longitude], {radius:10, fillColor:'#f5a623', color:'#fff', weight:2, fillOpacity:.9}).addTo(dm);
+    }
+    if (hasAfter) initBASlider();
+  }, 300);
 }
+
 
 async function sendMessage(complaintId) {
   const input = document.getElementById(`msg-input-${complaintId}`);
