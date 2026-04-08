@@ -2,7 +2,7 @@
 RoadWatch Auth API
 Endpoints used by login.html, citizen.html, admin.html — matched exactly.
 """
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status, BackgroundTasks
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import Optional
@@ -65,7 +65,7 @@ class OfficerCreate(BaseModel):
 # ── Citizen Register ──────────────────────────────────────────────────────────
 
 @router.post("/register", status_code=status.HTTP_201_CREATED)
-def citizen_register(payload: CitizenRegister, db: Session = Depends(get_db)):
+def citizen_register(payload: CitizenRegister, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     """POST /api/auth/register — login.html & citizen.html"""
     try:
         if db.query(User).filter(User.email == payload.email).first():
@@ -81,6 +81,14 @@ def citizen_register(payload: CitizenRegister, db: Session = Depends(get_db)):
         db.add(user)
         db.commit()
         db.refresh(user)
+
+        # Send welcome email in background
+        try:
+            from app.services.notification_service import notify_welcome
+            background_tasks.add_task(notify_welcome, to_email=user.email, citizen_name=user.name)
+        except Exception as e:
+            logging.getLogger("roadwatch").warning(f"Failed to queue welcome email: {e}")
+
         token = _make_token({"sub": str(user.id), "role": "citizen"})
         return {"access_token": token, "token_type": "bearer", "name": user.name}
     except Exception as e:
