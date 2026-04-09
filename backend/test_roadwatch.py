@@ -314,7 +314,10 @@ try:
     with open(img_path, 'wb') as f:
         f.write(base_img + os.urandom(10))
 except Exception:
-    pass
+    # Create a minimal valid JPEG header for fallback testing
+    fallback = b'\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00\xff\xdb\x00C\x00' + os.urandom(100)
+    with open(img_path, 'wb') as f:
+        f.write(fallback)
 
 check("Test image created", os.path.exists(img_path))
 
