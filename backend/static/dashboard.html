@@ -221,7 +221,7 @@ body { background: var(--bg); color: var(--text); font-family: 'DM Sans', sans-s
 <input type="file" id="after-file-input" accept="image/*" style="display:none" onchange="handleAfterPhoto(event)"/>
 
 <script>
-const API = window.location.port === '8443' ? 'https://localhost:8443/api' : 'http://localhost:8000/api';
+const API = (window.location.hostname === 'localhost' ? 'http://localhost:8000' : window.location.origin) + '/api';
 
 // ── DATE/TIME HELPERS (IST = UTC+5:30) ─────────────────
 function toIST(dateStr) {
@@ -273,13 +273,13 @@ function init() {
     document.getElementById('officer-display').textContent = officerName || 'Officer';
     loadComplaints(); startPolling();
   } else {
-    window.location.href = '/static/login.html';
+    window.location.href = '/';
   }
 }
 
 function logout() {
   token = null; localStorage.removeItem('officer_token'); localStorage.removeItem('officer_name');
-  window.location.href = '/static/login.html';
+  window.location.href = '/';
 }
 
 async function loadComplaints(silent=false) {
@@ -514,7 +514,7 @@ async function selectComplaint(id) {
 }
 
 function renderDetailPanel(c, msgs=[]) {
-  const BASE = window.location.port === '8443' ? 'https://localhost:8443' : 'http://localhost:8000';
+  const BASE = window.location.hostname === 'localhost' ? 'http://localhost:8000' : window.location.origin;
   const hasAfter = afterPhotos[c.complaint_id];
   const dpBody = document.getElementById('dp-body');
   

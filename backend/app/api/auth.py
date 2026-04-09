@@ -91,10 +91,12 @@ def citizen_register(payload: CitizenRegister, background_tasks: BackgroundTasks
 
         token = _make_token({"sub": str(user.id), "role": "citizen"})
         return {"access_token": token, "token_type": "bearer", "name": user.name}
+    except HTTPException:
+        raise
     except Exception as e:
         import logging
         logging.getLogger("roadwatch").error(f"Registration failed: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ── Citizen Login ─────────────────────────────────────────────────────────────

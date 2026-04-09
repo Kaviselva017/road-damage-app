@@ -369,31 +369,47 @@ function logout(){
   window.location.href='/';
 }
 
+let _gpsWatchId = null;
+let _gpsLocked = false;
 function getLocation(){
   if(!navigator.geolocation){document.getElementById('gps-text').textContent='GPS not supported';return;}
-  document.getElementById('gps-status-text').textContent='Searching...';
-  navigator.geolocation.getCurrentPosition(async pos=>{
+  document.getElementById('gps-status-text').textContent='Acquiring...';
+  // Use watchPosition for continuous high-accuracy tracking
+  _gpsWatchId = navigator.geolocation.watchPosition(async pos=>{
+    const acc = pos.coords.accuracy;
     currentLat=pos.coords.latitude;currentLng=pos.coords.longitude;
-    document.getElementById('gps-text').textContent=`${currentLat.toFixed(5)}, ${currentLng.toFixed(5)}`;
+    document.getElementById('gps-text').textContent=`${currentLat.toFixed(6)}, ${currentLng.toFixed(6)}`;
     document.getElementById('gps-dot').classList.add('active');
-    document.getElementById('gps-status-text').textContent='Locked ✓';
-    // Reverse geocode
-    currentAddr=await reverseGeocode(currentLat,currentLng);
-    document.getElementById('gps-addr').textContent=currentAddr.substring(0,60)+'...';
-    // Detect area type
-    currentArea=detectArea(currentAddr);
-    showAreaBadge(currentArea);
-    initMiniMap(currentLat,currentLng);
-    detectNearby(currentLat,currentLng);
+    document.getElementById('gps-status-text').textContent=`Locked ✓ (±${acc.toFixed(0)}m)`;
+    if(!_gpsLocked){
+      _gpsLocked=true;
+      // First lock — do full setup
+      currentAddr=await reverseGeocode(currentLat,currentLng);
+      document.getElementById('gps-addr').textContent=currentAddr.substring(0,60)+'...';
+      currentArea=detectArea(currentAddr);
+      showAreaBadge(currentArea);
+      initMiniMap(currentLat,currentLng);
+      detectNearby(currentLat,currentLng);
+    } else if(miniMarker){
+      // Subsequent updates — just move the marker
+      miniMarker.setLatLng([currentLat,currentLng]);
+    }
+    // Stop watching once accuracy is good enough (< 30m)
+    if(acc < 30 && _gpsWatchId !== null){
+      navigator.geolocation.clearWatch(_gpsWatchId);
+      _gpsWatchId = null;
+    }
   },err=>{
-    document.getElementById('gps-text').textContent='Using default location';
-    document.getElementById('gps-status-text').textContent='⚠ Manual';
-    currentLat=11.0168;currentLng=76.9558;
-    currentAddr='Coimbatore, Tamil Nadu';
-    currentArea='residential';
-    initMiniMap(currentLat,currentLng);
-    detectNearby(currentLat,currentLng);
-  },{ enableHighAccuracy: true, timeout: 15000, maximumAge: 0 });
+    if(!_gpsLocked){
+      document.getElementById('gps-text').textContent='Using default location';
+      document.getElementById('gps-status-text').textContent='⚠ Manual';
+      currentLat=11.0168;currentLng=76.9558;
+      currentAddr='Coimbatore, Tamil Nadu';
+      currentArea='residential';
+      initMiniMap(currentLat,currentLng);
+      detectNearby(currentLat,currentLng);
+    }
+  },{ enableHighAccuracy: true, timeout: 20000, maximumAge: 0 });
 }
 
 function detectArea(addr){
@@ -875,7 +891,11 @@ function showPage(page){
     document.getElementById('submit-btn').disabled=false;
     document.getElementById('submit-btn').innerHTML='🚨 Submit Complaint';
     document.getElementById('result-card').classList.remove('show');
-    document.getElementById('submit-error').style.display='none';}
+    document.getElementById('submit-error').style.display='none';
+    // Full reset for new submission
+    resetSource();
+    document.getElementById('file-input').value='';
+    selectedFile=null;}
   if(page==='complaints'){document.querySelectorAll('.nav-btn')[1].classList.add('active');loadComplaints();}
   if(page==='notifications'){document.querySelectorAll('.nav-btn')[2].classList.add('active');loadNotifications();}
 }

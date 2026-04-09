@@ -20,11 +20,12 @@ services:
         value: production
 
       # ── Database ─────────────────────────────────────────────
-      # For production use the Render PostgreSQL add-on (see databases section
-      # below).  The DATABASE_URL is injected automatically via fromDatabase.
-      # Remove the sqlite fallback line once you add a real DB.
+      # Uses the Render PostgreSQL add-on for persistent storage.
+      # SQLite does NOT persist on Render's ephemeral filesystem!
       - key: DATABASE_URL
-        value: sqlite:///./road_damage.db   # REPLACE with fromDatabase ref below
+        fromDatabase:
+          name: roadwatch-db
+          property: connectionString
 
       # ── Security ──────────────────────────────────────────────
       - key: SECRET_KEY
@@ -37,7 +38,6 @@ services:
 
       # ── CORS ──────────────────────────────────────────────────
       # Add every frontend origin, comma-separated.
-      # Include both the static HTML path and the React dashboard origin.
       - key: CORS_ORIGINS
         value: "https://road-damage-appsystem.onrender.com,https://roadwatch-dashboard.onrender.com"
 
@@ -69,15 +69,9 @@ services:
       - key: RESEND_API_KEY
         sync: false          # optional — only needed if Gmail SMTP fails
 
-# ── PostgreSQL database (uncomment to use a real DB on Render free tier) ──
-# databases:
-#   - name: roadwatch-db
-#     databaseName: roadwatch
-#     user: roadwatch
-#     plan: free
-#
-# Then replace the DATABASE_URL env var above with:
-#   - key: DATABASE_URL
-#     fromDatabase:
-#       name: roadwatch-db
-#       property: connectionString
+# ── PostgreSQL database (persistent storage for production) ──────
+databases:
+  - name: roadwatch-db
+    databaseName: roadwatch
+    user: roadwatch
+    plan: free

@@ -17,9 +17,10 @@ def _iso(dt):
     return dt.isoformat().replace("+00:00", "Z")
 
 
-def _m(msg: Message) -> dict:
+def _m(msg: Message, sender_name: str = None) -> dict:
     return {"id": msg.id, "complaint_id": msg.complaint_id,
             "sender_id": msg.sender_id, "sender_role": msg.sender_role,
+            "sender_name": sender_name or ("Officer" if msg.sender_role == "officer" else "Citizen"),
             "message": msg.message, "created_at": _iso(msg.created_at)}
 
 
@@ -35,7 +36,20 @@ def get_messages(complaint_id: str, request: Request, db: Session = Depends(get_
     msgs = db.query(Message).filter(
         Message.complaint_id == complaint_id
     ).order_by(Message.created_at.asc()).all()
-    return [_m(m) for m in msgs]
+    # Resolve sender names
+    result = []
+    name_cache = {}
+    for m in msgs:
+        cache_key = (m.sender_role, m.sender_id)
+        if cache_key not in name_cache:
+            if m.sender_role == "officer":
+                o = db.query(FieldOfficer).filter(FieldOfficer.id == m.sender_id).first()
+                name_cache[cache_key] = o.name if o else "Officer"
+            else:
+                u = db.query(User).filter(User.id == m.sender_id).first()
+                name_cache[cache_key] = u.name if u else "Citizen"
+        result.append(_m(m, name_cache[cache_key]))
+    return result
 
 
 @router.post("/{complaint_id}/send-citizen")
@@ -47,7 +61,7 @@ def send_citizen(complaint_id: str, data: MessageSend,
                   sender_role="citizen", message=data.message,
                   created_at=datetime.now(timezone.utc))
     db.add(msg); db.commit(); db.refresh(msg)
-    return _m(msg)
+    return _m(msg, user.name)
 
 
 @router.post("/{complaint_id}/send-officer")
@@ -59,4 +73,4 @@ def send_officer(complaint_id: str, data: MessageSend,
                   sender_role="officer", message=data.message,
                   created_at=datetime.now(timezone.utc))
     db.add(msg); db.commit(); db.refresh(msg)
-    return _m(msg)
+    return _m(msg, officer.name)
