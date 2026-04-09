@@ -315,7 +315,7 @@ try:
         f.write(base_img + os.urandom(10))
 except Exception:
     # Create a minimal valid JPEG header for fallback testing
-    fallback = b'\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00\xff\xdb\x00C\x00' + os.urandom(100)
+    fallback = b'\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00\xff\xdb\x00C\x00' + os.urandom(2000)
     with open(img_path, 'wb') as f:
         f.write(fallback)
 
