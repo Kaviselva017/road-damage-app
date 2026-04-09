@@ -62,8 +62,6 @@ class MessageSend(BaseModel):
 class OfficerDirectoryOut(BaseModel):
     id:    int
     name:  str
-    email: str
-    phone: Optional[str] = None
     zone:  Optional[str] = None
 
     class Config:
