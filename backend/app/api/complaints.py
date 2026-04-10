@@ -395,7 +395,7 @@ def list_complaints(
 ):
     q = db.query(Complaint)
     if not officer.is_admin:
-        q = q.filter(Complaint.officer_id == officer.id)
+        q = q.filter((Complaint.officer_id == officer.id) | (Complaint.status == "pending"))
     if status:
         q = q.filter(Complaint.status == status)
     if severity:
