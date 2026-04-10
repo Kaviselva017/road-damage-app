@@ -601,6 +601,17 @@ function renderDetailPanel(c, msgs=[]) {
     </div>
   </div>`;
 
+  // Nearby Places
+  if (c.nearby_places) {
+    html += `<div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:0.8rem;margin-bottom:0.8rem">
+      <div style="font-size:0.68rem;color:var(--muted);text-transform:uppercase;font-weight:700;margin-bottom:0.5rem">📍 Nearby Locations / Crowd Places</div>
+      <div style="display:flex;flex-wrap:wrap;gap:0.4rem">`;
+    c.nearby_places.split(',').forEach(p => {
+      html += `<span style="background:rgba(62,207,178,0.1);color:#3ecfb2;border:1px solid rgba(62,207,178,0.2);padding:0.2rem 0.5rem;border-radius:4px;font-size:0.7rem">${p.trim()}</span>`;
+    });
+    html += `</div></div>`;
+  }
+
   // Description & Mini Map
   html += `<div style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:0.7rem;margin-bottom:0.8rem;font-size:0.8rem;color:var(--muted)">${c.description||''}</div>
   <div style="border-radius:10px;overflow:hidden;margin-bottom:0.8rem;height:130px">

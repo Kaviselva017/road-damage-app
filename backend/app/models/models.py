@@ -51,6 +51,7 @@ class Complaint(Base):
     longitude = Column(Float, nullable=False)
     address   = Column(Text, nullable=True)
     area_type = Column(String, default="residential")
+    nearby_places = Column(Text, nullable=True)
 
     damage_type   = Column(String, default="pothole")   # pothole|crack|surface_damage|multiple
     severity      = Column(String, default="medium")    # high|medium|low

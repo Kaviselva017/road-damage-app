@@ -54,13 +54,8 @@ class ApiService {
   }
 
   // --- Complaints ---
-  Future<Map<String, dynamic>> submitComplaint({
-    required double latitude,
-    required double longitude,
-    String? address,
-    String? areaType,
-    double? impactScore,
     int? sensitiveLocationCount,
+    String? nearbySensitive,
     required File image,
   }) async {
     final formData = FormData.fromMap({
@@ -71,6 +66,7 @@ class ApiService {
       if (impactScore != null) 'impact_score': impactScore,
       if (sensitiveLocationCount != null)
         'sensitive_location_count': sensitiveLocationCount,
+      if (nearbySensitive != null) 'nearby_sensitive': nearbySensitive,
       'image': await MultipartFile.fromFile(image.path,
           filename: image.path.split('/').last),
     });

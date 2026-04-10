@@ -1,0 +1,8 @@
+
+Checking: d:/python/road-damage-app/backend/static/dashboard.html
+All backticks are paired.
+Line 780:       const match = cd.match(/filename=([^;]+)/);
+
+Checking: d:/python/road-damage-app/frontend/dashboard.html
+All backticks are paired.
+Line 780:     let filename = `RoadWatch_Report_${new Date().toISOString().slice(0,10)}.pdf`;

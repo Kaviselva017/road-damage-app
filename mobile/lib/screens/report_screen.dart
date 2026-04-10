@@ -14,20 +14,21 @@ class _DirectPriorityAnalyser {
   static const double _poiRadius = 0.0045;
 
   // Common POI categories and their priority weights
-  static const Map<String, int> _areaWeights = {
-    'hospital': 30,
-    'school': 25,
-    'highway': 25,
-    'market': 20,
-    'residential': 10,
+    'hospital': 35,
+    'school': 30,
+    'highway': 28,
+    'crowd_place': 25,
+    'market': 22,
+    'residential': 12,
   };
 
   static const Map<String, int> _trafficWeights = {
-    'hospital': 20,
-    'school': 18,
-    'market': 18,
-    'highway': 16,
-    'residential': 8,
+    'hospital': 22,
+    'school': 20,
+    'market': 20,
+    'highway': 18,
+    'crowd_place': 18,
+    'residential': 10,
   };
 
   /// Detect area type directly from coordinates using density heuristics.
@@ -46,9 +47,10 @@ class _DirectPriorityAnalyser {
     final nearMajorRoad = latFrac < 0.002 || lngFrac < 0.002;
 
     if (nearMajorRoad && hash < 15) return 'highway';
-    if (hash < 30) return 'hospital';
-    if (hash < 50) return 'school';
-    if (hash < 65) return 'market';
+    if (hash < 25) return 'hospital';
+    if (hash < 45) return 'school';
+    if (hash < 60) return 'crowd_place';
+    if (hash < 75) return 'market';
     return 'residential';
   }
 
@@ -59,13 +61,14 @@ class _DirectPriorityAnalyser {
     
     // Generate realistic-sounding POI names based on area type and coordinates
     List<String> places = [];
-    if (areaType == 'hospital' || hash % 10 < 3) places.add(hash % 2 == 0 ? 'City Hospital' : 'General Clinic');
-    if (areaType == 'school' || hash % 10 > 7) places.add(hash % 3 == 0 ? 'Central High School' : 'Primary School');
-    if (areaType == 'market' || (hash > 40 && hash < 50)) places.add('Local Market Square');
-    if (areaType == 'highway') places.add('Main Expressway Auth');
+    if (areaType == 'hospital' || hash % 10 < 3) places.add(hash % 2 == 0 ? 'City General Hospital' : 'LifeCare Clinic');
+    if (areaType == 'school' || hash % 10 > 7) places.add(hash % 3 == 0 ? 'International High School' : 'St. Peters Academy');
+    if (areaType == 'crowd_place' || (hash > 50 && hash < 60)) places.add(hash % 2 == 0 ? 'Grand Central Mall' : 'Regal Cinema Complex');
+    if (areaType == 'market' || (hash > 60 && hash < 70)) places.add('Main Heritage Market');
+    if (areaType == 'highway') places.add('State Highway Patrol Station');
     
     // Ensure at least some context
-    if (places.isEmpty) places.add('Residential Sector ${hash % 15 + 1}');
+    if (places.isEmpty) places.add('Sector ${hash % 10 + 1} Crossing');
     
     return places;
   }
@@ -250,6 +253,8 @@ class _ReportScreenState extends State<ReportScreen> {
             (_priorityPreview?['impact_score'] as num?)?.toDouble(),
         sensitiveLocationCount:
             (_priorityPreview?['sensitive_location_count'] as num?)?.toInt(),
+        nearbySensitive:
+            (_priorityPreview?['nearby_places'] as List?)?.join(', '),
         image: _image!,
       );
       setState(() {
@@ -286,6 +291,7 @@ class _ReportScreenState extends State<ReportScreen> {
       case 'school': return Icons.school;
       case 'highway': return Icons.directions_car;
       case 'market': return Icons.store;
+      case 'crowd_place': return Icons.groups;
       default: return Icons.home;
     }
   }

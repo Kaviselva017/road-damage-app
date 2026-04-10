@@ -46,28 +46,29 @@ def _iso(dt: Optional[datetime]) -> Optional[str]:
 
 def _area(addr: str) -> str:
     a = (addr or "").lower()
-    if any(w in a for w in ["hospital", "clinic", "medical", "health"]): return "hospital"
-    if any(w in a for w in ["school", "college", "university", "academy"]): return "school"
-    if any(w in a for w in ["highway", "nh-", "sh-", "expressway"]): return "highway"
-    if any(w in a for w in ["mall", "market", "shopping", "commercial"]): return "market"
+    if any(w in a for w in ["hospital", "clinic", "medical", "health", "dispensary"]): return "hospital"
+    if any(w in a for w in ["school", "college", "university", "academy", "educational"]): return "school"
+    if any(w in a for w in ["highway", "nh-", "sh-", "expressway", "bypass"]): return "highway"
+    if any(w in a for w in ["mall", "multiplex", "cinema", "theatre", "stadium", "bus_stand", "junction"]): return "crowd_place"
+    if any(w in a for w in ["market", "shopping", "commercial", "plaza"]): return "market"
     return "residential"
 
 
 def _priority(sev: str, dmg: str, area: str, nearby_sensitive: str = "") -> float:
     s = {"high": 35, "medium": 20, "low": 10}.get(sev, 10)
     d = {"pothole": 5, "multiple": 8, "crack": 3, "surface_damage": 2}.get(dmg, 0)
-    a = {"hospital": 30, "school": 25, "highway": 25, "market": 20, "residential": 10}.get(area, 10)
-    t = {"hospital": 20, "school": 18, "market": 18, "highway": 16, "residential": 8}.get(area, 8)
+    a = {"hospital": 35, "school": 30, "highway": 28, "crowd_place": 25, "market": 22, "residential": 12}.get(area, 12)
+    t = {"hospital": 22, "school": 20, "market": 20, "highway": 18, "crowd_place": 18, "residential": 10}.get(area, 10)
     r = {"pothole": 15, "multiple": 14, "crack": 8, "surface_damage": 6}.get(dmg, 6)
     # Nearby sensitive location bonus from POI scan
     nb = 0
     if nearby_sensitive:
         ns = nearby_sensitive.lower()
-        if any(w in ns for w in ["hospital", "clinic", "pharmacy"]): nb += 12
-        if any(w in ns for w in ["school", "college", "university"]): nb += 8
-        if any(w in ns for w in ["fire_station", "police"]): nb += 10
-        if any(w in ns for w in ["bus_station", "station", "railway"]): nb += 6
-        if any(w in ns for w in ["marketplace", "place_of_worship"]): nb += 4
+        if any(w in ns for w in ["hospital", "clinic", "pharmacy"]): nb += 15
+        if any(w in ns for w in ["school", "college", "university"]): nb += 10
+        if any(w in ns for w in ["fire_station", "police"]): nb += 12
+        if any(w in ns for w in ["mall", "stadium", "airport", "railway", "bus_stand"]): nb += 10
+        if any(w in ns for w in ["marketplace", "place_of_worship", "cinema"]): nb += 6
     return min(float(s + d + a + t + r + nb), 100.0)
 
 
@@ -241,6 +242,7 @@ async def submit(
         image_hash     = img_hash,
         status         = "assigned" if officer else "pending",
         priority_score = priority,
+        nearby_places  = nearby_sensitive,
         allocated_fund = 0.0,
         is_duplicate   = False,
         created_at     = _now(),

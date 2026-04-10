@@ -1,0 +1,20 @@
+
+Checking: d:/python/road-damage-app/backend/static/dashboard.html
+Total uncovered backticks: 126
+All backticks are paired.
+Unbalanced braces in template starting at line 319
+Unbalanced braces in template starting at line 328
+Unbalanced braces in template starting at line 359
+Unbalanced braces in template starting at line 370
+Unbalanced braces in template starting at line 469
+Unbalanced braces in template starting at line 472
+
+Checking: d:/python/road-damage-app/frontend/dashboard.html
+Total uncovered backticks: 126
+All backticks are paired.
+Unbalanced braces in template starting at line 319
+Unbalanced braces in template starting at line 328
+Unbalanced braces in template starting at line 359
+Unbalanced braces in template starting at line 370
+Unbalanced braces in template starting at line 469
+Unbalanced braces in template starting at line 472
