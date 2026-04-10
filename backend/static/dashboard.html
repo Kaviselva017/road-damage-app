@@ -55,6 +55,16 @@ body { background: var(--bg); color: var(--text); font-family: 'DM Sans', sans-s
 .c-card.low::before { background: var(--accent2); }
 .c-card:hover { border-color: var(--accent); transform: translateX(2px); }
 .c-card.selected { border-color: var(--accent); background: #1a1f2e; }
+.c-card .view-details-btn { display: none; margin-top: 0.4rem; background: linear-gradient(135deg, var(--accent), #e8941e); color: #000; border: none; border-radius: 6px; padding: 0.35rem 0.7rem; font-family: inherit; font-size: 0.72rem; font-weight: 700; cursor: pointer; width: 100%; transition: all 0.15s; }
+.c-card:hover .view-details-btn, .c-card.selected .view-details-btn { display: block; }
+.c-card .view-details-btn:hover { box-shadow: 0 2px 8px rgba(245,166,35,0.4); transform: translateY(-1px); }
+.dp-img-wrap { position: relative; width: 100%; border-radius: 12px; overflow: hidden; margin-bottom: 0.8rem; border: 1px solid var(--border); background: var(--card); min-height: 180px; }
+.dp-img-wrap img { width: 100%; display: block; border-radius: 12px; }
+.dp-img-wrap .img-error { display: flex; align-items: center; justify-content: center; height: 180px; color: var(--muted); font-size: 0.85rem; }
+.dp-address-box { background: linear-gradient(135deg, rgba(245,166,35,0.08), rgba(62,207,178,0.05)); border: 1px solid rgba(245,166,35,0.2); border-radius: 10px; padding: 0.7rem 0.9rem; margin-bottom: 0.8rem; }
+.dp-address-box .addr-label { font-size: 0.65rem; color: var(--accent); text-transform: uppercase; font-weight: 700; margin-bottom: 0.3rem; }
+.dp-address-box .addr-value { font-size: 0.82rem; color: var(--text); line-height: 1.4; }
+.dp-address-box .addr-coords { font-size: 0.7rem; color: var(--muted); margin-top: 0.25rem; }
 .c-row1 { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.25rem; }
 .c-id { font-size: 0.8rem; font-weight: 700; color: var(--accent); }
 .c-status { font-size: 0.62rem; font-weight: 700; text-transform: uppercase; padding: 0.15rem 0.5rem; border-radius: 20px; }
@@ -82,7 +92,7 @@ body { background: var(--bg); color: var(--text); font-family: 'DM Sans', sans-s
 .map-legend-title { color: var(--muted); font-weight: 700; text-transform: uppercase; margin-bottom: 0.4rem; font-size: 0.68rem; }
 .legend-item { display: flex; align-items: center; gap: 0.4rem; margin-bottom: 0.25rem; }
 .legend-dot { width: 10px; height: 10px; border-radius: 50%; }
-.detail-panel { position: absolute; top: 0; right: 0; bottom: 0; width: 380px; background: var(--surface); border-left: 1px solid var(--border); overflow-y: auto; transform: translateX(100%); transition: transform 0.3s; z-index: 20; }
+.detail-panel { position: fixed; top: 56px; right: 0; bottom: 0; width: 420px; background: var(--surface); border-left: 1px solid var(--border); overflow-y: auto; transform: translateX(100%); transition: transform 0.3s ease; z-index: 100; box-shadow: -4px 0 24px rgba(0,0,0,0.5); }
 .detail-panel.open { transform: translateX(0); }
 .detail-panel::-webkit-scrollbar { width: 4px; }
 .detail-panel::-webkit-scrollbar-thumb { background: var(--border); }
@@ -209,14 +219,15 @@ body { background: var(--bg); color: var(--text); font-family: 'DM Sans', sans-s
       <div class="legend-item"><div class="legend-dot" style="background:#3ecfb2"></div>Low</div>
       <div class="legend-item"><div class="legend-dot" style="background:#4ade80"></div>Completed</div>
     </div>
-    <div class="detail-panel" id="detail-panel">
-      <div class="dp-header">
-        <div id="dp-title" style="font-family:'Syne',sans-serif;font-size:1rem;font-weight:800;color:var(--accent)">—</div>
-        <button class="dp-close" onclick="closeDetail()">✕</button>
-      </div>
-      <div class="dp-body" id="dp-body"></div>
-    </div>
   </div>
+</div>
+
+<div class="detail-panel" id="detail-panel">
+  <div class="dp-header">
+    <div id="dp-title" style="font-family:'Syne',sans-serif;font-size:1rem;font-weight:800;color:var(--accent)">—</div>
+    <button class="dp-close" onclick="closeDetail()">✕</button>
+  </div>
+  <div class="dp-body" id="dp-body"></div>
 </div>
 
 <input type="file" id="after-file-input" accept="image/*" style="display:none" onchange="handleAfterPhoto(event)"/>
@@ -390,6 +401,7 @@ function renderList() {
       ${c.area_type && c.area_type!=='unknown' && c.area_type!=='residential' ? `<div style="font-size:0.68rem;margin-top:2px;color:${areaColor};font-weight:700">${c.area_type.toUpperCase()} ZONE${c.report_count>1?' · '+c.report_count+' reports':''}</div>` : ''}
       ${c.is_duplicate ? '<div style="font-size:0.68rem;color:#f59e0b;margin-top:2px">⚠ Duplicate report</div>' : ''}
       ${c.citizen_name ? `<div class="c-citizen">👤 ${c.citizen_name}</div>` : ''}
+      <button class="view-details-btn" onclick="event.stopPropagation(); selectComplaint('${c.complaint_id}')">🔍 View Full Details</button>
     </div>`;
   }).join('');
 }
@@ -486,19 +498,15 @@ function renderMapMarkers() {
       iconAnchor: [size, size]
     });
     const marker = L.marker([c.latitude, c.longitude], {icon}).addTo(map);
-    const popupHtml = `<div style="background:#141820;color:#e8eaf0;padding:10px;border-radius:8px;min-width:180px;font-family:sans-serif">
+    const cid = c.complaint_id;
+    const popupHtml = `<div style="background:#141820;color:#e8eaf0;padding:10px;border-radius:8px;min-width:200px;font-family:sans-serif">
       <div style="color:#f5a623;font-weight:700;margin-bottom:4px">${c.complaint_id}</div>
       <div style="font-size:12px;margin-bottom:4px">${(c.damage_type||'').replace('_',' ')} · <span style="color:${color}">${(c.severity||'').toUpperCase()}</span></div>
+      ${c.address ? `<div style="font-size:10px;color:#5a6480;margin-bottom:4px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${c.address.substring(0,50)}</div>` : ''}
       ${c.citizen_name?`<div style="font-size:11px;color:#3ecfb2;margin-bottom:6px">👤 ${c.citizen_name}</div>`:''}
-      <button data-id="${c.complaint_id}" style="background:#f5a623;color:#000;border:none;border-radius:4px;padding:5px 12px;cursor:pointer;font-size:11px;font-weight:700;width:100%">View Details</button>
+      <button onclick="event.preventDefault(); event.stopPropagation(); map.closePopup(); selectComplaint('${cid}');" style="background:linear-gradient(135deg,#f5a623,#e8941e);color:#000;border:none;border-radius:6px;padding:6px 14px;cursor:pointer;font-size:11px;font-weight:700;width:100%;transition:all 0.15s">🔍 View Full Details</button>
     </div>`;
-    marker.bindPopup(popupHtml, {className:'dark-popup'});
-    marker.on('click', function() {
-      setTimeout(() => {
-        const btn = document.querySelector(`[data-id="${c.complaint_id}"]`);
-        if (btn) btn.addEventListener('click', () => { map.closePopup(); selectComplaint(c.complaint_id); });
-      }, 100);
-    });
+    marker.bindPopup(popupHtml, {className:'dark-popup', closeButton: true});
     markers.push(marker);
   });
 }
@@ -525,7 +533,9 @@ async function selectComplaint(id) {
   selectedComplaintId = id; renderList();
   const c = allComplaints.find(x=>x.complaint_id===id);
   if (c&&map) { map.setView([c.latitude, c.longitude], 16); }
-  document.getElementById('detail-panel').classList.add('open');
+  const panel = document.getElementById('detail-panel');
+  panel.classList.add('open');
+  panel.scrollTop = 0;
   document.getElementById('dp-title').textContent = id;
   document.getElementById('dp-body').innerHTML = '<div style="color:var(--muted);text-align:center;padding:2rem">Loading...</div>';
   try {
@@ -541,7 +551,9 @@ async function selectComplaint(id) {
 
 function renderDetailPanel(c, msgs=[]) {
   const BASE = window.location.hostname === 'localhost' ? 'http://localhost:8000' : window.location.origin;
-  const hasAfter = afterPhotos[c.complaint_id];
+  const hasAfterServer = c.after_image_url ? `${BASE}${c.after_image_url}` : null;
+  const hasAfterLocal = afterPhotos[c.complaint_id];
+  const hasAfter = hasAfterLocal || hasAfterServer;
   const dpBody = document.getElementById('dp-body');
   
   const statusMap = {
@@ -552,6 +564,8 @@ function renderDetailPanel(c, msgs=[]) {
     rejected: { label: 'Rejected', icon: '❌', color: '#e05c5c' }
   };
   const st = statusMap[c.status] || { label: c.status, icon: '•', color: '#fff' };
+  const pScore = c.priority_score || 0;
+  const pColor = pScore>=70?'#ef4444':pScore>=40?'#f59e0b':'#10b981';
 
   let html = `<div style="background:rgba(255,255,255,0.03);border-radius:10px;padding:0.8rem;margin-bottom:0.8rem;display:flex;justify-content:space-between;align-items:center;border:1px solid var(--border)">
     <div>
@@ -562,11 +576,43 @@ function renderDetailPanel(c, msgs=[]) {
     </div>
     <div style="text-align:right">
       <div style="font-size:0.65rem;color:var(--muted);text-transform:uppercase;font-weight:700">Priority Score</div>
-      <div style="font-size:1.1rem;font-weight:800;color:${(c.priority_score||0)>=70?'#ef4444':(c.priority_score||0)>=40?'#f59e0b':'#10b981'};margin-top:2px">P${c.priority_score||0}</div>
+      <div style="font-size:1.1rem;font-weight:800;color:${pColor};margin-top:2px">P${pScore}</div>
     </div>
   </div>`;
+
+  // ── DAMAGE IMAGE (prominent, top of panel) ──
+  const imgUrl = c.image_url ? `${BASE}${c.image_url}` : '';
+  html += `<div style="font-size:0.68rem;color:var(--muted);text-transform:uppercase;font-weight:700;margin-bottom:0.4rem;display:flex;justify-content:space-between">
+    <span>📸 Damage Photo</span>
+    <span style="color:${pColor}">${(c.damage_type||'').replace('_',' ').toUpperCase()}</span>
+  </div>`;
+
+  if (hasAfter) {
+    html += `<div class="ba-labels"><span>Before</span><span>After (drag slider)</span></div>`;
+    html += `<div class="ba-wrap" id="ba-wrap">
+      <img class="ba-before" src="${imgUrl}" onerror="this.parentElement.innerHTML='<div class=dp-img-wrap><div class=img-error>⚠ Image unavailable</div></div>'"/>
+      <div class="ba-after-overlay" id="ba-after" style="width:50%"><img src="${hasAfter}" style="width:200%;height:100%;object-fit:cover"/></div>
+      <div class="ba-slider" id="ba-slider"><div class="ba-handle">⟺</div></div>
+    </div>`;
+  } else {
+    html += `<div class="dp-img-wrap">
+      <img src="${imgUrl}" alt="Road Damage Photo" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
+      <div class="img-error" style="display:none">⚠ Image unavailable</div>
+    </div>`;
+  }
+
+  if (['assigned','in_progress','completed'].includes(c.status)) {
+    html += `<button class="upload-after-btn" onclick="triggerAfterPhoto('${c.complaint_id}')">📸 ${hasAfter?'Update':'Upload'} After-Repair Photo</button>`;
+  }
+
+  // ── ADDRESS / LOCATION ──
+  html += `<div class="dp-address-box">
+    <div class="addr-label">📍 Location</div>
+    <div class="addr-value">${c.address || 'GPS Location (no address resolved)'}</div>
+    <div class="addr-coords">${c.latitude?.toFixed(6) || '—'}, ${c.longitude?.toFixed(6) || '—'}</div>
+  </div>`;
   
-  // Citizen Box
+  // ── Citizen Box ──
   if (c.citizen_name) {
     html += `<div class="citizen-info-box">
       <div class="cib-title">👤 Citizen Information</div>
@@ -577,57 +623,50 @@ function renderDetailPanel(c, msgs=[]) {
     </div>`;
   }
 
-  // Map / Images
-  html += `<div class="ba-labels"><span>Before</span><span>${hasAfter?'After (drag slider)':'After repair pending'}</span></div>`;
-  if (hasAfter) {
-    html += `<div class="ba-wrap" id="ba-wrap">
-      <img class="ba-before" src="${BASE}${c.image_url}"/>
-      <div class="ba-after-overlay" id="ba-after" style="width:50%"><img src="${hasAfter}" style="width:200%;height:100%;object-fit:cover"/></div>
-      <div class="ba-slider" id="ba-slider"><div class="ba-handle">⟺</div></div>
-    </div>`;
-  } else {
-    html += `<img class="dp-img" src="${BASE}${c.image_url}"/>
-             <div class="no-after">📸 Upload after-repair photo to enable comparison</div>`;
-  }
-
-  if (['in_progress','completed'].includes(c.status)) {
-    html += `<button class="upload-after-btn" onclick="triggerAfterPhoto('${c.complaint_id}')">📸 ${hasAfter?'Update':'Upload'} After-Repair Photo</button>`;
-  }
-
-  // Info Grid
+  // ── Info Grid ──
   html += `<div class="info-grid">
     <div class="info-cell"><div class="info-label">Type</div><div class="info-value">${(c.damage_type||'').replace('_',' ')}</div></div>
     <div class="info-cell"><div class="info-label">Severity</div><div class="info-value"><span class="sev-badge sev-${c.severity}">${(c.severity||'').toUpperCase()}</span></div></div>
     <div class="info-cell"><div class="info-label">AI Confidence</div><div class="info-value">${((c.ai_confidence||0)*100).toFixed(1)}%</div></div>
     <div class="info-cell"><div class="info-label">Area Type</div><div class="info-value" style="color:#f59e0b;font-weight:700">${(c.area_type||'unknown').toUpperCase()}</div></div>
     <div class="info-cell"><div class="info-label">Reports</div><div class="info-value">${c.report_count||1} citizen${(c.report_count||1)>1?'s':''}</div></div>
-    <div class="info-cell"><div class="info-label">Reported</div><div class="info-value">${c.created_at ? fmtDate(c.created_at) : '—'}</div></div>
+    <div class="info-cell"><div class="info-label">Reported</div><div class="info-value">${c.created_at ? fmtDateTime(c.created_at) : '—'}</div></div>
+    ${c.resolved_at ? `<div class="info-cell" style="grid-column:span 2"><div class="info-label">Resolved</div><div class="info-value" style="color:#4ade80">${fmtDateTime(c.resolved_at)}</div></div>` : ''}
+    ${c.officer_name ? `<div class="info-cell" style="grid-column:span 2"><div class="info-label">Assigned Officer</div><div class="info-value" style="color:var(--accent)">${c.officer_name}</div></div>` : ''}
   </div>`;
 
-  // Priority Score
+  // ── Priority Score Breakdown (computed from available API data) ──
+  const sevScore = {high:35,medium:20,low:10}[c.severity]||10;
+  const dmgScore = {pothole:5,multiple:8,crack:3,surface_damage:2}[c.damage_type]||0;
+  const areaScore = {hospital:35,school:30,highway:28,crowd_place:25,market:22,residential:12}[c.area_type]||12;
+  const trafficScore = {hospital:22,school:20,market:20,highway:18,crowd_place:18,residential:10}[c.area_type]||10;
+  const riskScore = {pothole:15,multiple:14,crack:8,surface_damage:6}[c.damage_type]||6;
+
   html += `<div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:0.8rem;margin-bottom:0.8rem">
     <div style="font-size:0.72rem;color:var(--muted);text-transform:uppercase;font-weight:700;margin-bottom:0.6rem;display:flex;justify-content:space-between">
       <span>Priority Score Breakdown</span>
-      <span style="color:${(c.priority_score||0)>=70?'#ef4444':(c.priority_score||0)>=40?'#f59e0b':'#10b981'};font-size:1rem;font-weight:800">${c.priority_score||0}/100</span>
+      <span style="color:${pColor};font-size:1rem;font-weight:800">${pScore}/100</span>
     </div>`;
   
   [
-    ['Damage Size', c.damage_size_score||0, 45],
-    ['Traffic Density', c.traffic_density_score||0, 20],
-    ['Accident Risk', c.accident_risk_score||0, 20],
-    ['Area Criticality', c.area_criticality_score||0, 20],
-  ].forEach(([label,val,max]) => {
+    ['Severity Impact', sevScore, 35, '🔴'],
+    ['Area Criticality', areaScore, 35, '🏥'],
+    ['Traffic Density', trafficScore, 22, '🚗'],
+    ['Accident Risk', riskScore, 15, '⚠️'],
+    ['Damage Factor', dmgScore, 8, '🕳️'],
+  ].forEach(([label,val,max,icon]) => {
+    const pct = Math.min(100, (val/max)*100);
     html += `<div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.35rem">
-      <div style="font-size:0.72rem;color:var(--muted);width:100px;flex-shrink:0">${label}</div>
+      <div style="font-size:0.72rem;color:var(--muted);width:110px;flex-shrink:0">${icon} ${label}</div>
       <div style="flex:1;height:6px;background:var(--bg);border-radius:3px;overflow:hidden">
-        <div style="height:100%;width:${Math.min(100,val/max*100)}%;background:linear-gradient(90deg,var(--accent2),var(--accent));border-radius:3px"></div>
+        <div style="height:100%;width:${pct}%;background:linear-gradient(90deg,var(--accent2),var(--accent));border-radius:3px;transition:width 0.5s"></div>
       </div>
-      <div style="font-size:0.72rem;font-weight:700;width:30px;text-align:right;color:var(--text)">${val.toFixed(0)}</div>
+      <div style="font-size:0.72rem;font-weight:700;width:30px;text-align:right;color:var(--text)">${val}</div>
     </div>`;
   });
   html += `</div>`;
 
-  // Funds
+  // ── Funds ──
   html += `<div style="background:var(--card);border:2px solid rgba(16,185,129,0.35);border-radius:12px;padding:1rem;margin-bottom:1rem;box-shadow:0 4px 12px rgba(0,0,0,0.2)">
     <div style="font-size:0.75rem;color:#4ade80;text-transform:uppercase;font-weight:800;margin-bottom:0.7rem;letter-spacing:0.05em">💰 Budget Allocation</div>`;
   if (c.allocated_fund > 0) {
@@ -649,7 +688,7 @@ function renderDetailPanel(c, msgs=[]) {
     </div>
   </div>`;
 
-  // Nearby Places
+  // ── Nearby Places ──
   if (c.nearby_places) {
     html += `<div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:0.8rem;margin-bottom:0.8rem">
       <div style="font-size:0.68rem;color:var(--muted);text-transform:uppercase;font-weight:700;margin-bottom:0.5rem">📍 Nearby Locations / Crowd Places</div>
@@ -660,13 +699,20 @@ function renderDetailPanel(c, msgs=[]) {
     html += `</div></div>`;
   }
 
-  // Description & Mini Map
-  html += `<div style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:0.7rem;margin-bottom:0.8rem;font-size:0.8rem;color:var(--muted)">${c.description||''}</div>
-  <div style="border-radius:10px;overflow:hidden;margin-bottom:0.8rem;height:130px">
-    <div id="dp-mini-map" style="height:130px;border-radius:8px;overflow:hidden"></div>
+  // ── Description ──
+  if (c.description) {
+    html += `<div style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:0.7rem;margin-bottom:0.8rem">
+      <div style="font-size:0.68rem;color:var(--muted);text-transform:uppercase;font-weight:700;margin-bottom:0.3rem">🤖 AI Analysis</div>
+      <div style="font-size:0.8rem;color:var(--text);line-height:1.5">${c.description}</div>
+    </div>`;
+  }
+
+  // ── Mini Map ──
+  html += `<div style="border-radius:10px;overflow:hidden;margin-bottom:0.8rem;height:140px">
+    <div id="dp-mini-map" style="height:140px;border-radius:8px;overflow:hidden"></div>
   </div>`;
 
-  // Status Form
+  // ── Status Form ──
   html += `<div class="status-form">
     <label>Update Status</label>
     <select id="dp-status">
@@ -682,7 +728,7 @@ function renderDetailPanel(c, msgs=[]) {
     <div class="save-success" id="save-success">✓ Updated!</div>
   </div>`;
 
-  // Messages
+  // ── Messages ──
   html += `<div class="msg-section">
     <div class="msg-title">💬 Message Citizen</div>
     <div class="msg-list" id="msg-list-${c.complaint_id}">`;
