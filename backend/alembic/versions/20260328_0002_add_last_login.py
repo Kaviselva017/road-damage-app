@@ -14,10 +14,20 @@ depends_on = None
 
 
 def upgrade():
-    with op.batch_alter_table('field_officers') as batch_op:
-        batch_op.add_column(sa.Column('last_login', sa.DateTime(), nullable=True))
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    columns = {c["name"] for c in inspector.get_columns("field_officers")}
+    
+    if "last_login" not in columns:
+        with op.batch_alter_table('field_officers') as batch_op:
+            batch_op.add_column(sa.Column('last_login', sa.DateTime(), nullable=True))
 
 
 def downgrade():
-    with op.batch_alter_table('field_officers') as batch_op:
-        batch_op.drop_column('last_login')
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    columns = {c["name"] for c in inspector.get_columns("field_officers")}
+    
+    if "last_login" in columns:
+        with op.batch_alter_table('field_officers') as batch_op:
+            batch_op.drop_column('last_login')
