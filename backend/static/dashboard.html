@@ -430,12 +430,10 @@ async function loadPriorityTab() {
 function initMap() {
   if (map) { map.remove(); map = null; }
   map = L.map('map', {zoomControl: true}).setView([11.0168, 76.9558], 13);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '© OpenStreetMap contributors',
+  L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+    attribution: 'Tiles &copy; Esri',
     maxZoom: 19
   }).addTo(map);
-  // Dark overlay for map
-  document.getElementById('map').style.filter = 'invert(90%) hue-rotate(180deg) brightness(0.85) contrast(0.9)';
   if (allComplaints.length) renderMapMarkers();
 }
 
@@ -654,7 +652,7 @@ function renderDetailPanel(c, msgs=[]) {
       if (mel._lmap) mel._lmap.remove();
       const dm = L.map(mel, {zoomControl:false, attributionControl:false}).setView([c.latitude, c.longitude], 16);
       mel._lmap = dm;
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(dm);
+      L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}').addTo(dm);
       L.circleMarker([c.latitude, c.longitude], {radius:10, fillColor:'#f5a623', color:'#fff', weight:2, fillOpacity:.9}).addTo(dm);
     }
     if (hasAfter) initBASlider();
