@@ -79,6 +79,7 @@ def dashboard_stats(
     recent   = _cnt(Complaint.created_at >= week_ago)
     rate     = round(done / total * 100, 1) if total else 0
 
+    total_budget = db.query(func.sum(Complaint.allocated_fund)).scalar() or 0
     return {
         "total":           total,
         "pending":         pending + assigned,
@@ -92,6 +93,7 @@ def dashboard_stats(
         "resolution_rate": rate,
         "recent_7days":    recent,
         "total_complaints": total,
+        "total_budget":    total_budget,
     }
 
 

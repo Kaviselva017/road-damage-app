@@ -284,6 +284,10 @@ tr:hover td { background:rgba(255,255,255,0.02); }
         <div class="stat-card purple"><div class="stat-num" style="color:var(--accent2)" id="s-progress">—</div><div class="stat-label">In Progress</div></div>
         <div class="stat-card green"><div class="stat-num green" id="s-done">—</div><div class="stat-label">Completed</div><div class="stat-sub" id="s-rate">—% resolved</div></div>
         <div class="stat-card red"><div class="stat-num red" id="s-high">—</div><div class="stat-label">High Severity</div></div>
+        <div class="stat-card" style="border-color:rgba(16, 185, 129, 0.4);background:rgba(16, 185, 129, 0.05)">
+          <div class="stat-num" id="stats-budget" style="color:var(--green)">₹0</div>
+          <div class="stat-label">Total Budget Allocated</div>
+        </div>
       </div>
 
       <div class="row">
@@ -423,7 +427,7 @@ tr:hover td { background:rgba(255,255,255,0.02); }
             <thead>
               <tr>
                 <th>ID</th><th>Type</th><th>Severity</th><th>Status</th>
-                <th>Citizen</th><th>Officer</th><th>Location</th><th>Date</th><th>Actions</th>
+                <th>Citizen</th><th>Officer</th><th>Budget</th><th>Location</th><th>Date</th><th>Actions</th>
               </tr>
             </thead>
             <tbody id="complaints-tbody"></tbody>
@@ -778,6 +782,11 @@ async function loadStats() {
     document.getElementById('s-officers').textContent = stats.total_officers || 0;
     document.getElementById('s-citizens').textContent = stats.total_citizens || 0;
     document.getElementById('s-resolution').textContent = stats.resolution_rate ? Math.round(stats.resolution_rate) + '%' : '—';
+    
+    const budget = stats.total_budget || 0;
+    document.getElementById('stats-budget').innerText = '₹' + (budget >= 100000 ? (budget/100000).toFixed(1) + 'L' : budget.toLocaleString());
+    document.getElementById('stats-budget').title = 'Total: ₹' + budget.toLocaleString();
+    
     renderSevChart();
   } catch(e) { console.error('loadStats:', e); }
 }
@@ -813,6 +822,7 @@ function filterComplaints() {
       <td><span class="badge badge-${(c.status||'').replace(' ','_')}">${(c.status||'').replace('_',' ')||'—'}</span></td>
       <td><div style="font-size:0.8rem">${c.citizen_name||'—'}</div><div style="font-size:0.7rem;color:var(--muted)">${c.citizen_phone||''}</div></td>
       <td style="font-size:0.8rem">${c.officer_name||'Unassigned'}</td>
+      <td style="font-size:0.8rem;color:var(--green);font-weight:700">${c.allocated_fund > 0 ? '₹' + c.allocated_fund.toLocaleString() : '—'}</td>
       <td style="font-size:0.75rem;color:var(--muted);max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${(c.address||'').substring(0,40)}</td>
       <td style="font-size:0.75rem;color:var(--muted)">${formatDate(c.created_at)}</td>
       <td>
@@ -1376,6 +1386,8 @@ function renderMapDetail(complaint) {
     </div>
     ${photoPanel}
     <div class="map-detail-grid">
+      <div class="map-detail-row"><span class="map-detail-label">Status</span><span class="map-detail-value" style="color:var(--accent)">${formatComplaintValue(complaint.status)}</span></div>
+      <div class="map-detail-row"><span class="map-detail-label">Budget</span><span class="map-detail-value" style="color:var(--green);font-weight:700">${complaint.allocated_fund > 0 ? '₹' + complaint.allocated_fund.toLocaleString() : 'Not Allocated'}</span></div>
       <div class="map-detail-row"><span class="map-detail-label">Severity</span><span class="map-detail-value">${formatComplaintValue(complaint.severity)}</span></div>
       <div class="map-detail-row"><span class="map-detail-label">Damage</span><span class="map-detail-value">${formatComplaintValue(complaint.damage_type)}</span></div>
       <div class="map-detail-row"><span class="map-detail-label">Priority</span><span class="map-detail-value">${complaintPriority(complaint)}</span></div>

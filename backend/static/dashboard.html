@@ -158,11 +158,12 @@ body { background: var(--bg); color: var(--text); font-family: 'DM Sans', sans-s
 <div class="main-layout" id="main-layout">
   <div class="sidebar" id="sidebar">
     <div class="sidebar-header">
-      <div class="stats-row">
+      <div class="stats-row" style="grid-template-columns: repeat(5, 1fr);">
         <div class="stat-mini"><div class="num" id="st-total">0</div><div class="lbl">Total</div></div>
         <div class="stat-mini"><div class="num" style="color:var(--accent)" id="st-pending">0</div><div class="lbl">Pending</div></div>
         <div class="stat-mini"><div class="num" style="color:var(--blue)" id="st-progress">0</div><div class="lbl">Active</div></div>
         <div class="stat-mini"><div class="num" style="color:#4ade80" id="st-done">0</div><div class="lbl">Done</div></div>
+        <div class="stat-mini" style="background:rgba(16,185,129,0.05);border-color:rgba(16,185,129,0.2)"><div class="num" style="color:#10b981;font-size:1rem" id="st-budget">₹0</div><div class="lbl">Budget</div></div>
       </div>
       <div class="filters">
         <div class="filter-chip active" onclick="setFilter('all',this)">All</div>
@@ -332,10 +333,18 @@ function renderCitizens() {
 }
 
 function updateStats() {
-  document.getElementById('st-total').textContent = allComplaints.length;
-  document.getElementById('st-pending').textContent = allComplaints.filter(c=>['pending','assigned'].includes(c.status)).length;
-  document.getElementById('st-progress').textContent = allComplaints.filter(c=>c.status==='in_progress').length;
-  document.getElementById('st-done').textContent = allComplaints.filter(c=>c.status==='completed').length;
+  const total = allComplaints.length;
+  const pending = allComplaints.filter(c=>['pending','assigned'].includes(c.status)).length;
+  const progress = allComplaints.filter(c=>c.status==='in_progress').length;
+  const done = allComplaints.filter(c=>c.status==='completed').length;
+  const budget = allComplaints.reduce((sum, c) => sum + (Number(c.allocated_fund) || 0), 0);
+
+  document.getElementById('st-total').textContent = total;
+  document.getElementById('st-pending').textContent = pending;
+  document.getElementById('st-progress').textContent = progress;
+  document.getElementById('st-done').textContent = done;
+  document.getElementById('st-budget').textContent = '₹' + (budget >= 100000 ? (budget/100000).toFixed(1) + 'L' : budget.toLocaleString());
+  document.getElementById('st-budget').title = 'Total Allocated: ₹' + budget.toLocaleString();
 }
 
 function getFiltered() {
@@ -356,12 +365,25 @@ function renderList() {
     const dmg = (c.damage_type||'').replace('_',' ');
     const sev = (c.severity||'').toUpperCase();
     const dt = c.created_at ? fmtDate(c.created_at) : '';
+    
+    const statusMap = {
+      pending: { label: 'Pending', icon: '🕒' },
+      assigned: { label: 'Assigned', icon: '👤' },
+      in_progress: { label: 'Working', icon: '🔧' },
+      completed: { label: 'Completed', icon: '✅' },
+      rejected: { label: 'Rejected', icon: '❌' }
+    };
+    const stInfo = statusMap[c.status] || { label: c.status, icon: '•' };
+
     return `<div class="c-card ${c.severity||'low'} ${selectedComplaintId===c.complaint_id?'selected':''}" onclick="selectComplaint('${c.complaint_id}')">
       <div class="c-row1">
         <div class="c-id">${c.complaint_id}</div>
         <div style="display:flex;gap:0.3rem;align-items:center">
-          <span style="background:${scoreColor}22;color:${scoreColor};font-size:0.6rem;font-weight:800;padding:0.1rem 0.4rem;border-radius:4px">P${pScore}</span>
-          <div class="c-status st-${c.status}">${(c.status||'').replace('_',' ')}</div>
+          ${c.allocated_fund > 0 ? `<div style="background:rgba(16,185,129,0.15);color:#4ade80;font-size:0.65rem;font-weight:800;padding:0.15rem 0.45rem;border-radius:4px;border:1px solid rgba(16,185,129,0.3)">₹${(c.allocated_fund||0).toLocaleString()}</div>` : ''}
+          <div class="c-status st-${c.status}" style="display:flex;align-items:center;gap:3px">
+            <span>${stInfo.icon}</span>
+            <span>${stInfo.label}</span>
+          </div>
         </div>
       </div>
       <div class="c-row2"><strong>${dmg}</strong> · ${sev} · ${dt}</div>
@@ -522,7 +544,27 @@ function renderDetailPanel(c, msgs=[]) {
   const hasAfter = afterPhotos[c.complaint_id];
   const dpBody = document.getElementById('dp-body');
   
-  let html = '';
+  const statusMap = {
+    pending: { label: 'Pending', icon: '🕒', color: '#5a6480' },
+    assigned: { label: 'Assigned', icon: '👤', color: '#f5a623' },
+    in_progress: { label: 'In Progress', icon: '🔧', color: '#3b82f6' },
+    completed: { label: 'Completed', icon: '✅', color: '#4ade80' },
+    rejected: { label: 'Rejected', icon: '❌', color: '#e05c5c' }
+  };
+  const st = statusMap[c.status] || { label: c.status, icon: '•', color: '#fff' };
+
+  let html = `<div style="background:rgba(255,255,255,0.03);border-radius:10px;padding:0.8rem;margin-bottom:0.8rem;display:flex;justify-content:space-between;align-items:center;border:1px solid var(--border)">
+    <div>
+      <div style="font-size:0.65rem;color:var(--muted);text-transform:uppercase;font-weight:700">Current Status</div>
+      <div style="font-size:1.1rem;font-weight:800;color:${st.color};display:flex;align-items:center;gap:6px;margin-top:2px">
+        <span>${st.icon}</span> <span>${st.label}</span>
+      </div>
+    </div>
+    <div style="text-align:right">
+      <div style="font-size:0.65rem;color:var(--muted);text-transform:uppercase;font-weight:700">Priority Score</div>
+      <div style="font-size:1.1rem;font-weight:800;color:${(c.priority_score||0)>=70?'#ef4444':(c.priority_score||0)>=40?'#f59e0b':'#10b981'};margin-top:2px">P${c.priority_score||0}</div>
+    </div>
+  </div>`;
   
   // Citizen Box
   if (c.citizen_name) {
@@ -586,18 +628,24 @@ function renderDetailPanel(c, msgs=[]) {
   html += `</div>`;
 
   // Funds
-  html += `<div style="background:var(--card);border:1px solid rgba(16,185,129,0.2);border-radius:10px;padding:0.8rem;margin-bottom:0.8rem">
-    <div style="font-size:0.72rem;color:#10b981;text-transform:uppercase;font-weight:700;margin-bottom:0.6rem">Budget Allocation</div>`;
+  html += `<div style="background:var(--card);border:2px solid rgba(16,185,129,0.35);border-radius:12px;padding:1rem;margin-bottom:1rem;box-shadow:0 4px 12px rgba(0,0,0,0.2)">
+    <div style="font-size:0.75rem;color:#4ade80;text-transform:uppercase;font-weight:800;margin-bottom:0.7rem;letter-spacing:0.05em">💰 Budget Allocation</div>`;
   if (c.allocated_fund > 0) {
-    html += `<div style="font-size:1.4rem;font-weight:800;color:#10b981">Rs. ${(c.allocated_fund).toLocaleString()}</div>
-             <div style="font-size:0.78rem;color:var(--muted);margin-top:3px">${c.fund_note||''}</div>`;
+    html += `<div style="font-size:1.6rem;font-weight:800;color:#4ade80;margin-bottom:4px">₹ ${(c.allocated_fund).toLocaleString()}</div>
+             <div style="font-size:0.82rem;color:var(--text);background:rgba(255,255,255,0.05);padding:0.4rem 0.6rem;border-radius:6px;margin-bottom:0.8rem">${c.fund_note||'No notes provided'}</div>`;
   } else {
-    html += `<div style="font-size:0.82rem;color:var(--muted)">No budget allocated yet</div>`;
+    html += `<div style="font-size:0.85rem;color:var(--muted);margin-bottom:1rem;font-style:italic">No budget allocated yet</div>`;
   }
-  html += `<div style="display:flex;gap:0.4rem;margin-top:0.6rem">
-      <input type="number" id="fund-amt-${c.complaint_id}" placeholder="Amount (Rs.)" style="flex:1;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:0.4rem 0.6rem;font-family:inherit;font-size:0.82rem" value="${c.allocated_fund||''}"/>
-      <input type="text" id="fund-note-${c.complaint_id}" placeholder="Note" style="flex:1.5;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:0.4rem 0.6rem;font-family:inherit;font-size:0.82rem" value="${c.fund_note||''}"/>
-      <button onclick="allocateFund('${c.complaint_id}')" style="background:#10b981;color:#000;border:none;border-radius:6px;padding:0.4rem 0.7rem;font-family:inherit;font-weight:700;font-size:0.78rem;cursor:pointer">Allocate</button>
+  html += `<div style="display:flex;gap:0.5rem;align-items:center">
+      <div style="flex:1">
+        <label style="font-size:0.6rem;color:var(--muted);text-transform:uppercase;display:block;margin-bottom:3px">Amount (₹)</label>
+        <input type="number" id="fund-amt-${c.complaint_id}" placeholder="e.g. 50000" style="width:100%;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:0.5rem 0.75rem;font-family:inherit;font-size:0.88rem" value="${c.allocated_fund||0}"/>
+      </div>
+      <div style="flex:2">
+        <label style="font-size:0.6rem;color:var(--muted);text-transform:uppercase;display:block;margin-bottom:3px">Fund Note</label>
+        <input type="text" id="fund-note-${c.complaint_id}" placeholder="e.g. Material + Labor" style="width:100%;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:0.5rem 0.75rem;font-family:inherit;font-size:0.88rem" value="${c.fund_note||''}"/>
+      </div>
+      <button onclick="allocateFund('${c.complaint_id}')" style="align-self:flex-end;background:#10b981;color:#000;border:none;border-radius:6px;padding:0.6rem 1rem;font-family:inherit;font-weight:800;font-size:0.82rem;cursor:pointer;transition:all 0.2s">Update</button>
     </div>
   </div>`;
 

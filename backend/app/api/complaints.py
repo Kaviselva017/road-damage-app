@@ -594,6 +594,12 @@ async def update_status(
         c.officer_notes = data.officer_notes
     if data.status == "completed":
         c.resolved_at = _now()
+        # Automate: Reward citizen with bonus points upon successful repair
+        if c.user_id:
+            user = db.query(User).filter(User.id == c.user_id).first()
+            if user:
+                user.reward_points = (user.reward_points or 0) + 5
+                
     db.flush()
 
     if c.user_id and c.status != old:
@@ -649,6 +655,11 @@ def fund(
     c.allocated_fund    = data.amount
     c.fund_note         = data.note
     c.fund_allocated_at = _now()
+    
+    # Automate: Transition to 'in_progress' from 'assigned' or 'pending' if budget is allocated
+    if c.status in ["pending", "assigned"] and data.amount > 0:
+        c.status = "in_progress"
+        
     db.flush()
     if c.user_id:
         db.add(Notification(
