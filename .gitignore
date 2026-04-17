@@ -1,80 +1,33 @@
-# ── Python ────────────────────────────────────────────────────────
-__pycache__/
-*.py[cod]
-*.pyo
-*.pyc
 .venv/
 .venv_clean/
 venv/
 env/
-*.egg-info/
-dist/
-build/
-
-# ── Environment / secrets — NEVER commit ─────────────────────────
-.env
-*.env
-!.env.example
-env_setup.txt
-firebase-service-account.json
-backend/firebase-service-account.json
-*.pem
-*.key
-
-# ── Databases — local only ────────────────────────────────────────
-*.db
-*.sqlite
-*.sqlite3
-backend/ci.db
-
-# ── Logs ─────────────────────────────────────────────────────────
-*.log
-*.err
-*.out
-backend-ci.log
-
-# ── Uploaded images — too large / user-generated ─────────────────
-backend/uploads/
-backend/smoke_uploads/
-backend/smoke_uploads_*/
-backend/uploads_smoke_*/
+__pycache__/
+*.pyc
+*.pyo
 uploads/
-
-# ── AI model weights — large binaries ────────────────────────────
-ai_model/*.pt
-ai_model/*.pth
-ai_model/*.onnx
-# Keep the README
-!ai_model/README.md
-
-# ── Duplicate / stale branch copies ──────────────────────────────
-.clean_admin_map_branch/
-.clean_priority_push_branch/
-.deploy_main_sync/
-
-# ── Patch and temp files ─────────────────────────────────────────
+backend/uploads/
 *.patch
 *.tmp
-
-# ── OS ────────────────────────────────────────────────────────────
+env_setup.txt
+firebase-service-account.json
+*.pem
+*.key
+.idea/
+.vscode/
+*.swp
 .DS_Store
 Thumbs.db
-
-# ── IDE ───────────────────────────────────────────────────────────
-.vscode/
-.idea/
-*.swp
-
-# ── Node ──────────────────────────────────────────────────────────
 node_modules/
 dashboard/dist/
-.next/
-
-# ── Flutter ───────────────────────────────────────────────────────
+dashboard/node_modules/
 mobile/.dart_tool/
 mobile/build/
-
-# ── Test artifacts ────────────────────────────────────────────────
+.flutter-plugins
+.flutter-plugins-dependencies
 .pytest_cache/
 htmlcov/
 .coverage
+backend/.env
+frontend/.env
+*.log
