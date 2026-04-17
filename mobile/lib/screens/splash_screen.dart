@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/api_service.dart';
+import '../services/push_notification_service.dart';
 
 /// Splash screen that checks if user is already logged in.
 /// If token exists → skip login and go directly to home.
@@ -25,6 +26,10 @@ class _SplashScreenState extends State<SplashScreen> {
     if (!mounted) return;
 
     if (loggedIn) {
+      final token = await api.getToken();
+      if (token != null) {
+        PushNotificationService.init(token);
+      }
       Navigator.pushReplacementNamed(context, '/home');
     } else {
       Navigator.pushReplacementNamed(context, '/login');

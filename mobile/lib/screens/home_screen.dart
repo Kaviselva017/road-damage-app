@@ -2,15 +2,31 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../services/api_service.dart';
+import '../services/push_notification_service.dart';
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  @override
+  void initState() {
+    super.initState();
+    // Initialize notification handlers
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      PushNotificationService.setupBackgroundTapHandler(context);
+      PushNotificationService.handleInitialMessage(context);
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Road Damage Reporter'),
+        title: const Text('RoadWatch'),
         backgroundColor: const Color(0xFFF5A623),
         foregroundColor: Colors.black,
         actions: [
@@ -18,7 +34,7 @@ class HomeScreen extends StatelessWidget {
             icon: const Icon(Icons.logout),
             onPressed: () async {
               await context.read<ApiService>().logout();
-              if (context.mounted) {
+              if (mounted) {
                 Navigator.pushReplacementNamed(context, '/login');
               }
             },
@@ -31,10 +47,14 @@ class HomeScreen extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const Text('What would you like to do?',
+            const Text('Welcome to RoadWatch',
                 textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 32),
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 8),
+            const Text('Report issues and track repairs in real-time.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.white54)),
+            const SizedBox(height: 48),
             _ActionCard(
               icon: Icons.add_a_photo,
               title: 'Report Road Damage',
@@ -42,7 +62,7 @@ class HomeScreen extends StatelessWidget {
               color: const Color(0xFFF5A623),
               onTap: () => Navigator.pushNamed(context, '/report'),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 20),
             _ActionCard(
               icon: Icons.list_alt,
               title: 'My Complaints',
@@ -82,14 +102,16 @@ class _ActionCard extends StatelessWidget {
         child: Row(children: [
           Icon(icon, color: color, size: 40),
           const SizedBox(width: 20),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(title, style: TextStyle(color: color,
-                  fontSize: 17, fontWeight: FontWeight.bold)),
-              Text(subtitle,
-                  style: const TextStyle(color: Colors.white54, fontSize: 13)),
-            ],
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: TextStyle(color: color,
+                    fontSize: 17, fontWeight: FontWeight.bold)),
+                Text(subtitle,
+                    style: const TextStyle(color: Colors.white54, fontSize: 13)),
+              ],
+            ),
           ),
         ]),
       ),

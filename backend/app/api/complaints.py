@@ -11,14 +11,24 @@ from pathlib import Path
 from typing import Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, BackgroundTasks
+from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
+import tempfile
+import asyncio
+from app.services import storage_service
 
-from app.database import get_db
+from app.database import get_db, SessionLocal
 from app.dependencies import get_current_officer, get_current_user
 from app.models.models import Complaint, ComplaintOfficer, FieldOfficer, Notification, User
 from app.schemas.schemas import FundUpdate, StatusUpdate
-from app.services import ai_service
+from app.schemas.complaint import ComplaintStatusOut
+from app.services import ai_service, sla_service, audit_service, weather_service, priority_service
 from app.ws_manager import manager
+from app.main import limiter
+from app.services.cache_service import cache
+from app.utils import cache_keys
+from app.utils import metrics
+import time
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/complaints", tags=["complaints"])
@@ -148,9 +158,222 @@ def _c(c: Complaint, db: Session) -> dict:
     }
 
 
+async def process_inference_background(complaint_id: str, fpath_str: str, img_bytes: bytes, filename: str, content_type: str, address: Optional[str], nearby_sensitive: Optional[str], user_id: int):
+    # This runs in a worker thread. We need our own DB session.
+    db = SessionLocal()
+    try:
+        c = db.query(Complaint).filter(Complaint.complaint_id == complaint_id).first()
+        if not c:
+            return
+
+        # 1. Road Check (Still uses AI, moved to background so it doesn't block)
+        is_road, conf = ai_service.is_road_image(fpath_str)
+        if not is_road:
+            c.status = "failed"
+            c.officer_notes = f"AI Rejection: Not a valid road or damage image. (Confidence: {conf})"
+            db.commit()
+            return
+            
+        # 2. Heavy AI Inference
+        import time
+        from app.utils import metrics
+        inf_start = time.perf_counter()
+        
+        ai = ai_service.analyze_image(fpath_str)
+        
+        inf_duration = time.perf_counter() - inf_start
+        
+        image_url = storage_service.upload_file(img_bytes, filename, content_type)
+        
+        if ai["ai_confidence"] < 0.10:
+            metrics.AI_INFERENCE_TOTAL.labels(result="undetected").inc()
+            c.detected_damage_type = None
+            c.confidence_score = None
+            c.analyzed_at = _now()
+            
+            # Legacy defaults for undetected
+            c.damage_type = "unknown"
+            c.severity = "low"
+            c.ai_confidence = 0.0
+            c.description = "No clear road damage surpassed the confidence threshold."
+            c.priority_score = 0.0
+            c.image_url = image_url
+            c.area_type = _area(nearby_sensitive or address or "")
+            c.status = "undetected"
+            
+            db.commit()
+        else:
+            area = _area(nearby_sensitive or address or "")
+            priority = _priority(ai["severity"], ai["damage_type"], area, nearby_sensitive or "")
+            officer = _best_officer(db, address or "")
+            
+            # New Background task fields
+            c.detected_damage_type = ai["damage_type"]
+            c.confidence_score = ai["ai_confidence"]
+            c.analyzed_at = _now()
+            
+            # Legacy mappings
+            c.damage_type = ai["damage_type"]
+            c.severity = ai["severity"]
+            c.ai_confidence = ai["ai_confidence"]
+            c.description = ai["description"]
+            c.priority_score = priority
+            c.image_url = image_url
+            c.area_type = area
+            
+            # SLA & Routing
+            c.department_id = sla_service.get_department_for_damage(db, ai["damage_type"], area)
+            
+            # --- Advanced Priority Scoring ---
+            weather_risk = await weather_service.fetch_weather_risk(c.latitude, c.longitude)
+            # Fetch nearby sensitive from area metadata or logic
+            nearby = area if "hospital" in area.lower() or "school" in area.lower() else "" 
+            
+            p_res = priority_service.calculate_priority_score(
+                damage_type=ai["damage_type"],
+                severity=ai["severity"],
+                confidence=ai["ai_confidence"],
+                area_type=area,
+                nearby_sensitive=nearby,
+                report_count=c.report_count or 1,
+                latitude=c.latitude,
+                longitude=c.longitude,
+                weather_risk=weather_risk,
+                db=db
+            )
+            
+            c.priority_score = p_res["score"]
+            c.urgency_label = p_res["urgency_label"]
+            c.priority_breakdown = p_res["factors"]
+            
+            # Use recommended SLA if it matches or overrides previous simple logic
+            c.sla_deadline = _now() + timedelta(hours=p_res["recommended_sla_hours"])
+
+            if officer:
+                c.officer_id = officer.id
+                c.status = "analyzed"
+                db.add(ComplaintOfficer(complaint_id=c.complaint_id, officer_id=officer.id, assigned_at=_now()))
+            else:
+                c.status = "analyzed"
+            
+            metrics.AI_INFERENCE_DURATION_SECONDS.labels(damage_type=ai["damage_type"]).observe(inf_duration)
+            metrics.AI_INFERENCE_TOTAL.labels(result="detected").inc()
+                
+            db.commit()
+
+        # Database Notifications
+        notify_status = c.status
+        db.add(Notification(
+            user_id      = user_id,
+            complaint_id = c.complaint_id,
+            message      = f"Complaint {c.complaint_id} processed. Status: {notify_status}",
+            type         = "submitted",
+            created_at   = _now(),
+        ))
+        user_record = db.query(User).filter(User.id == user_id).first()
+        if user_record:
+            user_record.reward_points = (user_record.reward_points or 0) + 10
+            
+            # --- FCM Push Notification Support ---
+            if user_record.fcm_token:
+                try:
+                    from app.services.fcm_service import send_status_update
+                    await send_status_update(
+                        user_record.fcm_token, c.complaint_id, c.status
+                    )
+                except Exception as ex:
+                    logger.warning(f"Push notify failed for {complaint_id}: {ex}")
+        
+        db.commit()
+        
+        # Emails
+        from app.services.notification_service import notify_complaint_submitted, notify_officer_assignment, notify_admin_emergency
+        base_url = os.getenv('BASE_URL', 'https://road-damage-appsystem.onrender.com')
+        full_img_url = f"{base_url}{c.image_url}" if c.image_url else ""
+        
+        try:
+            if user_record:
+                notify_complaint_submitted(
+                    to_email=user_record.email, citizen_name=user_record.name,
+                    complaint_id=complaint_id, damage_type=c.damage_type,
+                    severity=c.severity, priority_score=c.priority_score, area_type=c.area_type,
+                    image_url=full_img_url, location=address, nearby_places=nearby_sensitive
+                )
+            if c.officer_id and c.status == "analyzed":
+                officer = db.query(FieldOfficer).filter(FieldOfficer.id == c.officer_id).first()
+                if officer:
+                    notify_officer_assignment(
+                        to_email=officer.email, officer_name=officer.name,
+                        complaint_id=complaint_id, damage_type=c.damage_type,
+                        severity=c.severity, priority_score=c.priority_score, area_type=c.area_type,
+                        location=address, coords=f"{c.latitude}, {c.longitude}",
+                        image_url=full_img_url, notes=c.description,
+                        nearby_places=nearby_sensitive
+                    )
+            if c.severity == "high":
+                notify_admin_emergency(
+                    complaint_id=complaint_id, severity=c.severity,
+                    damage_type=c.damage_type, address=address or "",
+                    priority_score=c.priority_score, latitude=c.latitude, longitude=c.longitude,
+                    image_url=full_img_url
+                )
+        except Exception as e:
+            logger.warning(f"[Email Background] failed inside task: {e}")
+
+        # WS & Map Cache Invalidation
+        try:
+            # Broadcast new complaint to any listeners
+            await manager.broadcast_new_complaint(c)
+            
+            # Broadcast status update for specifics
+            from app.websockets.complaint_ws import complaint_ws_manager
+            await complaint_ws_manager.broadcast_status(
+                complaint_id=c.complaint_id,
+                status=c.status,
+                extra_data={
+                    "damage_type": c.damage_type,
+                    "confidence": c.confidence_score or c.ai_confidence
+                }
+            )
+            
+            # Invalidate map cache
+            from app.services.cache_service import cache as cache_service
+            await cache_service.delete_pattern("map:*")
+        except Exception as e:
+            logger.warning(f"Background broadcast error: {e}")
+        
+        db.commit() 
+
+
+    except Exception as e:
+        import sentry_sdk
+        logger.error(f"Inference failed for {complaint_id}: {e}", exc_info=True)
+        with sentry_sdk.push_scope() as scope:
+            scope.set_tag("complaint_id", complaint_id)
+            scope.set_tag("task", "yolo_inference")
+            scope.set_context("inference_context", {
+                "complaint_id": complaint_id,
+                "error_type": type(e).__name__,
+            })
+            sentry_sdk.capture_exception(e)
+        
+        c = db.query(Complaint).filter(Complaint.complaint_id == complaint_id).first()
+        if c:
+            c.status = "failed"
+            c.officer_notes = "System Error: AI inference failed to complete."
+            metrics.AI_INFERENCE_TOTAL.labels(result="failed").inc()
+            db.commit()
+    finally:
+        fpath = Path(fpath_str)
+        if fpath.exists(): fpath.unlink()
+        db.close()
+
+
 # ── Submit ─────────────────────────────────────────────────────
-@router.post("/submit")
+@router.post("/submit", status_code=202)
+@limiter.limit(os.getenv("RATE_LIMIT_SUBMIT", "10/minute"))
 async def submit(
+    request: Request,
     background_tasks: BackgroundTasks,
     latitude:  float = Form(...),
     longitude: float = Form(...),
@@ -160,156 +383,129 @@ async def submit(
     db:        Session = Depends(get_db),
     user:      User    = Depends(get_current_user),
 ):
-    # Basic file check
+    start_time = time.perf_counter()
     if not image or not image.filename:
         raise HTTPException(400, "Missing image file")
 
-    # Save image
-    ext      = Path(image.filename).suffix or ".jpg"
-    fname    = f"{uuid.uuid4().hex}{ext}"
-    fpath    = Path(UPLOAD_DIR) / fname
-    img_bytes = await image.read()
-    with open(fpath, "wb") as f:
-        f.write(img_bytes)
-
-    # Road Image Validation (Accuracy)
-    is_road, conf = ai_service.is_road_image(str(fpath))
-    if not is_road:
-        # Delete invalid file
-        if fpath.exists(): fpath.unlink()
-        raise HTTPException(400, f"Image rejected: Not a road or damage photo (Confidence: {conf})")
+    from app.utils.file_validators import validate_image
+    img_bytes, error_resp = await validate_image(image)
+    if error_resp:
+        return error_resp
 
     img_hash = ai_service.image_hash(img_bytes)
 
-    # Duplicate check — Hash first
-    dup = db.query(Complaint).filter(
-        Complaint.image_hash == img_hash,
-        Complaint.status != "rejected",
-    ).first()
+    # Use Geo Service for proximity duplicate detection
+    from app.services.geo_service import find_duplicate_complaint
+    # We pass damage_type=None here since inference hasn't run yet
+    is_duplicate = find_duplicate_complaint(latitude, longitude, None, db, hours=24)
+    if is_duplicate:
+        metrics.COMPLAINTS_DUPLICATE_TOTAL.labels(detection_method="geo").inc()
+        return JSONResponse(status_code=409, content={"detail": "Similar damage already reported nearby", "code": "DUPLICATE"})
 
-    # Duplicate check — Proximity (Same region)
-    if not dup:
-        margin = 0.00015
-        nearby_candidates = db.query(Complaint).filter(
-            Complaint.latitude.between(latitude - margin, latitude + margin),
-            Complaint.longitude.between(longitude - margin, longitude + margin),
-            Complaint.status != "rejected",
-            Complaint.status != "completed",
-        ).all()
-        for cand in nearby_candidates:
-            if (cand.latitude - latitude)**2 + (cand.longitude - longitude)**2 <= margin**2:
-                dup = cand
-                break
+    # Invalidate Cache
+    background_tasks.add_task(cache.delete_pattern, cache_keys.NEARBY_PATTERN)
+    background_tasks.add_task(cache.delete_pattern, cache_keys.COMPLAINTS_LIST_PATTERN)
 
-    if dup:
-        dup.report_count += 1
-        dup.priority_score = min(dup.priority_score + 5.0, 100.0)
-        db.commit()
-        # Clean up the newly uploaded image as it's a duplicate
-        if fpath.exists(): fpath.unlink()
-        return {
-            "warning": "duplicate",
-            "existing_complaint_id": dup.complaint_id,
-            "message": "A similar complaint already exists in this exact region. We've added your report to the existing one to increase its priority.",
-            "report_count": dup.report_count,
-            "priority_score": dup.priority_score
-        }
-
-    # AI Analysis
-    ai = ai_service.analyze_image(str(fpath))
-
-    # Priority calculation (using sensitive info + AI results)
-    area     = _area(nearby_sensitive or address or "")
-    priority = _priority(ai["severity"], ai["damage_type"], area, nearby_sensitive or "")
-    
-    # Generate ID and find best localized officer
-    cid      = f"RD-{_now().strftime('%Y%m%d')}-{uuid.uuid4().hex[:6].upper()}"
-    officer  = _best_officer(db, address or "")
-
+    # Save initial pending state
+    cid = f"RD-{_now().strftime('%Y%m%d')}-{uuid.uuid4().hex[:6].upper()}"
     c = Complaint(
         complaint_id   = cid,
         user_id        = user.id,
-        officer_id     = officer.id if officer else None,
         latitude       = latitude,
         longitude      = longitude,
         address        = address,
-        area_type      = area,
-        damage_type    = ai["damage_type"],
-        severity       = ai["severity"],
-        ai_confidence  = ai["ai_confidence"],
-        description    = ai["description"],
-        image_url      = f"/uploads/{fname}",
+        status         = "pending",
         image_hash     = img_hash,
-        status         = "assigned" if officer else "pending",
-        priority_score = priority,
-        nearby_places  = nearby_sensitive,
-        allocated_fund = 0.0,
         is_duplicate   = False,
+        nearby_places  = nearby_sensitive,
         created_at     = _now(),
     )
     db.add(c)
-    if officer:
-        db.add(ComplaintOfficer(complaint_id=cid, officer_id=officer.id, assigned_at=_now()))
-    user.reward_points = (user.reward_points or 0) + 10
-    db.flush()
-
-    db.add(Notification(
-        user_id      = user.id,
-        complaint_id = cid,
-        message      = f"Complaint {cid} registered and assigned to a field officer.",
-        type         = "submitted",
-        created_at   = _now(),
-    ))
     db.commit()
 
-    # Email Notifications (non-blocking)
-    try:
-        from app.services.notification_service import notify_complaint_submitted, notify_officer_assignment
-        base_url = os.getenv('BASE_URL', 'https://road-damage-appsystem.onrender.com')
-        full_img_url = f"{base_url}{c.image_url}" if c.image_url else ""
+    # AUDIT: Complaint Created
+    audit_service.log_event(
+        db, "complaint", cid, "created",
+        actor_id=user.id, actor_role="citizen",
+        new_value={"status": "pending", "lat": latitude, "lng": longitude},
+        request=request
+    )
+
+
+    # Track submission duration & total
+    duration = time.perf_counter() - start_time
+    metrics.COMPLAINT_SUBMISSION_DURATION_SECONDS.observe(duration)
+    metrics.COMPLAINTS_SUBMITTED_TOTAL.labels(area_type=_area(nearby_sensitive or address or ""), status="pending").inc()
+
+
+    # Save to temp file for the background worker
+    ext = Path(image.filename).suffix or ".jpg"
+    with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp:
+        tmp.write(img_bytes)
+        fpath = Path(tmp.name)
         
-        # 1. Notify Citizen (Background)
-        background_tasks.add_task(
-            notify_complaint_submitted,
-            to_email=user.email, citizen_name=user.name,
-            complaint_id=cid, damage_type=ai["damage_type"],
-            severity=ai["severity"], priority_score=priority, area_type=area,
-            image_url=full_img_url, location=address, nearby_places=nearby_sensitive
-        )
+    content_type = image.content_type or "image/jpeg"
+    
+    # Fire and forget inference
+    background_tasks.add_task(
+        process_inference_background,
+        cid,
+        str(fpath),
+        img_bytes,
+        image.filename,
+        content_type,
+        address,
+        nearby_sensitive,
+        user.id
+    )
+
+    return JSONResponse(status_code=202, content={
+        "complaint_id": cid, 
+        "status": "pending", 
+        "message": "Complaint saved. AI Inference running in background."
+    })
+
+
+# ── Status Poller ──────────────────────────────────────────────
+@router.get("/{id}/status", response_model=ComplaintStatusOut)
+def get_complaint_status(
+    id: str,
+    db: Session = Depends(get_db),
+):
+    c = db.query(Complaint).filter((Complaint.complaint_id == id) | (Complaint.id == id if id.isdigit() else False)).first()
+    if not c:
+        raise HTTPException(404, "Complaint not found")
         
-        # 2. Notify Officer (Background)
-        if officer:
-            background_tasks.add_task(
-                notify_officer_assignment,
-                to_email=officer.email, officer_name=officer.name,
-                complaint_id=cid, damage_type=ai["damage_type"],
-                severity=ai["severity"], priority_score=priority, area_type=area,
-                location=address, coords=f"{latitude}, {longitude}",
-                image_url=full_img_url, notes=ai["description"],
-                nearby_places=nearby_sensitive
-            )
-    except Exception as e:
-        logger.warning(f"[Email Background] submit/assign trigger error: {e}")
+    return {
+        "id": c.id,
+        "status": c.status,
+        "damage_type": c.detected_damage_type or c.damage_type,
+        "confidence": c.confidence_score or c.ai_confidence
+    }
 
-    if ai["severity"] == "high":
-        try:
-            from app.services.notification_service import notify_admin_emergency
-            background_tasks.add_task(
-                notify_admin_emergency,
-                complaint_id=cid, severity=ai["severity"],
-                damage_type=ai["damage_type"], address=address or "",
-                priority_score=priority, latitude=latitude, longitude=longitude,
-                image_url=full_img_url
-            )
-        except Exception as e:
-            logger.warning(f"[Email Background] admin alert trigger error: {e}")
 
-    try:
-        await manager.broadcast_new_complaint(c)
-    except Exception:
-        pass
-
-    return _c(c, db)
+# ── Nearby Complaints ──────────────────────────────────────────
+@router.get("/nearby")
+async def get_nearby_complaints(
+    lat: float, 
+    lng: float, 
+    radius: int = 500, 
+    db: Session = Depends(get_db)
+):
+    """Returns complaints within radius meters. Max 5000m. Cached 60s."""
+    if radius > 5000:
+        radius = 5000
+    
+    ckey = cache_keys.get_nearby_key(lat, lng, radius)
+    cached = await cache.get(ckey)
+    if cached:
+        return cached
+        
+    from app.services.geo_service import find_nearby_complaints
+    comps = find_nearby_complaints(lat, lng, db, radius_meters=radius)
+    data = [_c(c, db) for c in comps]
+    await cache.set(ckey, data, ttl_seconds=60)
+    return data
 
 
 # ── My complaints ──────────────────────────────────────────────
@@ -387,12 +583,21 @@ def read_all(db: Session = Depends(get_db), user: User = Depends(get_current_use
 
 # ── Officer: list all ──────────────────────────────────────────
 @router.get("/")
-def list_complaints(
+async def list_complaints(
     status:   Optional[str] = None,
     severity: Optional[str] = None,
+    page:     int = 1,
     db:       Session        = Depends(get_db),
     officer:  FieldOfficer   = Depends(get_current_officer),
 ):
+    # Distinct caching per officer if restricted, or global for admins
+    ctx = f"officer:{officer.id}" if not officer.is_admin else "admin"
+    ckey = f"complaints:list:{ctx}:{status or 'all'}:{severity or 'all'}:{page}"
+    
+    cached = await cache.get(ckey)
+    if cached:
+        return cached
+
     q = db.query(Complaint)
     if not officer.is_admin:
         q = q.filter((Complaint.officer_id == officer.id) | (Complaint.status == "pending"))
@@ -400,8 +605,13 @@ def list_complaints(
         q = q.filter(Complaint.status == status)
     if severity:
         q = q.filter(Complaint.severity == severity)
-    rows = q.order_by(Complaint.priority_score.desc(), Complaint.created_at.desc()).all()
-    return [_c(r, db) for r in rows]
+    
+    # Simple pagination: 50 per page
+    rows = q.order_by(Complaint.priority_score.desc(), Complaint.created_at.desc()).offset((page-1)*50).limit(50).all()
+    data = [_c(r, db) for r in rows]
+    
+    await cache.set(ckey, data, ttl_seconds=30)
+    return data
 
 
 # ── Officer PDF Report Download ────────────────────────────────
@@ -630,13 +840,41 @@ async def update_status(
                 )
         except Exception as e:
             logger.warning(f"[Email Background] status update trigger error: {e}")
-    else:
+        
+        # AUDIT: Status Change
+        audit_service.log_event(
+            db, "complaint", complaint_id, "status_changed",
+            actor_id=officer.id, actor_role="officer",
+            old_value={"status": old},
+            new_value={"status": data.status},
+            request=request
+        )
+
+        # --- FCM Push Update (Task Specification) ---
+        try:
+            from app.services.fcm_service import send_status_update
+            token_user = db.query(User).filter(User.id == c.user_id).first()
+            if token_user and token_user.fcm_token:
+                background_tasks.add_task(
+                    send_status_update,
+                    token_user.fcm_token, complaint_id, data.status
+                )
+        except Exception as ex:
+            logger.warning(f"Failed to queue FCM push: {ex}")
+            
+        # Invalidate Heatmap/Map cache
+        await cache.delete_pattern("map:*")
+
         db.commit()
 
     try:
         await manager.broadcast_status_update(c)
     except Exception:
         pass
+    
+    # Invalidate cache on status change
+    background_tasks.add_task(cache.delete_pattern, cache_keys.COMPLAINTS_LIST_PATTERN)
+    background_tasks.add_task(cache.delete_pattern, cache_keys.NEARBY_PATTERN)
 
     return _c(c, db)
 
@@ -646,6 +884,7 @@ async def update_status(
 def fund(
     complaint_id: str,
     data:    FundUpdate,
+    background_tasks: BackgroundTasks,
     db:      Session      = Depends(get_db),
     officer: FieldOfficer = Depends(get_current_officer),
 ):
@@ -675,6 +914,86 @@ def fund(
                 notify_fund_allocated(user.email, user.name, complaint_id, data.amount, data.note or "")
         except Exception as e:
             logger.warning(f"[Email] fund: {e}")
-    else:
+        # --- FCM Fund Push ---
+        try:
+            if user and user.fcm_token:
+                from app.services.fcm_service import send_fund_allocated_notification
+                background_tasks.add_task(
+                    send_fund_allocated_notification,
+                    user.fcm_token, complaint_id, data.amount
+                )
+        except Exception as e:
+            logger.warning(f"FCM fund push failed: {e}")
+        
         db.commit()
     return _c(c, db)
+
+
+# ── SLA & Dashboard ──────────────────────────────────────────────
+
+@router.get("/{complaint_id}/sla")
+def get_complaint_sla(complaint_id: str, db: Session = Depends(get_db)):
+    c = db.query(Complaint).filter(Complaint.complaint_id == complaint_id).first()
+    if not c or not c.sla_deadline:
+        raise HTTPException(404, "SLA data not available")
+    
+    now = datetime.now(timezone.utc)
+    deadline = c.sla_deadline
+    if deadline.tzinfo is None:
+        deadline = deadline.replace(tzinfo=timezone.utc)
+        
+    delta = deadline - now
+    hours_remaining = delta.total_seconds() / 3600
+    
+    status = "on_track"
+    if hours_remaining < 0:
+        status = "overdue"
+    elif hours_remaining < 12:
+        status = "at_risk"
+        
+    return {
+        "deadline": deadline.isoformat().replace("+00:00", "Z"),
+        "hours_remaining": round(hours_remaining, 2),
+        "escalation_level": c.escalation_level,
+        "status": status
+    }
+
+@router.post("/{complaint_id}/resolve")
+async def resolve_complaint(
+    complaint_id: str,
+    background_tasks: BackgroundTasks,
+    proof: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    officer: FieldOfficer = Depends(get_current_officer)
+):
+    c = db.query(Complaint).filter(Complaint.complaint_id == complaint_id).first()
+    if not c: raise HTTPException(404, "Not found")
+    
+    # Save proof photo
+    content = await proof.read()
+    proof_url = storage_service.upload_file(content, proof.filename, proof.content_type)
+    
+    c.status = "completed"
+    c.resolved_proof_url = proof_url
+    c.resolved_at = datetime.now(timezone.utc)
+    db.commit()
+    
+    # AUDIT: Resolved
+    audit_service.log_event(
+        db, "complaint", complaint_id, "resolved",
+        actor_id=officer.id, actor_role="officer",
+        new_value={"status": "completed", "proof": proof_url},
+        request=None # Request object might not be cleanly available here unless passed
+    )
+
+    
+    # Notify user via Push
+    try:
+        user = db.query(User).filter(User.id == c.user_id).first()
+        if user and user.fcm_token:
+            from app.services.fcm_service import send_status_update
+            background_tasks.add_task(send_status_update, user.fcm_token, complaint_id, "completed")
+    except Exception as e:
+        logger.warning(f"FCM resolve push failed: {e}")
+    
+    return {"status": "ok", "proof_url": proof_url}

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/api_service.dart';
+import '../services/push_notification_service.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -17,7 +18,10 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _login() async {
     setState(() { _loading = true; _error = null; });
     try {
-      await context.read<ApiService>().login(_emailCtrl.text, _passCtrl.text);
+      final token = await context.read<ApiService>().login(_emailCtrl.text, _passCtrl.text);
+      if (token != null) {
+        await PushNotificationService.init(token);
+      }
       if (mounted) Navigator.pushReplacementNamed(context, '/home');
     } catch (e) {
       setState(() { _error = 'Invalid email or password'; _loading = false; });

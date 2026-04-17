@@ -22,7 +22,7 @@ export default function ComplaintDetail() {
       setStatus(c.status);
       setNotes(c.officer_notes || '');
     });
-  }, [id]);
+  }, [id, token]);
 
   const handleSave = async () => {
     setSaving(true);

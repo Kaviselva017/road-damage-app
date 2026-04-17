@@ -11,13 +11,13 @@ const STATUS_COLORS = {
 };
 
 export default function Dashboard() {
-  const { token, logout } = useAuth();
+  const { token, logout, isAdmin } = useAuth();
   const navigate = useNavigate();
   const [complaints, setComplaints] = useState([]);
   const [filter, setFilter] = useState({ status: '', severity: '' });
   const [loading, setLoading] = useState(true);
 
-  const load = async () => {
+  const load = React.useCallback(async () => {
     setLoading(true);
     try {
       const params = {};
@@ -29,7 +29,7 @@ export default function Dashboard() {
       console.error(e);
     }
     setLoading(false);
-  };
+  }, [token, filter.status, filter.severity]);
 
   const downloadPDF = async () => {
     setLoading(true);
@@ -54,7 +54,7 @@ export default function Dashboard() {
     setLoading(false);
   };
 
-  useEffect(() => { load(); }, [filter]);
+  useEffect(() => { load(); }, [load]);
 
   const stats = {
     total: complaints.length,
@@ -73,6 +73,11 @@ export default function Dashboard() {
           <p style={styles.subtitle}>Road Damage Complaint Management</p>
         </div>
         <div style={{ display: 'flex', gap: 12 }}>
+          {isAdmin && (
+            <button onClick={() => navigate('/admin')} style={{...styles.btnOutline, borderColor: '#f5a623', color: '#f5a623'}}>
+              ⚙️ Admin Panel
+            </button>
+          )}
           <button onClick={downloadPDF} style={styles.btnPdf} disabled={loading}>
             {loading ? 'Processing...' : '📄 PDF Report'}
           </button>

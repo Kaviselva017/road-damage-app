@@ -13,6 +13,9 @@ from app.database import get_db
 from app.models.models import User, FieldOfficer, LoginLog
 from app.dependencies import get_current_user, get_current_admin
 from app.services.auth_service import create_access_token
+from app.services import audit_service
+import os
+from app.main import limiter
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 pwd_ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -62,10 +65,15 @@ class OfficerCreate(BaseModel):
     phone: Optional[str] = None
 
 
+class FcmTokenUpdate(BaseModel):
+    fcm_token: str
+
+
 # ── Citizen Register ──────────────────────────────────────────────────────────
 
 @router.post("/register", status_code=status.HTTP_201_CREATED)
-def citizen_register(payload: CitizenRegister, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+@limiter.limit(os.getenv("RATE_LIMIT_AUTH", "20/minute"))
+def citizen_register(request: Request, payload: CitizenRegister, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     """POST /api/auth/register — login.html & citizen.html"""
     try:
         if db.query(User).filter(User.email == payload.email).first():
@@ -102,6 +110,7 @@ def citizen_register(payload: CitizenRegister, background_tasks: BackgroundTasks
 # ── Citizen Login ─────────────────────────────────────────────────────────────
 
 @router.post("/login")
+@limiter.limit(os.getenv("RATE_LIMIT_AUTH", "20/minute"))
 def citizen_login(payload: CitizenLogin, request: Request, db: Session = Depends(get_db)):
     """POST /api/auth/login — login.html & citizen.html"""
     user = db.query(User).filter(User.email == payload.email).first()
@@ -117,6 +126,14 @@ def citizen_login(payload: CitizenLogin, request: Request, db: Session = Depends
         logged_in_at=_now(),
     ))
     db.commit()
+
+    # AUDIT: User Access
+    audit_service.log_event(
+        db, "user", str(user.id), "accessed", 
+        actor_id=user.id, actor_role="citizen", 
+        request=request
+    )
+
     return {
         "access_token": token,
         "token_type": "bearer",
@@ -145,6 +162,14 @@ def officer_login(payload: OfficerLogin, request: Request, db: Session = Depends
     ))
     db.commit()
     token = _make_token({"sub": str(officer.id), "role": role})
+
+    # AUDIT: Officer Access
+    audit_service.log_event(
+        db, "officer", str(officer.id), "accessed", 
+        actor_id=officer.id, actor_role=role, 
+        request=request
+    )
+
     return {
         "access_token": token,
         "token_type": "bearer",
@@ -190,6 +215,21 @@ def get_me(current_user: User = Depends(get_current_user)):
         "email": current_user.email,
         "reward_points": current_user.reward_points or 0,
     }
+
+
+@router.patch("/fcm-token")
+def update_fcm_token(
+    payload: FcmTokenUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """PATCH /api/auth/fcm-token — update FCM token for push notifications."""
+    if payload.fcm_token == "":
+        current_user.fcm_token = None
+    else:
+        current_user.fcm_token = payload.fcm_token
+    db.commit()
+    return {"status": "ok"}
 
 
 @router.get("/admin/me")

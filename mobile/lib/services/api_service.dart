@@ -53,7 +53,20 @@ class ApiService {
     return token != null && token.isNotEmpty;
   }
 
-  // --- Complaints ---
+  Future<String?> getToken() async {
+    return await _storage.read(key: 'token');
+  }
+
+  Future<void> updateFcmToken(String token) async {
+    await _dio.patch('/auth/fcm-token', data: {'fcm_token': token});
+  }
+
+  Future<Map<String, dynamic>> submitComplaint({
+    required double latitude,
+    required double longitude,
+    String? address,
+    String? areaType,
+    double? impactScore,
     int? sensitiveLocationCount,
     String? nearbySensitive,
     required File image,

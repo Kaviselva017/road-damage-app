@@ -1,0 +1,55 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "title": "Complaint Submission Rate",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "targets": [{ "expr": "rate(complaints_submitted_total[1m])", "legendFormat": "{{status}}" }]
+    },
+    {
+      "title": "Active WebSocket Connections",
+      "type": "gauge",
+      "gridPos": { "h": 8, "w": 4, "x": 12, "y": 0 },
+      "targets": [{ "expr": "active_websocket_connections" }]
+    },
+    {
+      "title": "Cache Hit Ratio",
+      "type": "stat",
+      "gridPos": { "h": 8, "w": 4, "x": 16, "y": 0 },
+      "targets": [{ "expr": "sum(rate(redis_cache_access_total{result=\"hit\"}[5m])) / sum(rate(redis_cache_access_total[5m]))", "legendFormat": "Hit Rate" }],
+      "fieldConfig": { "defaults": { "unit": "percentunit" } }
+    },
+    {
+      "title": "AI Inference Result Distrubution",
+      "type": "piechart",
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 8 },
+      "targets": [{ "expr": "sum by (result) (ai_inference_total)", "legendFormat": "{{result}}" }]
+    },
+    {
+      "title": "P95 Inference Latency",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 8 },
+      "targets": [{ "expr": "histogram_quantile(0.95, sum by (le) (rate(ai_inference_duration_seconds_bucket[5m])))", "legendFormat": "P95 Latency" }]
+    },
+    {
+      "title": "Duplicate Detection Rate",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 8 },
+      "targets": [{ "expr": "rate(complaints_duplicate_total[5m])", "legendFormat": "{{detection_method}}" }]
+    }
+  ],
+  "refresh": "10s",
+  "schemaVersion": 38,
+  "style": "dark",
+  "tags": ["roadwatch"],
+  "templating": { "list": [] },
+  "time": { "from": "now-1h", "to": "now" },
+  "title": "RoadWatch System Observability",
+  "uid": "roadwatch_obs"
+}

@@ -15,6 +15,8 @@ build/
 *.env
 !.env.example
 !env_setup.txt
+firebase-service-account.json
+backend/firebase-service-account.json
 
 # ── Databases — local only ────────────────────────────────────────
 *.db

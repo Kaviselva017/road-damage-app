@@ -1,60 +1,85 @@
-# AI Model – YOLOv8 Road Damage Detection
+# RoadWatch — AI Model Training
 
-## Dataset
-Use the Road Damage Dataset (RDD2022):
-- Download: https://github.com/sekilab/RoadDamageDetector
-- Or Kaggle: https://www.kaggle.com/datasets/felipenogueira/road-damage-dataset
+## Overview
 
-Classes:
-- D00: Longitudinal Crack
-- D10: Transverse Crack  
-- D20: Alligator Crack (Pothole-like)
-- D40: Pothole
+This directory contains the YOLOv8 model weights and the Google Colab training
+notebook for the RoadWatch road damage detection system.
 
-## Training (train_model.py)
+## Files
 
-```python
-from ultralytics import YOLO
+| File | Description |
+|------|-------------|
+| `train_rdd2022.ipynb` | Complete Colab notebook — downloads RDD2022, trains YOLOv8n, evaluates, and exports `best.pt` to Google Drive |
+| `road_damage_yolov8.pt` | Trained YOLOv8n weights (referenced by the backend via `YOLO_MODEL_PATH`) |
 
-# Start from pretrained YOLOv8 weights
-model = YOLO('yolov8m.pt')
+## Detection Classes
 
-results = model.train(
-    data='rdd2022.yaml',   # Dataset config file
-    epochs=50,
-    imgsz=640,
-    batch=16,
-    name='road_damage_v1',
-    device=0,              # GPU (use 'cpu' if no GPU)
-    patience=10,
-    save=True,
-)
+| Index | Class Name | RDD2022 Code | Description |
+|-------|-----------|--------------|-------------|
+| 0 | `pothole` | D40 | Road surface depression / pothole |
+| 1 | `crack` | D00, D10 | Longitudinal & transverse cracking |
+| 2 | `surface_damage` | D20 | Alligator / weathering / surface deterioration |
+| 3 | `multiple` | (composite) | ≥ 2 distinct damage types in one image |
 
-# After training, copy best weights:
-# runs/detect/road_damage_v1/weights/best.pt → ai_model/road_damage_yolov8.pt
+## Training Pipeline
+
+### Quick Start (Google Colab)
+
+1. Open `train_rdd2022.ipynb` in Google Colab
+2. Set runtime to **GPU → T4** or better
+3. Run all 6 cells in order:
+   - **Cell 1** — Install `ultralytics`, `gdown`, `albumentations`; mount Drive
+   - **Cell 2** — Download & extract RDD2022 dataset via `gdown`
+   - **Cell 3** — Auto-detect dataset splits and generate `data.yaml`
+   - **Cell 4** — Train YOLOv8n for 50 epochs (batch=16, imgsz=640)
+   - **Cell 5** — Print mAP@50, mAP@50-95; copy `best.pt` to Google Drive
+   - **Cell 6** — Validate inference on 3 random val images
+4. Download `best.pt` from Drive → place here as `road_damage_yolov8.pt`
+
+### Training Hyperparameters
+
+```
+epochs:    50
+imgsz:     640
+batch:     16
+patience:  10
+mosaic:    1.0
+flipud:    0.3
+fliplr:    0.5
+hsv_h:     0.015
+backbone:  yolov8n.pt (pretrained COCO nano)
 ```
 
-## Dataset YAML (rdd2022.yaml)
+## Backend Integration
 
-```yaml
-path: ./datasets/rdd2022
-train: images/train
-val: images/val
+The backend loads the model via the `YOLO_MODEL_PATH` environment variable:
 
-nc: 4
-names: ['longitudinal_crack', 'transverse_crack', 'alligator_crack', 'pothole']
+```bash
+# .env
+YOLO_MODEL_PATH=../ai_model/road_damage_yolov8.pt
 ```
 
-## Inference Test
+If the model file is missing, `ai_service.py` falls back to a **deterministic
+mock** that returns consistent results per-image (seeded by file content hash).
+Mock results are prefixed with `[MOCK]` in the description field.
 
-```python
-from ultralytics import YOLO
-model = YOLO('ai_model/road_damage_yolov8.pt')
-results = model('test_image.jpg', conf=0.25)
-results[0].show()
+### Severity Mapping
+
+| Confidence Range | Severity |
+|-----------------|----------|
+| ≥ 0.80 | `high` |
+| ≥ 0.55 | `medium` |
+| < 0.55 | `low` |
+
+### API Contract
+
+`ai_service.analyze_image(path)` returns:
+
+```json
+{
+  "damage_type":   "pothole | crack | surface_damage | multiple",
+  "severity":      "high | medium | low",
+  "ai_confidence": 0.85,
+  "description":   "High severity pothole detected with 85% confidence."
+}
 ```
-
-## Notes
-- Without a trained model file, the system uses mock AI detection (random results for dev/testing)
-- For production, train on RDD2022 dataset with at least 50 epochs on GPU
-- Recommended: Google Colab (free GPU) or AWS EC2 p3.xlarge

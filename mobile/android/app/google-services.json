@@ -1,0 +1,40 @@
+{
+  "project_info": {
+    "project_number": "123456789012",
+    "project_id": "road-watch-XXXXX",
+    "storage_bucket": "road-watch-XXXXX.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:123456789012:android:abcdef1234567890",
+        "android_client_info": {
+          "package_name": "com.example.road_damage_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSy..."
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
+
+/* 
+INSTRUCTIONS TO DOWNLOAD REAL FILE:
+1. Go to Firebase Console (https://console.firebase.google.com/)
+2. Create or select your project.
+3. Click "Add App" and select "Android".
+4. Enter the package name (found in mobile/android/app/build.gradle: namespace or applicationId).
+5. Follow the steps and download `google-services.json`.
+6. Replace this file at: mobile/android/app/google-services.json
+7. Ensure `google-services` plugin is added to `android/build.gradle` and `android/app/build.gradle`.
+*/

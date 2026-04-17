@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../services/api_service.dart';
+import 'complaint_detail_screen.dart';
 
 class MyComplaintsScreen extends StatefulWidget {
   const MyComplaintsScreen({super.key});
@@ -94,83 +95,99 @@ class _MyComplaintsScreenState extends State<MyComplaintsScreen> {
             itemCount: complaints.length,
             itemBuilder: (_, i) {
               final c = complaints[i];
-              return Card(
-                color: Colors.grey[850],
-                margin: const EdgeInsets.only(bottom: 12),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(c['complaint_id'],
-                              style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  color: Color(0xFFF5A623),
-                                  fontSize: 14)),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: _statusColor(c['status']).withOpacity(0.15),
-                              borderRadius: BorderRadius.circular(20),
+              return InkWell(
+                onTap: () async {
+                  final token = await context.read<ApiService>().getToken();
+                  if (token != null && mounted) {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => ComplaintDetailScreen(
+                          complaint: c,
+                          token: token,
+                        ),
+                      ),
+                    );
+                  }
+                },
+                child: Card(
+                  color: Colors.grey[850],
+                  margin: const EdgeInsets.only(bottom: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(c['complaint_id'],
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: Color(0xFFF5A623),
+                                    fontSize: 14)),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: _statusColor(c['status']).withOpacity(0.15),
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Text(_statusLabel(c['status']),
+                                  style: TextStyle(
+                                      color: _statusColor(c['status']),
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold)),
                             ),
-                            child: Text(_statusLabel(c['status']),
-                                style: TextStyle(
-                                    color: _statusColor(c['status']),
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.bold)),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        Row(children: [
+                          Icon(Icons.warning_amber_rounded,
+                              size: 16, color: _severityColor(c['severity'])),
+                          const SizedBox(width: 6),
+                          Text('${c['severity'].toUpperCase()} — ${c['damage_type'].replaceAll('_', ' ')}',
+                              style: TextStyle(
+                                  color: _severityColor(c['severity']), fontSize: 13)),
+                        ]),
+                        const SizedBox(height: 6),
+                        if (c['address'] != null)
+                          Row(children: [
+                            const Icon(Icons.location_on, size: 14, color: Colors.white38),
+                            const SizedBox(width: 4),
+                            Expanded(child: Text(c['address'],
+                                style: const TextStyle(color: Colors.white60, fontSize: 12))),
+                          ]),
+                        const SizedBox(height: 8),
+                        Row(children: [
+                          const Icon(Icons.schedule, size: 14, color: Colors.white38),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: Text(
+                              'Registered ${_formatReportedAt(c['created_at'])}',
+                              style: const TextStyle(color: Colors.white60, fontSize: 12),
+                            ),
+                          ),
+                        ]),
+                        if (c['description'] != null) ...[
+                          const SizedBox(height: 8),
+                          Text(c['description'],
+                              style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                        ],
+                        if (c['officer_notes'] != null) ...[
+                          const SizedBox(height: 8),
+                          Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: Colors.blueAccent.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text('Officer: ${c['officer_notes']}',
+                                style: const TextStyle(color: Colors.lightBlueAccent, fontSize: 12)),
                           ),
                         ],
-                      ),
-                      const SizedBox(height: 10),
-                      Row(children: [
-                        Icon(Icons.warning_amber_rounded,
-                            size: 16, color: _severityColor(c['severity'])),
-                        const SizedBox(width: 6),
-                        Text('${c['severity'].toUpperCase()} — ${c['damage_type'].replaceAll('_', ' ')}',
-                            style: TextStyle(
-                                color: _severityColor(c['severity']), fontSize: 13)),
-                      ]),
-                      const SizedBox(height: 6),
-                      if (c['address'] != null)
-                        Row(children: [
-                          const Icon(Icons.location_on, size: 14, color: Colors.white38),
-                          const SizedBox(width: 4),
-                          Expanded(child: Text(c['address'],
-                              style: const TextStyle(color: Colors.white60, fontSize: 12))),
-                        ]),
-                      const SizedBox(height: 8),
-                      Row(children: [
-                        const Icon(Icons.schedule, size: 14, color: Colors.white38),
-                        const SizedBox(width: 4),
-                        Expanded(
-                          child: Text(
-                            'Registered ${_formatReportedAt(c['created_at'])}',
-                            style: const TextStyle(color: Colors.white60, fontSize: 12),
-                          ),
-                        ),
-                      ]),
-                      if (c['description'] != null) ...[
-                        const SizedBox(height: 8),
-                        Text(c['description'],
-                            style: const TextStyle(color: Colors.white70, fontSize: 12)),
                       ],
-                      if (c['officer_notes'] != null) ...[
-                        const SizedBox(height: 8),
-                        Container(
-                          padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(
-                            color: Colors.blueAccent.withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Text('Officer: ${c['officer_notes']}',
-                              style: const TextStyle(color: Colors.lightBlueAccent, fontSize: 12)),
-                        ),
-                      ],
-                    ],
+                    ),
                   ),
                 ),
               );
