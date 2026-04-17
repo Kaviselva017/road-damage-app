@@ -2,6 +2,7 @@
 __pycache__/
 *.py[cod]
 *.pyo
+*.pyc
 .venv/
 .venv_clean/
 venv/
@@ -14,9 +15,11 @@ build/
 .env
 *.env
 !.env.example
-!env_setup.txt
+env_setup.txt
 firebase-service-account.json
 backend/firebase-service-account.json
+*.pem
+*.key
 
 # ── Databases — local only ────────────────────────────────────────
 *.db
@@ -49,8 +52,9 @@ ai_model/*.onnx
 .clean_priority_push_branch/
 .deploy_main_sync/
 
-# ── Patch files ───────────────────────────────────────────────────
+# ── Patch and temp files ─────────────────────────────────────────
 *.patch
+*.tmp
 
 # ── OS ────────────────────────────────────────────────────────────
 .DS_Store
@@ -66,9 +70,11 @@ node_modules/
 dashboard/dist/
 .next/
 
-# ── Render / CI ───────────────────────────────────────────────────
-.render-buildinfo.json
+# ── Flutter ───────────────────────────────────────────────────────
+mobile/.dart_tool/
+mobile/build/
 
-# ── SSL certs generated locally ───────────────────────────────────
-backend/cert.pem
-backend/key.pem
+# ── Test artifacts ────────────────────────────────────────────────
+.pytest_cache/
+htmlcov/
+.coverage
