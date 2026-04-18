@@ -1,33 +1,81 @@
+# Python environments
 .venv/
 .venv_clean/
 venv/
 env/
+ENV/
 __pycache__/
-*.pyc
+*.py[cod]
 *.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Byte-compiled
+*.pyc
+
+# Local uploads (never commit user photos)
 uploads/
 backend/uploads/
+mobile/uploads/
+
+# Patch and temp files
 *.patch
 *.tmp
+*.bak
 env_setup.txt
+
+# Secrets (never commit these)
 firebase-service-account.json
 *.pem
 *.key
+.env
+!.env.example
+backend/.env
+!backend/.env.example
+dashboard/.env
+!dashboard/.env.example
+
+# IDE
 .idea/
 .vscode/
 *.swp
+*.swo
 .DS_Store
 Thumbs.db
+
+# Node
 node_modules/
 dashboard/dist/
-dashboard/node_modules/
+dashboard/.vite/
+
+# Flutter / Dart
 mobile/.dart_tool/
 mobile/build/
-.flutter-plugins
-.flutter-plugins-dependencies
+mobile/.flutter-plugins
+mobile/.flutter-plugins-dependencies
+mobile/pubspec.lock
+mobile/android/.gradle/
+mobile/android/local.properties
+mobile/ios/Pods/
+mobile/ios/.symlinks/
+mobile/ios/Flutter/ephemeral/
+mobile/ios/Runner.xcworkspace/xcuserdata/
+
+# Test artifacts
 .pytest_cache/
 htmlcov/
 .coverage
-backend/.env
-frontend/.env
+coverage.xml
+test_results.txt
 *.log
+
+# Alembic
+backend/alembic/versions/__pycache__/
+
+# Model weights (large binary — use LFS or upload manually)
+*.pt
+*.onnx
+!ai_model/.gitkeep
