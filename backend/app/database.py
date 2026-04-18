@@ -4,12 +4,13 @@ RoadWatch — Database configuration
 - Connection pooling for fast retrieval
 - Supports SQLite (dev) and PostgreSQL (prod)
 """
-import os
 
+import os
+from pathlib import Path
+
+from dotenv import load_dotenv
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
-from pathlib import Path
-from dotenv import load_dotenv
 
 env_path = Path(__file__).resolve().parent.parent / ".env"
 load_dotenv(dotenv_path=env_path)
@@ -36,6 +37,7 @@ engine = create_engine(
 
 # Enable WAL mode for SQLite (faster concurrent reads)
 if _is_sqlite:
+
     @event.listens_for(engine, "connect")
     def _set_sqlite_pragma(dbapi_conn, _):
         cursor = dbapi_conn.cursor()

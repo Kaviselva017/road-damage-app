@@ -1,21 +1,24 @@
+# ruff: noqa: E402, E712, B904, E722
 """
 RoadWatch Auth API
 Endpoints used by login.html, citizen.html, admin.html — matched exactly.
 """
-from fastapi import APIRouter, Depends, HTTPException, Request, status, BackgroundTasks
-from sqlalchemy.orm import Session
-from pydantic import BaseModel
-from typing import Optional
-from passlib.context import CryptContext
+
+import logging
+import os
 from datetime import datetime, timezone
 
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
+from passlib.context import CryptContext
+from pydantic import BaseModel
+from sqlalchemy.orm import Session
+
 from app.database import get_db
-from app.models.models import User, FieldOfficer, LoginLog
-from app.dependencies import get_current_user, get_current_admin
-from app.services.auth_service import create_access_token
-from app.services import audit_service
-import os
+from app.dependencies import get_current_admin, get_current_user
 from app.main import limiter
+from app.models.models import FieldOfficer, LoginLog, User
+from app.services import audit_service
+from app.services.auth_service import create_access_token
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 pwd_ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -40,11 +43,12 @@ def _make_token(data: dict) -> str:
 
 # ── Schemas ───────────────────────────────────────────────────────────────────
 
+
 class CitizenRegister(BaseModel):
     name: str
     email: str
     password: str
-    phone: Optional[str] = None
+    phone: str | None = None
 
 
 class CitizenLogin(BaseModel):
@@ -61,8 +65,8 @@ class OfficerCreate(BaseModel):
     name: str
     email: str
     password: str
-    zone: Optional[str] = None
-    phone: Optional[str] = None
+    zone: str | None = None
+    phone: str | None = None
 
 
 class FcmTokenUpdate(BaseModel):
@@ -70,6 +74,7 @@ class FcmTokenUpdate(BaseModel):
 
 
 # ── Citizen Register ──────────────────────────────────────────────────────────
+
 
 @router.post("/register", status_code=status.HTTP_201_CREATED)
 @limiter.limit(os.getenv("RATE_LIMIT_AUTH", "20/minute"))
@@ -93,6 +98,7 @@ def citizen_register(request: Request, payload: CitizenRegister, background_task
         # Send welcome email in background
         try:
             from app.services.notification_service import notify_welcome
+
             background_tasks.add_task(notify_welcome, to_email=user.email, citizen_name=user.name)
         except Exception as e:
             logging.getLogger("roadwatch").warning(f"Failed to queue welcome email: {e}")
@@ -102,12 +108,12 @@ def citizen_register(request: Request, payload: CitizenRegister, background_task
     except HTTPException:
         raise
     except Exception as e:
-        import logging
         logging.getLogger("roadwatch").error(f"Registration failed: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Internal server error")
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 # ── Citizen Login ─────────────────────────────────────────────────────────────
+
 
 @router.post("/login")
 @limiter.limit(os.getenv("RATE_LIMIT_AUTH", "20/minute"))
@@ -120,19 +126,18 @@ def citizen_login(payload: CitizenLogin, request: Request, db: Session = Depends
         raise HTTPException(status_code=403, detail="Account inactive")
     token = _make_token({"sub": str(user.id), "role": "citizen"})
     # Log the login
-    db.add(LoginLog(
-        email=payload.email, role="citizen",
-        ip_address=request.client.host if request.client else None,
-        logged_in_at=_now(),
-    ))
+    db.add(
+        LoginLog(
+            email=payload.email,
+            role="citizen",
+            ip_address=request.client.host if request.client else None,
+            logged_in_at=_now(),
+        )
+    )
     db.commit()
 
     # AUDIT: User Access
-    audit_service.log_event(
-        db, "user", str(user.id), "accessed", 
-        actor_id=user.id, actor_role="citizen", 
-        request=request
-    )
+    audit_service.log_event(db, "user", str(user.id), "accessed", actor_id=user.id, actor_role="citizen", request=request)
 
     return {
         "access_token": token,
@@ -143,6 +148,7 @@ def citizen_login(payload: CitizenLogin, request: Request, db: Session = Depends
 
 
 # ── Officer / Admin Login ─────────────────────────────────────────────────────
+
 
 @router.post("/officer/login")
 def officer_login(payload: OfficerLogin, request: Request, db: Session = Depends(get_db)):
@@ -155,20 +161,19 @@ def officer_login(payload: OfficerLogin, request: Request, db: Session = Depends
     officer.last_login = _now()
     role = "admin" if officer.is_admin else "officer"
     # Log the login
-    db.add(LoginLog(
-        email=payload.email, role=role,
-        ip_address=request.client.host if request.client else None,
-        logged_in_at=_now(),
-    ))
+    db.add(
+        LoginLog(
+            email=payload.email,
+            role=role,
+            ip_address=request.client.host if request.client else None,
+            logged_in_at=_now(),
+        )
+    )
     db.commit()
     token = _make_token({"sub": str(officer.id), "role": role})
 
     # AUDIT: Officer Access
-    audit_service.log_event(
-        db, "officer", str(officer.id), "accessed", 
-        actor_id=officer.id, actor_role=role, 
-        request=request
-    )
+    audit_service.log_event(db, "officer", str(officer.id), "accessed", actor_id=officer.id, actor_role=role, request=request)
 
     return {
         "access_token": token,
@@ -179,6 +184,7 @@ def officer_login(payload: OfficerLogin, request: Request, db: Session = Depends
 
 
 # ── Create Officer (admin only) ───────────────────────────────────────────────
+
 
 @router.post("/officer/register", status_code=status.HTTP_201_CREATED)
 def officer_register(
@@ -206,6 +212,7 @@ def officer_register(
 
 # ── /me ───────────────────────────────────────────────────────────────────────
 
+
 @router.get("/me")
 def get_me(current_user: User = Depends(get_current_user)):
     """GET /api/auth/me — citizen.html fetchUserPoints()"""
@@ -218,11 +225,7 @@ def get_me(current_user: User = Depends(get_current_user)):
 
 
 @router.patch("/fcm-token")
-def update_fcm_token(
-    payload: FcmTokenUpdate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
+def update_fcm_token(payload: FcmTokenUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """PATCH /api/auth/fcm-token — update FCM token for push notifications."""
     if payload.fcm_token == "":
         current_user.fcm_token = None
@@ -243,6 +246,7 @@ def get_admin_me(current_admin: FieldOfficer = Depends(get_current_admin)):
 
 # ── Login Logs (admin only) ──────────────────────────────────────────────────
 
+
 @router.get("/logs")
 def get_login_logs(
     db: Session = Depends(get_db),
@@ -250,12 +254,15 @@ def get_login_logs(
 ):
     """GET /api/auth/logs — returns all login logs (admin only)"""
     rows = db.query(LoginLog).order_by(LoginLog.logged_in_at.desc()).limit(200).all()
-    return [{
-        "id": r.id,
-        "email": r.email,
-        "role": r.role,
-        "ip_address": r.ip_address,
-        "logged_in_at": _iso(r.logged_in_at),
-        "logged_out_at": _iso(r.logged_out_at),
-        "session_minutes": r.session_minutes,
-    } for r in rows]
+    return [
+        {
+            "id": r.id,
+            "email": r.email,
+            "role": r.role,
+            "ip_address": r.ip_address,
+            "logged_in_at": _iso(r.logged_in_at),
+            "logged_out_at": _iso(r.logged_out_at),
+            "session_minutes": r.session_minutes,
+        }
+        for r in rows
+    ]

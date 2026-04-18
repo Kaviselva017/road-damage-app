@@ -26,14 +26,13 @@ import os
 import random
 from collections import OrderedDict
 from pathlib import Path
-from typing import Dict, List, Optional, Set, Tuple
 
 logger = logging.getLogger(__name__)
 
 # ── Configuration ──────────────────────────────────────────────────────
 MODEL_PATH = os.getenv("YOLO_MODEL_PATH", "../ai_model/road_damage_yolov8.pt")
 
-MIN_FILE_BYTES = 1_000          # reject obviously empty / corrupt uploads
+MIN_FILE_BYTES = 1_000  # reject obviously empty / corrupt uploads
 MAX_FILE_BYTES = 20 * 1024 * 1024  # 20 MB hard cap
 
 ROAD_VALID_CLASSES = {"pothole", "crack", "surface_damage", "multiple"}
@@ -41,16 +40,16 @@ ROAD_VALID_CLASSES = {"pothole", "crack", "surface_damage", "multiple"}
 # Raw YOLO class-name → normalised RoadWatch name
 _CLASS_MAP = {
     # RDD2022 code names
-    "D00":              "crack",
-    "D10":              "crack",
-    "D20":              "surface_damage",
-    "D40":              "pothole",
+    "D00": "crack",
+    "D10": "crack",
+    "D20": "surface_damage",
+    "D40": "pothole",
     # Human-readable names (if the model was trained with these)
-    "pothole":          "pothole",
-    "crack":            "crack",
-    "surface_damage":   "surface_damage",
-    "multiple":         "multiple",
-    "multiple_damage":  "multiple",
+    "pothole": "pothole",
+    "crack": "crack",
+    "surface_damage": "surface_damage",
+    "multiple": "multiple",
+    "multiple_damage": "multiple",
 }
 
 # ── LRU analysis cache (avoids re-processing the same image) ──────────
@@ -75,6 +74,7 @@ def _load():
         return None
     try:
         from ultralytics import YOLO
+
         _model = YOLO(str(resolved))
         logger.info("[AI] YOLOv8 loaded from %s", resolved)
     except Exception as exc:
@@ -92,7 +92,7 @@ def image_hash(data: bytes) -> str:
     return hashlib.md5(data).hexdigest()
 
 
-def is_road_image(image_path: str) -> Tuple[bool, float]:
+def is_road_image(image_path: str) -> tuple[bool, float]:
     """
     Lightweight gate: is this upload a plausible road-damage photo?
 
@@ -119,7 +119,7 @@ def is_road_image(image_path: str) -> Tuple[bool, float]:
         return False, 0.0
 
     jpeg = header[:3] == b"\xff\xd8\xff"
-    png  = header[:8] == b"\x89PNG\r\n\x1a\n"
+    png = header[:8] == b"\x89PNG\r\n\x1a\n"
     webp = header[:4] == b"RIFF" and header[8:12] == b"WEBP"
     if not (jpeg or png or webp):
         return False, 0.0
@@ -143,7 +143,7 @@ def is_road_image(image_path: str) -> Tuple[bool, float]:
     return True, 0.80
 
 
-def analyze_image(image_path: str) -> Dict[str, object]:
+def analyze_image(image_path: str) -> dict[str, object]:
     """
     Analyse a road-damage image and return a classification dict.
 
@@ -209,13 +209,10 @@ def _normalise_class(raw_name: str) -> str:
 
 def _build_description(damage_type: str, sev: str, conf: float) -> str:
     """Generate a human-readable description string."""
-    return (
-        f"{sev.title()} severity {damage_type.replace('_', ' ')} "
-        f"detected with {conf:.0%} confidence."
-    )
+    return f"{sev.title()} severity {damage_type.replace('_', ' ')} detected with {conf:.0%} confidence."
 
 
-def _yolo_analyze(model, path: str) -> Dict[str, object]:
+def _yolo_analyze(model, path: str) -> dict[str, object]:
     """
     Run full YOLOv8 inference and return the standardised result dict.
 
@@ -231,24 +228,24 @@ def _yolo_analyze(model, path: str) -> Dict[str, object]:
     # No detections at all
     if not results or results[0].boxes is None or len(results[0].boxes) == 0:
         return {
-            "damage_type":   "surface_damage",
-            "severity":      "low",
+            "damage_type": "surface_damage",
+            "severity": "low",
             "ai_confidence": 0.0,
-            "description":   "No significant road damage detected in the image.",
+            "description": "No significant road damage detected in the image.",
         }
 
     boxes = results[0].boxes
 
     # Gather per-box class names and confidences
-    detected_classes: Set[str] = set()
+    detected_classes: set[str] = set()
     best_conf = 0.0
     best_class_raw = ""
 
     for i in range(len(boxes)):
-        cls_id   = int(boxes.cls[i])
+        cls_id = int(boxes.cls[i])
         conf_val = float(boxes.conf[i])
         raw_name = model.names.get(cls_id, f"class_{cls_id}")
-        norm     = _normalise_class(raw_name)
+        norm = _normalise_class(raw_name)
         detected_classes.add(norm)
 
         if conf_val > best_conf:
@@ -262,13 +259,13 @@ def _yolo_analyze(model, path: str) -> Dict[str, object]:
         damage_type = _normalise_class(best_class_raw)
 
     conf = round(best_conf, 4)
-    sev  = _severity(conf)
+    sev = _severity(conf)
 
     return {
-        "damage_type":   damage_type,
-        "severity":      sev,
+        "damage_type": damage_type,
+        "severity": sev,
         "ai_confidence": conf,
-        "description":   _build_description(damage_type, sev, conf),
+        "description": _build_description(damage_type, sev, conf),
     }
 
 
@@ -277,7 +274,7 @@ def _yolo_analyze(model, path: str) -> Dict[str, object]:
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 
-def _mock(path: str) -> Dict[str, object]:
+def _mock(path: str) -> dict[str, object]:
     """
     Deterministic mock — same file always produces the same classification.
     Uses an MD5-seeded RNG so results are reproducible across runs.
@@ -291,13 +288,13 @@ def _mock(path: str) -> Dict[str, object]:
 
     rng = random.Random(seed)
     damages = ["pothole", "crack", "surface_damage", "multiple"]
-    damage  = rng.choices(damages, weights=[0.45, 0.30, 0.15, 0.10])[0]
-    conf    = round(rng.uniform(0.30, 0.95), 4)
-    sev     = _severity(conf)
+    damage = rng.choices(damages, weights=[0.45, 0.30, 0.15, 0.10])[0]
+    conf = round(rng.uniform(0.30, 0.95), 4)
+    sev = _severity(conf)
 
     return {
-        "damage_type":   damage,
-        "severity":      sev,
+        "damage_type": damage,
+        "severity": sev,
         "ai_confidence": conf,
-        "description":   f"[MOCK] {_build_description(damage, sev, conf)}",
+        "description": f"[MOCK] {_build_description(damage, sev, conf)}",
     }

@@ -1,54 +1,54 @@
 from __future__ import annotations
-from typing import Optional
+
 from pydantic import BaseModel, EmailStr
 
 
 class UserRegister(BaseModel):
-    name:     str
-    email:    EmailStr
-    phone:    Optional[str] = None
+    name: str
+    email: EmailStr
+    phone: str | None = None
     password: str
 
 
 class UserLogin(BaseModel):
-    email:    EmailStr
+    email: EmailStr
     password: str
 
 
 class OfficerLogin(BaseModel):
-    email:    EmailStr
+    email: EmailStr
     password: str
 
 
 class OfficerRegister(BaseModel):
-    name:     str
-    email:    EmailStr
-    phone:    Optional[str] = None
+    name: str
+    email: EmailStr
+    phone: str | None = None
     password: str
-    zone:     Optional[str] = None
+    zone: str | None = None
 
 
 class OfficerUpdate(BaseModel):
-    name:     Optional[str] = None
-    phone:    Optional[str] = None
-    zone:     Optional[str] = None
-    password: Optional[str] = None
+    name: str | None = None
+    phone: str | None = None
+    zone: str | None = None
+    password: str | None = None
 
 
 class TokenResponse(BaseModel):
     access_token: str
-    token_type:   str = "bearer"
-    name:         Optional[str] = None
+    token_type: str = "bearer"
+    name: str | None = None
 
 
 class StatusUpdate(BaseModel):
-    status:        str
-    officer_notes: Optional[str] = None
+    status: str
+    officer_notes: str | None = None
 
 
 class FundUpdate(BaseModel):
     amount: float
-    note:   Optional[str] = None
+    note: str | None = None
 
 
 class ReassignUpdate(BaseModel):
@@ -60,9 +60,9 @@ class MessageSend(BaseModel):
 
 
 class OfficerDirectoryOut(BaseModel):
-    id:    int
-    name:  str
-    zone:  Optional[str] = None
+    id: int
+    name: str
+    zone: str | None = None
 
     class Config:
         from_attributes = True

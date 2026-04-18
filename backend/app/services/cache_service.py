@@ -1,32 +1,41 @@
 import json
 import logging
 import os
-from typing import Any, Optional
+from typing import Any
+
 import redis.asyncio as redis
 
 logger = logging.getLogger(__name__)
 
+
 class NoOpCache:
     """Fallback cache for local dev without Redis."""
-    async def get(self, key: str) -> Optional[Any]:
+
+    async def get(self, key: str) -> Any | None:
         return None
+
     async def set(self, key: str, value: Any, ttl: int = 60):
         pass
+
     async def delete(self, key: str):
         pass
+
     async def delete_pattern(self, pattern: str):
         pass
+
     async def flush_all(self):
         pass
+
 
 class RedisCache:
     def __init__(self, url: str):
         self.redis = redis.from_url(url, decode_responses=True)
-    
-    async def get(self, key: str) -> Optional[Any]:
+
+    async def get(self, key: str) -> Any | None:
         try:
             val = await self.redis.get(key)
             from app.utils import metrics
+
             if val:
                 metrics.track_redis_access(hit=True)
                 return json.loads(val)
@@ -60,6 +69,7 @@ class RedisCache:
             await self.redis.flushdb()
         except Exception as e:
             logger.error(f"Redis FLUSH error: {e}")
+
 
 # Global cache instance
 REDIS_URL = os.getenv("REDIS_URL")

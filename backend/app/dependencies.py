@@ -1,11 +1,11 @@
+import sentry_sdk
 from fastapi import Depends, HTTPException
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.models.models import FieldOfficer, User
 from app.services.auth_service import decode_token
-from app.models.models import User, FieldOfficer
-import sentry_sdk
 
 bearer = HTTPBearer(auto_error=False)
 

@@ -1,3 +1,4 @@
+# ruff: noqa: E402, E712, B904, E722
 """
 RoadWatch — Auth Service
 Provides JWT creation/decoding PLUS FastAPI dependency injectors.
@@ -11,13 +12,13 @@ New exports used by the complaints router patch:
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
+
 from dotenv import load_dotenv
 
 env_path = Path(__file__).resolve().parent.parent.parent / ".env"
 load_dotenv(dotenv_path=env_path)
 
 from datetime import datetime, timedelta, timezone
-from typing import Optional
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -50,14 +51,14 @@ def verify_password(plain: str, hashed: str) -> bool:
 
 # ── Token helpers ─────────────────────────────────────────────────
 
-def create_access_token(data: dict, expires_minutes: Optional[int] = None) -> str:
+def create_access_token(data: dict, expires_minutes: int | None = None) -> str:
     payload = data.copy()
     expire  = datetime.now(timezone.utc) + timedelta(minutes=expires_minutes or EXPIRE_MINS)
     payload["exp"] = expire
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 
 
-def decode_token(token: str) -> Optional[dict]:
+def decode_token(token: str) -> dict | None:
     try:
         return jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
     except JWTError:
@@ -73,8 +74,8 @@ class AuthPrincipal:
     and officers (e.g. GET /api/complaints/{id}).
     """
     role:     str          # "citizen" | "officer" | "admin"
-    citizen:  Optional[object] = field(default=None)
-    officer:  Optional[object] = field(default=None)
+    citizen:  object | None = field(default=None)
+    officer:  object | None = field(default=None)
 
     @property
     def is_admin(self) -> bool:

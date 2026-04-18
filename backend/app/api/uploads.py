@@ -1,6 +1,6 @@
-from fastapi import APIRouter
-from fastapi.staticfiles import StaticFiles
 import os
+
+from fastapi import APIRouter
 
 router = APIRouter()
 UPLOAD_DIR = os.getenv("UPLOAD_DIR", "uploads")

@@ -1,3 +1,4 @@
+# ruff: noqa: E402, E712, B904, E722
 """
 RoadWatch — FastAPI Application Entry Point (v2.2.0)
 
@@ -7,28 +8,28 @@ Clean, modularized setup with:
   - Strict Pydantic settings
   - WebSocket & Background Workers
 """
-import logging
-import os
-import time
-import json
-import asyncio
-from pathlib import Path
-from contextlib import asynccontextmanager
-from dotenv import load_dotenv
 
-from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
-from fastapi.staticfiles import StaticFiles
-from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import model_validator
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from prometheus_fastapi_instrumentator import Instrumentator
-import sentry_sdk
-from sentry_sdk.integrations.fastapi import FastApiIntegration
-from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
-from sentry_sdk.integrations.logging import LoggingIntegration
-from sentry_sdk.integrations.asyncio import AsyncioIntegration
+import asyncio  # noqa: E402
+import json  # noqa: E402
+import logging  # noqa: E402
+import os  # noqa: E402
+import time  # noqa: E402
+from contextlib import asynccontextmanager  # noqa: E402
+from pathlib import Path  # noqa: E402
+
+import sentry_sdk  # noqa: E402
+from apscheduler.schedulers.asyncio import AsyncIOScheduler  # noqa: E402
+from dotenv import load_dotenv  # noqa: E402
+from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect  # noqa: E402
+from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse  # noqa: E402
+from fastapi.staticfiles import StaticFiles  # noqa: E402
+from prometheus_fastapi_instrumentator import Instrumentator  # noqa: E402
+from pydantic import model_validator  # noqa: E402
+from pydantic_settings import BaseSettings, SettingsConfigDict  # noqa: E402
+from sentry_sdk.integrations.fastapi import FastApiIntegration  # noqa: E402
+from sentry_sdk.integrations.logging import LoggingIntegration  # noqa: E402
+from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration  # noqa: E402
 
 # ── Environment & Config ──────────────────────────────────────────────
 env_path = Path(__file__).resolve().parent.parent / ".env"
@@ -39,12 +40,13 @@ try:
 except ImportError:
     from typing_extensions import Self
 
+
 class Settings(BaseSettings):
     APP_ENV: str = "production"
     CORS_ORIGINS: str = ""
     SENTRY_DSN: str | None = None
     APP_VERSION: str = "1.0.0"
-    
+
     model_config = SettingsConfigDict(env_file=str(env_path), extra="ignore")
 
     @model_validator(mode="after")
@@ -60,6 +62,7 @@ class Settings(BaseSettings):
             return ["http://localhost:3000", "http://localhost:8000", "http://127.0.0.1:3000", "http://10.0.2.2:8000"]
         return [o.strip() for o in self.CORS_ORIGINS.split(",") if o.strip()]
 
+
 settings = Settings()
 
 # ── Logging ───────────────────────────────────────────────────────────
@@ -69,6 +72,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger("roadwatch")
 
+
 # ── Sentry Initialization ─────────────────────────────────────────────
 def _sentry_before_send(event, hint):
     if "user" in event and "email" in event["user"]:
@@ -76,20 +80,22 @@ def _sentry_before_send(event, hint):
     if "exc_info" in hint:
         _, exc_value, _ = hint["exc_info"]
         from fastapi import HTTPException
+
         if isinstance(exc_value, HTTPException) and exc_value.status_code in (401, 403, 404, 422):
             return None
     return event
 
+
 # Removed module-level sentry init
 
 # ── Core Services & DB ───────────────────────────────────────────────
-from app.database import Base, engine
-from app.ws_manager import manager # noqa
-from app.models.models import User, FieldOfficer, Complaint, Notification, Message, LoginLog, ComplaintOfficer # noqa
-from slowapi import Limiter
-from slowapi.util import get_remote_address
-from slowapi.errors import RateLimitExceeded
-from slowapi import _rate_limit_exceeded_handler
+from slowapi import Limiter, _rate_limit_exceeded_handler  # noqa: E402
+from slowapi.errors import RateLimitExceeded  # noqa: E402
+from slowapi.util import get_remote_address  # noqa: E402
+
+from app.database import Base, engine  # noqa: E402
+from app.models.models import Complaint, ComplaintOfficer, FieldOfficer, LoginLog, Message, Notification, User  # noqa
+from app.ws_manager import manager  # noqa
 
 Base.metadata.create_all(bind=engine)
 limiter = Limiter(key_func=get_remote_address)
@@ -100,18 +106,20 @@ instrumentator = Instrumentator(
     env_var_name="ENABLE_METRICS",
 )
 
+
 # ── Lifespan & App Setup ──────────────────────────────────────────────
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup tasks
     from app.tasks.escalation_task import run_escalation_check
+
     scheduler = AsyncIOScheduler()
     scheduler.add_job(run_escalation_check, "interval", hours=1)
     scheduler.start()
-    
+
     # Instrumentation
     instrumentator.expose(app, endpoint="/metrics", include_in_schema=False)
-    
+
     sentry_dsn = os.getenv("SENTRY_DSN", "")
     if sentry_dsn:
         sentry_sdk.init(
@@ -135,11 +143,8 @@ async def lifespan(app: FastAPI):
     yield
     scheduler.shutdown()
 
-app = FastAPI(
-    title="RoadWatch API",
-    version=settings.APP_VERSION,
-    lifespan=lifespan
-)
+
+app = FastAPI(title="RoadWatch API", version=settings.APP_VERSION, lifespan=lifespan)
 
 instrumentator.instrument(app)
 
@@ -154,6 +159,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
     start = time.perf_counter()
@@ -165,11 +171,12 @@ async def log_requests(request: Request, call_next):
         sentry_sdk.capture_message(f"5xx: {request.method} {request.url.path}", level="error")
         logger.exception("Unhandled error")
         return JSONResponse(status_code=500, content={"detail": "Internal server error"})
-    
+
     elapsed = (time.perf_counter() - start) * 1000
     if elapsed > 1000:
         logger.warning(f"SLOW {request.method} {request.url.path} {elapsed:.0f}ms")
     return response
+
 
 # ── Directories ───────────────────────────────────────────────────────
 UPLOAD_DIR = os.getenv("UPLOAD_DIR", "uploads")
@@ -180,38 +187,44 @@ STATIC_DIR = Path(__file__).parent.parent / "static"
 if STATIC_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
+
 def _html(name: str):
     p = STATIC_DIR / name
     return FileResponse(str(p), media_type="text/html") if p.exists() else HTMLResponse("Not Found", status_code=404)
 
+
 # ── Routes ────────────────────────────────────────────────────────────
-from app.api import admin, auth, complaints, messages, officers, map
-app.include_router(auth.router,       prefix="/api")
+from app.api import admin, auth, complaints, map, messages, officers  # noqa: E402
+
+app.include_router(auth.router, prefix="/api")
 app.include_router(complaints.router, prefix="/api")
-app.include_router(messages.router,   prefix="/api")
-app.include_router(admin.router,      prefix="/api")
-app.include_router(officers.router,   prefix="/api")
-app.include_router(map.router,        prefix="/api")
+app.include_router(messages.router, prefix="/api")
+app.include_router(admin.router, prefix="/api")
+app.include_router(officers.router, prefix="/api")
+app.include_router(map.router, prefix="/api")
+
 
 @app.get("/", include_in_schema=False)
-def root(): return _html("login.html")
+def root():
+    return _html("login.html")
+
 
 @app.get("/healthz", include_in_schema=False)
 def health():
-    return {
-        "status": "ok",
-        "sentry": "configured" if os.getenv("SENTRY_DSN") else "not_configured",
-        "env": settings.APP_ENV
-    }
+    return {"status": "ok", "sentry": "configured" if os.getenv("SENTRY_DSN") else "not_configured", "env": settings.APP_ENV}
+
 
 if settings.APP_ENV == "development":
+
     @app.post("/api/debug/sentry-test", tags=["debug"])
     def trigger_error():
         raise ZeroDivisionError("Sentry test")
 
+
 # ── WebSockets ────────────────────────────────────────────────────────
-from app.websockets.complaint_ws import complaint_ws_manager
-from app.services.auth_service import decode_token
+from app.services.auth_service import decode_token  # noqa: E402
+from app.websockets.complaint_ws import complaint_ws_manager  # noqa: E402
+
 
 @app.websocket("/ws/complaints/{complaint_id}")
 async def websocket_complaint_status(websocket: WebSocket, complaint_id: str, token: str = None):
@@ -220,13 +233,14 @@ async def websocket_complaint_status(websocket: WebSocket, complaint_id: str, to
         return
 
     await complaint_ws_manager.connect(complaint_id, websocket)
-    
+
     async def keep_alive():
         while True:
             await asyncio.sleep(30)
             try:
                 await websocket.send_text(json.dumps({"type": "ping"}))
-            except: break
+            except Exception:
+                break
 
     ping_task = asyncio.create_task(keep_alive())
     try:

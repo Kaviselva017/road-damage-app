@@ -1,8 +1,10 @@
 import logging
+
 from app.database import SessionLocal
 from app.services import sla_service
 
 logger = logging.getLogger(__name__)
+
 
 def run_escalation_check():
     """Wrapper for the background scheduler."""
