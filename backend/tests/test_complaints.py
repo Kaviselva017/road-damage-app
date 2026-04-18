@@ -3,7 +3,7 @@ import pytest
 @pytest.mark.asyncio
 async def test_submit_complaint_auth(async_client, citizen_token, dummy_image):
     headers = {"Authorization": f"Bearer {citizen_token}"}
-    files = {"image": ("test.jpg", dummy_image, "image/jpeg")}
+    files = {"image": ("test.jpg", dummy_image + b"1", "image/jpeg")}
     data = {
         "latitude": 40.7128,
         "longitude": -74.0060,
@@ -34,7 +34,7 @@ async def test_submit_complaint_no_auth(async_client, dummy_image):
 @pytest.mark.asyncio
 async def test_get_my_complaints(async_client, citizen_token, dummy_image):
     headers = {"Authorization": f"Bearer {citizen_token}"}
-    files = {"image": ("test.jpg", dummy_image, "image/jpeg")}
+    files = {"image": ("test.jpg", dummy_image + b"2", "image/jpeg")}
     await async_client.post(
         "/api/complaints/submit",
         headers=headers,
@@ -61,7 +61,7 @@ async def test_citizen_list_all(async_client, citizen_token):
 @pytest.mark.asyncio
 async def test_officer_update_status(async_client, officer_token, citizen_token, dummy_image):
     headers_cit = {"Authorization": f"Bearer {citizen_token}"}
-    files = {"image": ("test.jpg", dummy_image, "image/jpeg")}
+    files = {"image": ("test.jpg", dummy_image + b"3", "image/jpeg")}
     data = {
         "latitude": 40.0,
         "longitude": -74.0,

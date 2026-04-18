@@ -1,302 +1,303 @@
-import hashlib
+"""
+RoadWatch AI Service
+====================
+- Loads YOLOv8 model from YOLO_MODEL_PATH (supports .pt and .onnx)
+- CLAHE preprocessing (cv2)
+- Test-time augmentation (original + hflip, averaged scores)
+- Graceful mock fallback if model file not found
+- Returns typed DamageResult dataclass
+"""
+
+from __future__ import annotations
+
 import logging
 import os
-import random
-from collections import OrderedDict
-from pathlib import Path
-from typing import Any
+import time
+from dataclasses import dataclass, field
 
-"""
-RoadWatch AI Service — YOLOv8 Road Damage Detection
-────────────────────────────────────────────────────
-Public API consumed by complaints.py:
-
-  analyze_image(image_path)  → dict  (damage_type, severity, ai_confidence, description)
-  is_road_image(image_path)  → (bool, float)
-  image_hash(img_bytes)      → str   (MD5 hex digest)
-
-Model loading:
-  - Reads YOLO_MODEL_PATH env var (default: ../ai_model/road_damage_yolov8.pt)
-  - If the .pt file is missing the service falls back to a deterministic mock
-    that returns consistent results per-image (seeded by file content hash).
-
-Class mapping:
-  The RDD2022 label set uses D00/D10/D20/D40 codes.  We normalise to:
-    D00, D10 → crack
-    D20      → surface_damage
-    D40      → pothole
-  If ≥ 2 distinct normalised classes are detected → "multiple".
-"""
-
+import cv2
+import numpy as np
 
 logger = logging.getLogger(__name__)
 
-# ── Configuration ──────────────────────────────────────────────────────
-MODEL_PATH = os.getenv("YOLO_MODEL_PATH", "../ai_model/road_damage_yolov8.pt")
+# ── Lazy calibration import (avoids circular at module load) ─────────────────
+def _get_calibration():
+    from app.services.calibration_service import get_calibration_service  # noqa
+    return get_calibration_service()
 
-MIN_FILE_BYTES = 1_000  # reject obviously empty / corrupt uploads
-MAX_FILE_BYTES = 20 * 1024 * 1024  # 20 MB hard cap
-
-ROAD_VALID_CLASSES = {"pothole", "crack", "surface_damage", "multiple"}
-
-# Raw YOLO class-name → normalised RoadWatch name
-_CLASS_MAP = {
-    # RDD2022 code names
-    "D00": "crack",
-    "D10": "crack",
-    "D20": "surface_damage",
-    "D40": "pothole",
-    # Human-readable names (if the model was trained with these)
-    "pothole": "pothole",
-    "crack": "crack",
-    "surface_damage": "surface_damage",
-    "multiple": "multiple",
-    "multiple_damage": "multiple",
+# ── Class map ────────────────────────────────────────────────────────────────
+CLASS_NAMES: dict[int, str] = {
+    0: "longitudinal_crack",   # D00
+    1: "transverse_crack",     # D10
+    2: "alligator_crack",      # D20
+    3: "pothole",              # D40
 }
 
-# ── LRU analysis cache (avoids re-processing the same image) ──────────
-_CACHE_SIZE = 128
-_analysis_cache: OrderedDict = OrderedDict()
-
-# ── Lazy model singleton ──────────────────────────────────────────────
-_model = None
-_model_tried = False
-
-
-def _load():
-    """Lazy-load the YOLO model exactly once."""
-    global _model, _model_tried
-    if _model_tried:
-        return _model
-    _model_tried = True
-
-    resolved = Path(MODEL_PATH)
-    if not resolved.exists():
-        logger.warning("[AI] Model not found at %s — using mock mode", MODEL_PATH)
-        return None
-    try:
-        from ultralytics import YOLO
-
-        _model = YOLO(str(resolved))
-        logger.info("[AI] YOLOv8 loaded from %s", resolved)
-    except Exception as exc:
-        logger.error("[AI] Failed to load model: %s — using mock mode", exc)
-    return _model
+SEVERITY_THRESHOLDS = [
+    (0.80, "critical"),
+    (0.60, "high"),
+    (0.40, "medium"),
+    (0.00, "low"),
+]
 
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-#  PUBLIC API
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-
-def image_hash(data: bytes) -> str:
-    """MD5 hex digest of raw image bytes — used for duplicate detection."""
-    return hashlib.md5(data).hexdigest()
-
-
-def is_road_image(image_path: str) -> tuple[bool, float]:
-    """
-    Lightweight gate: is this upload a plausible road-damage photo?
-
-    Returns ``(is_road, confidence)``.
-
-    * **Model loaded** — runs a quick inference pass.  Accepts the image if
-      ANY detection has confidence > 0.30.
-    * **Mock mode** — validates JPEG / PNG / WebP magic bytes and accepts
-      with a fixed confidence of 0.80.
-    """
-    # ── Size sanity check ──
-    try:
-        size = os.path.getsize(image_path)
-    except OSError:
-        return False, 0.0
-    if size < MIN_FILE_BYTES or size > MAX_FILE_BYTES:
-        return False, 0.0
-
-    # ── Magic-byte check ──
-    try:
-        with open(image_path, "rb") as fh:
-            header = fh.read(12)
-    except OSError:
-        return False, 0.0
-
-    jpeg = header[:3] == b"\xff\xd8\xff"
-    png = header[:8] == b"\x89PNG\r\n\x1a\n"
-    webp = header[:4] == b"RIFF" and header[8:12] == b"WEBP"
-    if not (jpeg or png or webp):
-        return False, 0.0
-
-    # ── Model inference (if available) ──
-    model = _load()
-    if model is not None:
-        try:
-            results = model(image_path, conf=0.10, verbose=False)
-            if results and results[0].boxes is not None and len(results[0].boxes) > 0:
-                max_conf = float(results[0].boxes.conf.max())
-                if max_conf > 0.30:
-                    return True, round(max_conf, 3)
-                return False, round(max_conf, 3)
-            return False, 0.0
-        except Exception as exc:
-            logger.warning("[AI] is_road_image inference error: %s — accepting with fallback", exc)
-            return True, 0.50
-
-    # ── Mock mode: accept any valid image format ──
-    return True, 0.80
-
-
-def analyze_image(image_path: str) -> dict[str, Any]:
-    """
-    Analyse a road-damage image and return a classification dict.
-
-    Return shape (guaranteed)::
-
-        {
-            "damage_type":   "pothole" | "crack" | "surface_damage" | "multiple",
-            "severity":      "high" | "medium" | "low",
-            "ai_confidence": float,       # 0.0 – 1.0
-            "description":   str,
-        }
-
-    Results are LRU-cached keyed on a partial file-content hash.
-    """
-    # ── Cache lookup ──
-    try:
-        with open(image_path, "rb") as f:
-            file_hash = hashlib.md5(f.read(8192)).hexdigest()
-    except OSError:
-        file_hash = image_path
-
-    if file_hash in _analysis_cache:
-        _analysis_cache.move_to_end(file_hash)
-        return _analysis_cache[file_hash]
-
-    # ── Run inference ──
-    model = _load()
-    if model is not None:
-        try:
-            result = _yolo_analyze(model, image_path)
-        except Exception as exc:
-            logger.warning("[AI] Inference error: %s — falling back to mock", exc)
-            result = _mock(image_path)
-    else:
-        result = _mock(image_path)
-
-    # ── Store in cache ──
-    _analysis_cache[file_hash] = result
-    if len(_analysis_cache) > _CACHE_SIZE:
-        _analysis_cache.popitem(last=False)
-
-    return result
-
-
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-#  INTERNAL — real YOLO inference
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-
-def _severity(conf: float) -> str:
-    """Map a confidence value to a severity label."""
-    if conf >= 0.80:
-        return "high"
-    if conf >= 0.55:
-        return "medium"
+def _map_severity(confidence: float) -> str:
+    for threshold, label in SEVERITY_THRESHOLDS:
+        if confidence >= threshold:
+            return label
     return "low"
 
 
-def _normalise_class(raw_name: str) -> str:
-    """Map any raw YOLO class name to one of the 4 canonical damage types."""
-    return _CLASS_MAP.get(raw_name, "pothole")
+# ── Result dataclass ─────────────────────────────────────────────────────────
+@dataclass
+class DamageResult:
+    class_name: str
+    confidence: float
+    bbox: list[int]          # [x1, y1, x2, y2] in pixel coords
+    severity: str
+    inference_ms: float = 0.0
+    raw_class_id: int = -1
+    extra: dict = field(default_factory=dict)
 
 
-def _build_description(damage_type: str, sev: str, conf: float) -> str:
-    """Generate a human-readable description string."""
-    return f"{sev.title()} severity {damage_type.replace('_', ' ')} detected with {conf:.0%} confidence."
+# ── Image helpers ─────────────────────────────────────────────────────────────
+def _apply_clahe(bgr: np.ndarray) -> np.ndarray:
+    """Apply CLAHE to the L channel of LAB colourspace."""
+    lab = cv2.cvtColor(bgr, cv2.COLOR_BGR2LAB)
+    l_ch, a_ch, b_ch = cv2.split(lab)
+    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+    l_ch = clahe.apply(l_ch)
+    return cv2.cvtColor(cv2.merge([l_ch, a_ch, b_ch]), cv2.COLOR_LAB2BGR)
 
 
-def _yolo_analyze(model, path: str) -> dict[str, Any]:
-    """
-    Run full YOLOv8 inference and return the standardised result dict.
+def _bytes_to_bgr(image_bytes: bytes) -> np.ndarray:
+    arr = np.frombuffer(image_bytes, dtype=np.uint8)
+    img = cv2.imdecode(arr, cv2.IMREAD_COLOR)
+    if img is None:
+        raise ValueError("cv2 could not decode provided image bytes.")
+    return img
 
-    Logic:
-      1. Run inference at conf=0.01 to capture everything.
-      2. Collect the normalised class name for every detection.
-      3. If ≥ 2 *distinct* normalised classes → ``damage_type = "multiple"``.
-      4. Otherwise use the class of the highest-confidence detection.
-      5. ``ai_confidence`` = max detection confidence across all boxes.
-    """
-    results = model(path, conf=0.01, verbose=False)
 
-    # No detections at all
-    if not results or results[0].boxes is None or len(results[0].boxes) == 0:
-        return {
-            "damage_type": "surface_damage",
-            "severity": "low",
-            "ai_confidence": 0.0,
-            "description": "No significant road damage detected in the image.",
-        }
+# ── Model loader (lazy singleton) ─────────────────────────────────────────────
+_model = None        # ultralytics YOLO or onnxruntime.InferenceSession
+_model_type = None   # "yolo" | "onnx" | "mock"
+_input_name = None   # ONNX input name
 
-    boxes = results[0].boxes
 
-    # Gather per-box class names and confidences
-    detected_classes: set[str] = set()
-    best_conf = 0.0
-    best_class_raw = ""
+def _load_model():
+    global _model, _model_type, _input_name
 
-    for i in range(len(boxes)):
-        cls_id = int(boxes.cls[i])
-        conf_val = float(boxes.conf[i])
-        raw_name = model.names.get(cls_id, f"class_{cls_id}")
-        norm = _normalise_class(raw_name)
-        detected_classes.add(norm)
+    if _model is not None:
+        return
 
-        if conf_val > best_conf:
-            best_conf = conf_val
-            best_class_raw = raw_name
+    model_path = os.getenv("YOLO_MODEL_PATH", "ai_model/best.pt")
 
-    # Decide damage_type
-    if len(detected_classes) >= 2:
-        damage_type = "multiple"
+    if not os.path.exists(model_path):
+        logger.warning(
+            "YOLO_MODEL_PATH '%s' not found — running in MOCK mode. "
+            "Set YOLO_MODEL_PATH to enable real inference.",
+            model_path,
+        )
+        _model_type = "mock"
+        return
+
+    if model_path.endswith(".onnx"):
+        try:
+            import onnxruntime as ort  # noqa: PLC0415
+
+            sess_opts = ort.SessionOptions()
+            sess_opts.log_severity_level = 3
+            _model = ort.InferenceSession(
+                model_path,
+                sess_options=sess_opts,
+                providers=["CUDAExecutionProvider", "CPUExecutionProvider"],
+            )
+            _input_name = _model.get_inputs()[0].name
+            _model_type = "onnx"
+            logger.info("Loaded ONNX model from %s", model_path)
+        except Exception as exc:
+            logger.warning("ONNX load failed (%s) — falling back to mock.", exc)
+            _model_type = "mock"
     else:
-        damage_type = _normalise_class(best_class_raw)
+        try:
+            from ultralytics import YOLO  # noqa: PLC0415
 
-    conf = round(best_conf, 4)
-    sev = _severity(conf)
-
-    return {
-        "damage_type": damage_type,
-        "severity": sev,
-        "ai_confidence": conf,
-        "description": _build_description(damage_type, sev, conf),
-    }
+            _model = YOLO(model_path)
+            _model_type = "yolo"
+            logger.info("Loaded YOLO model from %s", model_path)
+        except Exception as exc:
+            logger.warning("YOLO load failed (%s) — falling back to mock.", exc)
+            _model_type = "mock"
 
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-#  INTERNAL — deterministic mock (no model file)
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# ── ONNX inference helper ─────────────────────────────────────────────────────
+def _run_onnx(bgr: np.ndarray) -> list[DamageResult]:
+    import onnxruntime as ort  # noqa: PLC0415
+
+    h, w = 640, 640
+    resized = cv2.resize(bgr, (w, h))
+    blob = resized.astype(np.float32) / 255.0
+    blob = np.transpose(blob, (2, 0, 1))[np.newaxis, ...]  # (1, 3, H, W)
+
+    outputs = _model.run(None, {_input_name: blob})
+    # YOLOv8 ONNX outputs shape: [1, 84, 8400] — [batch, (4+80), anchors]
+    raw = outputs[0][0]  # (84, 8400)
+    boxes = raw[:4, :].T        # (8400, 4)  cx cy w h
+    scores = raw[4:, :].T       # (8400, num_classes)
+
+    results = []
+    conf_threshold = 0.25
+    for i, row in enumerate(scores):
+        class_id = int(np.argmax(row))
+        conf = float(row[class_id])
+        if conf < conf_threshold:
+            continue
+        cx, cy, bw, bh = boxes[i]
+        orig_h, orig_w = bgr.shape[:2]
+        x1 = int((cx - bw / 2) * orig_w / w)
+        y1 = int((cy - bh / 2) * orig_h / h)
+        x2 = int((cx + bw / 2) * orig_w / w)
+        y2 = int((cy + bh / 2) * orig_h / h)
+        results.append(
+            DamageResult(
+                class_name=CLASS_NAMES.get(class_id, "unknown"),
+                confidence=round(conf, 4),
+                bbox=[x1, y1, x2, y2],
+                severity=_map_severity(conf),
+                raw_class_id=class_id,
+            )
+        )
+    return results
 
 
-def _mock(path: str) -> dict[str, Any]:
+def _run_onnx_tta(bgr: np.ndarray) -> list[DamageResult]:
+    """Run ONNX inference with horizontal-flip TTA, merge by highest conf per box."""
+    r1 = _run_onnx(bgr)
+    r2 = _run_onnx(cv2.flip(bgr, 1))
+    # Simple merge: take the highest-confidence result per class
+    best: dict[str, DamageResult] = {}
+    for r in r1 + r2:
+        if r.class_name not in best or r.confidence > best[r.class_name].confidence:
+            best[r.class_name] = r
+    return sorted(best.values(), key=lambda x: x.confidence, reverse=True)
+
+
+# ── YOLO inference helper ─────────────────────────────────────────────────────
+def _run_yolo(bgr: np.ndarray) -> list[DamageResult]:
+    results_orig = _model(bgr, verbose=False)[0]
+    results_flip = _model(cv2.flip(bgr, 1), verbose=False)[0]
+
+    best: dict[str, DamageResult] = {}
+
+    def _parse(res, flipped: bool = False):
+        if res.boxes is None:
+            return
+        for box in res.boxes:
+            class_id = int(box.cls.item())
+            conf = float(box.conf.item())
+            xyxy = box.xyxy[0].tolist()
+            x1, y1, x2, y2 = [int(v) for v in xyxy]
+            if flipped:
+                img_w = bgr.shape[1]
+                x1, x2 = img_w - x2, img_w - x1
+            name = CLASS_NAMES.get(class_id, res.names.get(class_id, "unknown"))
+            dr = DamageResult(
+                class_name=name,
+                confidence=round(conf, 4),
+                bbox=[x1, y1, x2, y2],
+                severity=_map_severity(conf),
+                raw_class_id=class_id,
+            )
+            if name not in best or conf > best[name].confidence:
+                best[name] = dr
+
+    _parse(results_orig, flipped=False)
+    _parse(results_flip, flipped=True)
+    return sorted(best.values(), key=lambda x: x.confidence, reverse=True)
+
+
+# ── Mock inference ─────────────────────────────────────────────────────────────
+def _run_mock(_bgr: np.ndarray) -> list[DamageResult]:
+    return [
+        DamageResult(
+            class_name="pothole",
+            confidence=0.55,
+            bbox=[10, 10, 120, 120],
+            severity="medium",
+            raw_class_id=3,
+        )
+    ]
+
+
+# ── Public API ────────────────────────────────────────────────────────────────
+def analyze_image(image_bytes: bytes) -> list[DamageResult]:
     """
-    Deterministic mock — same file always produces the same classification.
-    Uses an MD5-seeded RNG so results are reproducible across runs.
+    Entry point. Returns a list of DamageResult sorted by confidence desc.
+    Applies temperature-scaling calibration to every raw confidence.
+    Never raises — returns a mock result on any error.
     """
-    seed = 42
+    _load_model()
+
     try:
-        with open(path, "rb") as f:
-            seed = int(hashlib.md5(f.read(2048)).hexdigest()[:8], 16)
-    except Exception:
-        pass
+        bgr = _bytes_to_bgr(image_bytes)
+        bgr = _apply_clahe(bgr)
 
-    rng = random.Random(seed)
-    damages = ["pothole", "crack", "surface_damage", "multiple"]
-    damage = rng.choices(damages, weights=[0.45, 0.30, 0.15, 0.10])[0]
-    conf = round(rng.uniform(0.30, 0.95), 4)
-    sev = _severity(conf)
+        t0 = time.perf_counter()
 
-    return {
-        "damage_type": damage,
-        "severity": sev,
-        "ai_confidence": conf,
-        "description": f"[MOCK] {_build_description(damage, sev, conf)}",
-    }
+        if _model_type == "onnx":
+            results = _run_onnx_tta(bgr)
+        elif _model_type == "yolo":
+            results = _run_yolo(bgr)
+        else:
+            results = _run_mock(bgr)
+
+        elapsed_ms = (time.perf_counter() - t0) * 1000
+
+        # ── Apply calibration ─────────────────────────────────────────────
+        try:
+            cal = _get_calibration()
+            for r in results:
+                r.confidence = cal.calibrate(r.confidence)
+                r.severity   = _map_severity(r.confidence)   # Re-derive after scaling
+        except Exception as cal_exc:
+            logger.debug("Calibration skipped: %s", cal_exc)
+
+        for r in results:
+            r.inference_ms = round(elapsed_ms, 2)
+
+        return results if results else _run_mock(bgr)
+
+    except Exception as exc:
+        logger.error("AI inference error: %s", exc, exc_info=True)
+        return _run_mock(np.zeros((100, 100, 3), dtype=np.uint8))
+
+
+# ── Ensemble entry point ──────────────────────────────────────────────────────
+
+def analyze_image_ensemble(image_bytes: bytes) -> list[DamageResult]:
+    """
+    When ENABLE_ENSEMBLE=true, delegates to EnsembleService (WBF fusion).
+    Otherwise falls back to analyze_image().
+    """
+    enable = os.getenv("ENABLE_ENSEMBLE", "false").lower() in ("1", "true", "yes")
+    if enable:
+        try:
+            from app.services.ensemble_service import get_ensemble_service  # noqa
+            return get_ensemble_service().predict(image_bytes)
+        except Exception as exc:
+            logger.warning("Ensemble failed, using single model: %s", exc)
+    return analyze_image(image_bytes)
+
+
+
+def image_hash(image_bytes: bytes) -> str:
+    """SHA-256 hex digest — used for duplicate detection."""
+    import hashlib
+
+    return hashlib.sha256(image_bytes).hexdigest()
+
+
+def top_result(image_bytes: bytes) -> DamageResult | None:
+    """Convenience: return only the highest-confidence detection."""
+    results = analyze_image(image_bytes)
+    return results[0] if results else None

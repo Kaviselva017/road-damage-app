@@ -79,3 +79,9 @@ backend/alembic/versions/__pycache__/
 *.pt
 *.onnx
 !ai_model/.gitkeep
+
+*.db
+*.db-shm
+*.db-wal
+*.txt
+!requirements.txt

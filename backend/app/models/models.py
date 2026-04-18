@@ -2,13 +2,8 @@ from geoalchemy2 import Geography
 from sqlalchemy import JSON, BigInteger, Boolean, Column, DateTime, Float, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.orm import relationship
 
-from app.database import Base
+from app.database import Base, _is_sqlite
 from app.utils.datetime_utils import utc_now
-
-"""
-RoadWatch Models — uses plain String for status/severity/damage_type
-so SQLite works without enum migration issues.
-"""
 
 
 class User(Base):
@@ -67,11 +62,12 @@ class FieldOfficer(Base):
 class Complaint(Base):
     __tablename__ = "complaints"
     __table_args__ = (
-        Index("ix_complaints_location", "location", postgresql_using="gist"),
+        Index("ix_complaints_location", "location", postgresql_using="gist") if not _is_sqlite else None,
         Index("ix_complaints_status", "status"),
         Index("ix_complaints_created_at", "created_at"),
         Index("ix_complaints_user_id", "user_id"),
     )
+    __table_args__ = tuple(x for x in __table_args__ if x is not None)
     id = Column(Integer, primary_key=True, index=True)
     complaint_id = Column(String, unique=True, index=True, nullable=False)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
@@ -79,7 +75,10 @@ class Complaint(Base):
 
     latitude = Column(Float, nullable=False)
     longitude = Column(Float, nullable=False)
-    location = Column(Geography(geometry_type="POINT", srid=4326), nullable=True)
+    if _is_sqlite:
+        location = Column(Text, nullable=True)
+    else:
+        location = Column(Geography(geometry_type="POINT", srid=4326), nullable=True)
     address = Column(Text, nullable=True)
     area_type = Column(String, default="residential")
     nearby_places = Column(Text, nullable=True)

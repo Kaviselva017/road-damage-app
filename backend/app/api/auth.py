@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.dependencies import get_current_admin, get_current_user
-from app.main import limiter
+from app.middleware.rate_limit import limiter
 from app.models.models import FieldOfficer, LoginLog, User
 from app.services import audit_service
 from app.services.auth_service import create_access_token

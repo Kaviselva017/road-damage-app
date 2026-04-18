@@ -6,15 +6,13 @@ class PendingBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<int>(
-      future: SyncService.pendingCount(),
-      builder: (context, snapshot) {
-        if (!snapshot.hasData || snapshot.data == 0) {
-          return const SizedBox.shrink();
-        }
+    final count = SyncService.pendingCount();
+    
+    if (count == 0) {
+      return const SizedBox.shrink();
+    }
 
-        final count = snapshot.data!;
-        return Container(
+    return Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
           decoration: BoxDecoration(
             color: Color.fromRGBO(
@@ -49,7 +47,5 @@ class PendingBadge extends StatelessWidget {
             ],
           ),
         );
-      },
-    );
   }
 }

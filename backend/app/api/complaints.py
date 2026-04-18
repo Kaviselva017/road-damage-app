@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.database import SessionLocal, get_db
 from app.dependencies import get_current_officer, get_current_user
-from app.main import limiter
+from app.middleware.rate_limit import limiter
 from app.models.models import Complaint, ComplaintOfficer, FieldOfficer, Notification, User
 from app.schemas.complaint import ComplaintStatusOut
 from app.schemas.schemas import FundUpdate, StatusUpdate
@@ -337,15 +337,31 @@ async def process_inference_background(complaint_id: str, fpath_str: str, img_by
         except Exception as e:
             logger.warning(f"[Email Background] failed inside task: {e}")
 
-        # WS & Map Cache Invalidation
+            # WS & Map Cache Invalidation
         try:
             # Broadcast new complaint to any listeners
             await manager.broadcast_new_complaint(c)
 
-            # Broadcast status update for specifics
+            # Broadcast status update for complaint-room subscribers
             from app.websockets.complaint_ws import complaint_ws_manager
+            await complaint_ws_manager.broadcast_status(
+                complaint_id=c.complaint_id,
+                status=c.status,
+                extra_data={"damage_type": c.damage_type, "confidence": c.confidence_score or c.ai_confidence}
+            )
 
-            await complaint_ws_manager.broadcast_status(complaint_id=c.complaint_id, status=c.status, extra_data={"damage_type": c.damage_type, "confidence": c.confidence_score or c.ai_confidence})
+            # ── User-keyed WS: inference_complete ────────────────────────────────
+            if c.user_id:
+                from app.api.ws import build_inference_payload, manager as user_ws_manager
+                await user_ws_manager.send(
+                    str(c.user_id),
+                    build_inference_payload(
+                        complaint_id=c.complaint_id,
+                        damage_type=c.detected_damage_type or c.damage_type or "unknown",
+                        confidence=round(c.confidence_score or c.ai_confidence or 0.0, 4),
+                        severity=c.severity or "medium",
+                    ),
+                )
 
             # Invalidate map cache
             from app.services.cache_service import cache as cache_service
@@ -407,6 +423,7 @@ async def submit(
     background_tasks: BackgroundTasks,
     latitude: float = Form(...),
     longitude: float = Form(...),
+    description: str = Form(""),
     address: str | None = Form(None),
     nearby_sensitive: str | None = Form(None),
     image: UploadFile = File(...),
@@ -417,12 +434,37 @@ async def submit(
     if not image or not image.filename:
         raise HTTPException(400, "Missing image file")
 
-    from app.utils.file_validators import validate_image
+    from app.schemas.complaint_schema import ComplaintCreate
+    from pydantic import ValidationError
+    from fastapi.exceptions import RequestValidationError
+    
+    try:
+        complaint_data = ComplaintCreate(
+            latitude=latitude,
+            longitude=longitude,
+            description=description,
+            image=image
+        )
+        # Apply the stripped description, bounded lat/lng back
+        description = complaint_data.description
+        latitude = complaint_data.latitude
+        longitude = complaint_data.longitude
+    except ValidationError as e:
+        raise RequestValidationError(e.errors())
 
-    img_bytes, error_resp = await validate_image(image)
-    if error_resp:
-        return error_resp
+    from app.utils.image_validator import validate_image
+    from fastapi.responses import JSONResponse
 
+    is_valid, error_msg = await validate_image(image)
+    if not is_valid:
+        # Tests assert 422 for invalid images as well in Pydantic logic / validators
+        # Pydantic image validation is already running, but we also run the manual util just in case it yields a specific format or for redundancy.
+        # Actually Pydantic image validator might have caught it, but if not we still fail it here.
+        # Ensure we return 422 if invalid image according to our test cases: "upload a .txt renamed to .jpg, assert 422"
+        return JSONResponse(status_code=422, content={"detail": error_msg})
+
+    await image.seek(0)
+    img_bytes = await image.read()
     img_hash = ai_service.image_hash(img_bytes)
 
     # Use Geo Service for proximity duplicate detection
@@ -446,6 +488,7 @@ async def submit(
         latitude=latitude,
         longitude=longitude,
         address=address,
+        description=description,
         status="pending",
         image_hash=img_hash,
         is_duplicate=False,
@@ -471,10 +514,30 @@ async def submit(
 
     content_type = image.content_type or "image/jpeg"
 
-    # Fire and forget inference
-    background_tasks.add_task(process_inference_background, cid, str(fpath), img_bytes, image.filename, content_type, address, nearby_sensitive, user.id)
+    # Fire and forget inference — use Celery if available, else BackgroundTasks
+    _use_celery = os.getenv("CELERY_ENABLED", "false").lower() in ("1", "true", "yes")
+    if _use_celery:
+        try:
+            from app.tasks import run_inference
+            run_inference.delay(
+                complaint_id=cid,
+                image_path=str(fpath),
+                image_bytes_hex=img_bytes.hex(),
+                filename=image.filename,
+                content_type=content_type,
+                address=address,
+                nearby_sensitive=nearby_sensitive,
+                user_id=user.id,
+            )
+            logger.info("Dispatched Celery inference task for %s", cid)
+        except Exception as celery_exc:
+            logger.warning("Celery dispatch failed (%s), falling back to BackgroundTasks", celery_exc)
+            background_tasks.add_task(process_inference_background, cid, str(fpath), img_bytes, image.filename, content_type, address, nearby_sensitive, user.id)
+    else:
+        background_tasks.add_task(process_inference_background, cid, str(fpath), img_bytes, image.filename, content_type, address, nearby_sensitive, user.id)
 
     return JSONResponse(status_code=202, content={"complaint_id": cid, "status": "pending", "message": "Complaint saved. AI Inference running in background."})
+
 
 
 # ── Status Poller ──────────────────────────────────────────────
@@ -598,7 +661,7 @@ async def list_complaints(
         q = q.filter(Complaint.severity == severity)
 
     # Simple pagination: 50 per page
-    rows = q.order_by(Complaint.priority_score.desc(), Complaint.created_at.desc()).offset((page - 1) * 50).limit(50).all()
+    rows = db.execute(q.order_by(Complaint.priority_score.desc(), Complaint.created_at.desc()).offset((page - 1) * 50).limit(50)).scalars().all()
     data = [_c(r, db) for r in rows]
 
     await cache.set(ckey, data, ttl_seconds=30)
@@ -921,6 +984,19 @@ async def update_status(
             "new_status": data.status,
             "officer_id": officer.id
         })
+        # ── User-keyed WS broadcast ─────────────────────────────────────────
+        if c.user_id:
+            from app.api.ws import build_status_update_payload, manager as user_ws_manager
+            await user_ws_manager.send(
+                str(c.user_id),
+                build_status_update_payload(
+                    complaint_id=c.complaint_id,
+                    status=c.status,
+                    severity=c.severity or "medium",
+                    damage_type=c.damage_type,
+                    confidence=c.confidence_score or c.ai_confidence,
+                ),
+            )
     except Exception:
         pass
 

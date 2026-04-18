@@ -19,11 +19,11 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from sentry_sdk.integrations.fastapi import FastApiIntegration
 from sentry_sdk.integrations.logging import LoggingIntegration
 from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
-from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
-from slowapi.util import get_remote_address
 
 from app.api import admin, auth, complaints, map, messages, officers
+from app.api.ws import manager as user_ws_manager, websocket_complaints
 from app.database import Base, engine
 from app.models.models import Complaint, ComplaintOfficer, FieldOfficer, LoginLog, Message, Notification, User  # noqa
 from app.services.auth_service import decode_token
@@ -102,7 +102,7 @@ def _sentry_before_send(event, hint):
 
 
 Base.metadata.create_all(bind=engine)
-limiter = Limiter(key_func=get_remote_address)
+from app.middleware.rate_limit import limiter, custom_rate_limit_handler
 
 # Initialize Instrumentator globally so it's available in lifespan
 instrumentator = Instrumentator(
@@ -153,7 +153,7 @@ app = FastAPI(title="RoadWatch API", version=settings.APP_VERSION, lifespan=life
 instrumentator.instrument(app)
 
 app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_exception_handler(RateLimitExceeded, custom_rate_limit_handler)
 
 app.add_middleware(
     CORSMiddleware,
@@ -251,6 +251,13 @@ async def websocket_complaint_status(websocket: WebSocket, complaint_id: str, to
         complaint_ws_manager.disconnect(complaint_id, websocket)
     finally:
         ping_task.cancel()
+
+
+# ── User-keyed WS (/ws/complaints/{user_id}) ─────────────────────────────────
+@app.websocket("/ws/user/{user_id}")
+async def ws_user_endpoint(websocket: WebSocket, user_id: str, token: str = None):
+    """User-keyed WebSocket: receives status_update + inference_complete events."""
+    await websocket_complaints(websocket, user_id, token)
 
 
 @app.websocket("/ws/officers/location")

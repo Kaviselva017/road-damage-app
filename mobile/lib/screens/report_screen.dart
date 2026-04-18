@@ -8,6 +8,8 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:path_provider/path_provider.dart';
 import '../services/api_service.dart';
 import '../services/offline_queue_service.dart';
+import '../services/offline_queue.dart';
+import '../services/location_service.dart';
 
 /// ── Direct Priority Analyser (no server dependency) ──────────
 /// Computes area type and priority score directly from GPS coordinates
@@ -119,7 +121,7 @@ class ReportScreen extends StatefulWidget {
 
 class _ReportScreenState extends State<ReportScreen> {
   File? _image;
-  Position? _position;
+  LocationResult? _position;
   Map<String, dynamic>? _priorityPreview;
   bool _isLoading = false;
   bool _locationDeniedForever = false;
@@ -147,51 +149,29 @@ class _ReportScreenState extends State<ReportScreen> {
         _locationStatus = 'Checking GPS permission...';
       });
     }
-    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) {
+
+    final permError = await LocationService.ensurePermissions();
+    if (permError != null) {
       if (!mounted) return;
       setState(() {
-        _locationServicesDisabled = true;
-        _locationStatus = 'Location services are disabled.';
-        _error = 'Turn on device location to sync priority analysis faster.';
+        _locationStatus = 'Location permission error';
+        _error = permError;
+        if (permError.contains('disabled')) _locationServicesDisabled = true;
+        if (permError.contains('permanently')) _locationDeniedForever = true;
       });
       return;
     }
+
     if (mounted) {
-      setState(() => _locationServicesDisabled = false);
-    }
-    LocationPermission permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
-    }
-    if (permission == LocationPermission.denied) {
-      if (!mounted) return;
       setState(() {
-        _locationStatus = 'Location permission denied.';
-        _error = 'Allow location access so GPS and priority analysis can sync automatically.';
+        _locationServicesDisabled = false;
+        _locationDeniedForever = false;
+        _locationStatus = 'Acquiring high-accuracy GPS...';
       });
-      return;
     }
-    if (permission == LocationPermission.deniedForever) {
-      if (!mounted) return;
-      setState(() {
-        _locationDeniedForever = true;
-        _locationStatus = 'Location permission permanently denied.';
-        _error = 'Open app settings and allow location access to sync automatically.';
-      });
-      return;
-    }
+
     try {
-      Position? pos;
-      try {
-        pos = await Geolocator.getCurrentPosition(
-          desiredAccuracy: LocationAccuracy.best, // High accuracy for correct priority scoring
-          timeLimit: const Duration(seconds: 15),
-        );
-      } catch (e) {
-        // Fallback to last known position if timeout or error
-        pos = await Geolocator.getLastKnownPosition();
-      }
+      final pos = await LocationService.getBestLocation();
       
       if (pos == null) {
         throw Exception('Could not fetch GPS');
@@ -200,7 +180,6 @@ class _ReportScreenState extends State<ReportScreen> {
       if (!mounted) return;
       setState(() {
         _position = pos;
-        _locationDeniedForever = false;
         _locationStatus = 'Live GPS synced';
       });
       // ── Run priority analysis DIRECTLY (no server call) ──
@@ -262,13 +241,14 @@ class _ReportScreenState extends State<ReportScreen> {
         final bytes = await _image!.readAsBytes();
         await File(savedPath).writeAsBytes(bytes);
 
-        await OfflineQueueService.enqueue(
+        await OfflineQueue.enqueue(ComplaintDraft(
           imagePath: savedPath,
           latitude: _position!.latitude,
           longitude: _position!.longitude,
           address: _priorityPreview?['address'] as String?,
-          nearbyPlaces: (_priorityPreview?['nearby_places'] as List?)?.join(', '),
-        );
+          nearbySensitive: (_priorityPreview?['nearby_places'] as List?)?.join(', '),
+          areaType: _priorityPreview?['area_type'] as String?,
+        ));
 
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
@@ -336,6 +316,12 @@ class _ReportScreenState extends State<ReportScreen> {
       case 'crowd_place': return Icons.groups;
       default: return Icons.home;
     }
+  }
+
+  Color _accuracyColor(double accuracy) {
+    if (accuracy < 10) return Colors.greenAccent;
+    if (accuracy <= 30) return Colors.amber;
+    return Colors.redAccent;
   }
 
   @override
@@ -407,6 +393,39 @@ class _ReportScreenState extends State<ReportScreen> {
                             color: Colors.white70, fontSize: 13),
                       ),
                     ),
+                    // ── GPS Accuracy Badge ──
+                    if (_position != null)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: _accuracyColor(_position!.accuracy).withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: _accuracyColor(_position!.accuracy), width: 1),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              _position!.accuracy < 10
+                                  ? Icons.gps_fixed
+                                  : _position!.accuracy <= 30
+                                      ? Icons.gps_not_fixed
+                                      : Icons.gps_off,
+                              size: 12,
+                              color: _accuracyColor(_position!.accuracy),
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              '±${_position!.accuracy.toStringAsFixed(0)}m',
+                              style: TextStyle(
+                                color: _accuracyColor(_position!.accuracy),
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                   ]),
                   const SizedBox(height: 12),
                   Wrap(

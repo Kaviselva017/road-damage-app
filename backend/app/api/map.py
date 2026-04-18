@@ -1,7 +1,9 @@
 import logging
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+import os
+
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -11,13 +13,15 @@ from app.models.models import Complaint, FieldOfficer
 from app.schemas.heatmap import ClusterPoint, Hotspot
 from app.services import clustering_service
 from app.services.cache_service import cache
+from app.middleware.rate_limit import limiter
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/map", tags=["map"])
 
 
 @router.get("/heatmap", response_model=list[ClusterPoint])
-async def get_heatmap(grid: int = Query(500, ge=100, le=2000), db: Session = Depends(get_db)):
+@limiter.limit(os.getenv("RATE_LIMIT_HEATMAP", "60/minute"))
+async def get_heatmap(request: Request, grid: int = Query(500, ge=100, le=2000), db: Session = Depends(get_db)):
     cache_key = f"map:heatmap:{grid}"
     cached = await cache.get(cache_key)
     if cached:

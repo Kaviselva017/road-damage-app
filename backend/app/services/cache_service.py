@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 
 class CacheInterface(Protocol):
     async def get(self, key: str) -> Any | None: ...
-    async def set(self, key: str, value: Any, ttl: int = 60) -> None: ...
+    async def set(self, key: str, value: Any, ttl_seconds: int = 60) -> None: ...
     async def delete(self, key: str) -> None: ...
     async def delete_pattern(self, pattern: str) -> None: ...
     async def list(self, prefix: str) -> list[Any]: ...
@@ -23,7 +23,7 @@ class NoOpCache:
     async def get(self, key: str) -> Any | None:
         return None
 
-    async def set(self, key: str, value: Any, ttl: int = 60) -> None:
+    async def set(self, key: str, value: Any, ttl_seconds: int = 60) -> None:
         pass
 
     async def delete(self, key: str) -> None:
@@ -57,9 +57,9 @@ class RedisCache:
             logger.error(f"Redis GET error for {key}: {e}")
         return None
 
-    async def set(self, key: str, value: Any, ttl: int = 60) -> None:
+    async def set(self, key: str, value: Any, ttl_seconds: int = 60) -> None:
         try:
-            await self.redis.setex(key, ttl, json.dumps(value))
+            await self.redis.setex(key, ttl_seconds, json.dumps(value))
         except Exception as e:
             logger.error(f"Redis SET error for {key}: {e}")
 

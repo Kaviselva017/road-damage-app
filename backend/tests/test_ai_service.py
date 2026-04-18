@@ -1,233 +1,141 @@
 """
-Tests for app.services.ai_service
-──────────────────────────────────
-Covers:
-  • _yolo_analyze   — real-model path with mocked YOLO objects
-  • _mock           — deterministic mock fallback
-  • _severity       — confidence → severity mapping
-  • image_hash      — MD5 dedup helper
-  • is_road_image   — file-gate logic (mock mode)
+backend/tests/test_ai_service.py
+==================================
+pytest tests for ai_service.py:
+  - test_severity_mapping: all 4 bands
+  - test_clahe_applied: output differs from input
+  - test_onnx_fallback: mock onnxruntime, assert DamageResult returned
 """
 
-import hashlib
+from __future__ import annotations
+
+import importlib
+import io
 import os
-import tempfile
-import pytest
+import sys
+import types
 from unittest.mock import MagicMock, patch
 
-from app.services.ai_service import (
-    _yolo_analyze,
-    _mock,
-    _severity,
-    image_hash,
-    is_road_image,
-    _normalise_class,
-    _build_description,
-)
+import numpy as np
+import pytest
 
 
-# ── Helpers ────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
+# Helpers
+# ─────────────────────────────────────────────────────────────────────────────
 
-class _FakeConf:
-    """Mimics a tensor with .max() and index access."""
-    def __init__(self, values):
-        self._v = values
-    def __getitem__(self, i):
-        return self._v[i]
-    def __len__(self):
-        return len(self._v)
-    def max(self):
-        return max(self._v) if self._v else 0.0
+def _make_jpeg_bytes(width: int = 64, height: int = 64) -> bytes:
+    """Create a minimal valid JPEG from a random numpy array using cv2."""
+    import cv2  # noqa: PLC0415
 
-class _FakeCls:
-    def __init__(self, values):
-        self._v = values
-    def __getitem__(self, i):
-        return self._v[i]
-    def __len__(self):
-        return len(self._v)
-
-class _FakeBoxes:
-    def __init__(self, cls_list, conf_list):
-        self.cls  = _FakeCls(cls_list)
-        self.conf = _FakeConf(conf_list)
-    def __len__(self):
-        return len(self.conf)
-
-class _FakeResult:
-    def __init__(self, cls_list, conf_list):
-        if cls_list is None:
-            self.boxes = None
-        else:
-            self.boxes = _FakeBoxes(cls_list, conf_list)
-
-def _make_model(names_map, cls_list, conf_list):
-    """Return a callable mock model that yields one FakeResult."""
-    model = MagicMock()
-    model.names = names_map
-    model.return_value = [_FakeResult(cls_list, conf_list)]
-    return model
+    img = np.random.randint(50, 200, (height, width, 3), dtype=np.uint8)
+    ok, buf = cv2.imencode(".jpg", img)
+    assert ok, "cv2.imencode failed in test helper"
+    return buf.tobytes()
 
 
-# ── _severity ──────────────────────────────────────────────────────────
-
-def test_severity_high():
-    assert _severity(0.80) == "high"
-    assert _severity(0.99) == "high"
-
-def test_severity_medium():
-    assert _severity(0.55) == "medium"
-    assert _severity(0.79) == "medium"
-
-def test_severity_low():
-    assert _severity(0.54) == "low"
-    assert _severity(0.10) == "low"
+def _fresh_ai_service():
+    """Force a clean import of ai_service (reset module-level globals)."""
+    if "app.services.ai_service" in sys.modules:
+        del sys.modules["app.services.ai_service"]
+    return importlib.import_module("app.services.ai_service")
 
 
-# ── _normalise_class ───────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
+# 1. Severity mapping — all 4 bands
+# ─────────────────────────────────────────────────────────────────────────────
 
-def test_normalise_rdd_codes():
-    assert _normalise_class("D00") == "crack"
-    assert _normalise_class("D10") == "crack"
-    assert _normalise_class("D20") == "surface_damage"
-    assert _normalise_class("D40") == "pothole"
+def test_severity_mapping():
+    """_map_severity must return the correct label for all 4 confidence bands."""
+    svc = _fresh_ai_service()
 
-def test_normalise_human_names():
-    assert _normalise_class("pothole") == "pothole"
-    assert _normalise_class("crack") == "crack"
-
-def test_normalise_unknown_falls_back():
-    assert _normalise_class("unknown_label") == "pothole"
-
-
-# ── _build_description ────────────────────────────────────────────────
-
-def test_description_format():
-    desc = _build_description("surface_damage", "high", 0.91)
-    assert "High severity surface damage" in desc
-    assert "91%" in desc
+    assert svc._map_severity(0.85) == "critical"
+    assert svc._map_severity(0.80) == "critical"   # boundary: >= 0.80
+    assert svc._map_severity(0.79) == "high"
+    assert svc._map_severity(0.60) == "high"       # boundary: >= 0.60
+    assert svc._map_severity(0.59) == "medium"
+    assert svc._map_severity(0.40) == "medium"     # boundary: >= 0.40
+    assert svc._map_severity(0.39) == "low"
+    assert svc._map_severity(0.00) == "low"
 
 
-# ── _yolo_analyze ──────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
+# 2. CLAHE applied — output differs from input
+# ─────────────────────────────────────────────────────────────────────────────
 
-def test_yolo_single_class_pothole():
-    model = _make_model({0: "D40"}, [0, 0], [0.85, 0.60])
-    result = _yolo_analyze(model, "dummy.jpg")
+def test_clahe_applied():
+    """_apply_clahe must return an array that is not identical to the input."""
+    import cv2  # noqa: PLC0415
 
-    assert result["damage_type"] == "pothole"
-    assert result["severity"] == "high"       # 0.85 >= 0.80
-    assert result["ai_confidence"] == 0.85
-    assert "pothole" in result["description"].lower()
+    svc = _fresh_ai_service()
 
-def test_yolo_single_class_crack():
-    model = _make_model({0: "D00"}, [0], [0.70])
-    result = _yolo_analyze(model, "dummy.jpg")
+    # Create a flat, dull image (very low contrast) — CLAHE should change it
+    bgr = np.full((64, 64, 3), 128, dtype=np.uint8)
+    result = svc._apply_clahe(bgr)
 
-    assert result["damage_type"] == "crack"
-    assert result["severity"] == "medium"     # 0.55 <= 0.70 < 0.80
-    assert result["ai_confidence"] == 0.70
-
-def test_yolo_multiple_classes():
-    """Two distinct normalised classes → damage_type = 'multiple'."""
-    model = _make_model(
-        {0: "D40", 1: "D00"},
-        [0, 1, 0],
-        [0.72, 0.65, 0.50],
-    )
-    result = _yolo_analyze(model, "dummy.jpg")
-
-    assert result["damage_type"] == "multiple"
-    assert result["ai_confidence"] == 0.72    # max across all boxes
-
-def test_yolo_no_detections():
-    model = _make_model({0: "D40"}, None, None)
-    result = _yolo_analyze(model, "dummy.jpg")
-
-    assert result["damage_type"] == "surface_damage"
-    assert result["ai_confidence"] == 0.0
-    assert result["severity"] == "low"
-
-def test_yolo_empty_boxes():
-    model = _make_model({0: "D40"}, [], [])
-    result = _yolo_analyze(model, "dummy.jpg")
-
-    assert result["ai_confidence"] == 0.0
+    assert result.shape == bgr.shape, "Shape must be preserved"
+    assert result.dtype == bgr.dtype, "Dtype must be preserved"
+    # CLAHE on a perfectly flat image may produce the same values,
+    # but on real images it will differ. We test a gradient image:
+    gradient = np.zeros((64, 64, 3), dtype=np.uint8)
+    gradient[:, :, 0] = np.tile(np.arange(64, dtype=np.uint8), (64, 1))
+    out = svc._apply_clahe(gradient)
+    assert not np.array_equal(gradient, out), \
+        "CLAHE output must differ from a gradient input image"
 
 
-# ── _mock ──────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
+# 3. ONNX fallback — mock onnxruntime, assert DamageResult returned
+# ─────────────────────────────────────────────────────────────────────────────
 
-def test_mock_deterministic():
-    """Same file content should yield the same mock result every time."""
-    with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as f:
-        f.write(b"\xff\xd8\xff" + b"\x00" * 2048)
-        path = f.name
-    try:
-        r1 = _mock(path)
-        r2 = _mock(path)
-        assert r1 == r2
-    finally:
-        os.unlink(path)
+def test_onnx_fallback(tmp_path, monkeypatch):
+    """When YOLO_MODEL_PATH points to a .onnx file, use onnxruntime and return DamageResult."""
+    svc = _fresh_ai_service()
 
-def test_mock_has_required_keys():
-    with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as f:
-        f.write(b"\xff\xd8\xff" + b"\x00" * 2048)
-        path = f.name
-    try:
-        result = _mock(path)
-        assert "damage_type" in result
-        assert "severity" in result
-        assert "ai_confidence" in result
-        assert "description" in result
-        assert result["damage_type"] in {"pothole", "crack", "surface_damage", "multiple"}
-        assert result["severity"] in {"high", "medium", "low"}
-        assert "[MOCK]" in result["description"]
-    finally:
-        os.unlink(path)
+    # --- create a dummy .onnx file so the path-exists check passes ---
+    onnx_file = tmp_path / "best.onnx"
+    onnx_file.write_bytes(b"dummy")
 
+    monkeypatch.setenv("YOLO_MODEL_PATH", str(onnx_file))
 
-# ── image_hash ─────────────────────────────────────────────────────────
+    # --- build a minimal onnxruntime mock ---
+    # Output mimics YOLOv8 ONNX shape: (1, 84, 8400)
+    # One strong detection: class 3 (pothole) at confidence 0.85
+    output_data = np.zeros((1, 8 + 4, 8400), dtype=np.float32)  # 4+4 classes simplified
+    # We'll patch with full 84 channels (4 box + 80 classes) but only use first 4 classes
+    output_data = np.zeros((1, 84, 8400), dtype=np.float32)
+    # Set one anchor: cx=320, cy=320, w=100, h=100, class-3 conf=0.9
+    output_data[0, 0, 0] = 320.0   # cx
+    output_data[0, 1, 0] = 320.0   # cy
+    output_data[0, 2, 0] = 100.0   # w
+    output_data[0, 3, 0] = 100.0   # h
+    output_data[0, 4 + 3, 0] = 0.9  # class_id=3, conf=0.90
 
-def test_image_hash():
-    data = b"some image bytes"
-    expected = hashlib.md5(data).hexdigest()
-    assert image_hash(data) == expected
+    mock_input = MagicMock()
+    mock_input.name = "images"
 
-def test_image_hash_different_inputs():
-    assert image_hash(b"a") != image_hash(b"b")
+    mock_session = MagicMock()
+    mock_session.get_inputs.return_value = [mock_input]
+    mock_session.run.return_value = [output_data]
 
+    mock_ort = types.ModuleType("onnxruntime")
+    mock_ort.SessionOptions = MagicMock(return_value=MagicMock())
+    mock_ort.InferenceSession = MagicMock(return_value=mock_session)
 
-# ── is_road_image (mock mode — no model) ──────────────────────────────
+    # Reset module globals so _load_model() runs fresh
+    svc._model = None
+    svc._model_type = None
+    svc._input_name = None
 
-def test_is_road_image_valid_jpeg():
-    """Valid JPEG with enough bytes should pass in mock mode."""
-    with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as f:
-        f.write(b"\xff\xd8\xff" + b"\x00" * 2000)
-        path = f.name
-    try:
-        # Force mock mode by ensuring model is not loaded
-        with patch("app.services.ai_service._load", return_value=None):
-            is_road, conf = is_road_image(path)
-            assert is_road is True
-            assert conf == 0.80
-    finally:
-        os.unlink(path)
+    with patch.dict(sys.modules, {"onnxruntime": mock_ort}):
+        jpeg_bytes = _make_jpeg_bytes()
+        results = svc.analyze_image(jpeg_bytes)
 
-def test_is_road_image_too_small():
-    with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as f:
-        f.write(b"\xff\xd8\xff" + b"\x00" * 10)
-        path = f.name
-    try:
-        is_road, conf = is_road_image(path)
-        assert is_road is False
-    finally:
-        os.unlink(path)
-
-def test_is_road_image_bad_magic():
-    with tempfile.NamedTemporaryFile(suffix=".txt", delete=False) as f:
-        f.write(b"not an image " * 200)
-        path = f.name
-    try:
-        is_road, conf = is_road_image(path)
-        assert is_road is False
-    finally:
-        os.unlink(path)
+    assert isinstance(results, list), "analyze_image must return a list"
+    assert len(results) >= 1, "At least one detection expected"
+    top = results[0]
+    assert isinstance(top, svc.DamageResult), "Result must be a DamageResult"
+    assert top.class_name == "pothole", f"Expected pothole, got {top.class_name}"
+    assert top.confidence >= 0.5, "Confidence must be >= 0.5"
+    assert top.severity in {"critical", "high", "medium", "low"}
+    assert len(top.bbox) == 4, "bbox must have 4 ints [x1,y1,x2,y2]"

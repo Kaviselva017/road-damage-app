@@ -2,32 +2,21 @@ import 'dart:async';
 import 'dart:developer' as dev;
 import 'dart:io';
 import 'package:connectivity_plus/connectivity_plus.dart';
-import 'offline_queue_service.dart';
+import 'offline_queue.dart';
 import 'api_service.dart';
 import 'local_notification_helper.dart';
 
 class SyncService {
-  static StreamSubscription<List<ConnectivityResult>>? _sub;
   static bool _isSyncing = false;
 
   static Future<void> init() async {
-    await OfflineQueueService.init();
+    await OfflineQueue.init();
     
     // Initial sync attempt if already connected
     final connectivity = await Connectivity().checkConnectivity();
     if (connectivity.contains(ConnectivityResult.mobile) || 
         connectivity.contains(ConnectivityResult.wifi)) {
-      _attemptSync();
-    }
-
-    _sub = Connectivity().onConnectivityChanged.listen((List<ConnectivityResult> results) {
-      final isConnected = results.contains(ConnectivityResult.mobile) || 
-                          results.contains(ConnectivityResult.wifi);
-      if (isConnected) {
-        dev.log('[SyncService] Connectivity restored, triggering sync');
-        _attemptSync();
-      }
-    });
+    _attemptSync();
   }
 
   static Future<void> _attemptSync() async {
@@ -35,44 +24,16 @@ class SyncService {
     _isSyncing = true;
 
     try {
-      final pending = await OfflineQueueService.getPending();
-      if (pending.isEmpty) {
+      final pendingCount = OfflineQueue.pendingCount;
+      if (pendingCount == 0) {
         _isSyncing = false;
         return;
       }
 
-      dev.log('[SyncService] Attempting to sync ${pending.length} reports');
+      dev.log('[SyncService] Attempting to sync $pendingCount reports');
       final api = ApiService();
-      int syncedCount = 0;
-
-      for (final complaint in pending) {
-        final id = complaint['id'] as int;
-        final imagePath = complaint['image_path'] as String;
-        final file = File(imagePath);
-
-        if (!file.existsSync()) {
-          dev.log('[SyncService] Image file $imagePath missing, skipping');
-          await OfflineQueueService.markSynced(id);
-          continue;
-        }
-
-        try {
-          await api.submitComplaint(
-            latitude: complaint['latitude'] as double,
-            longitude: complaint['longitude'] as double,
-            address: complaint['address'] as String?,
-            nearbySensitive: complaint['nearby_places'] as String?,
-            image: file,
-          );
-          
-          await OfflineQueueService.markSynced(id);
-          syncedCount++;
-          dev.log('[SyncService] Synced complaint $id');
-        } catch (e) {
-          dev.log('[SyncService] Sync failure for complaint $id: $e');
-          await OfflineQueueService.incrementRetry(id);
-        }
-      }
+      
+      final syncedCount = await OfflineQueue.processQueue(api.submitComplaint);
 
       if (syncedCount > 0) {
         await LocalNotificationHelper.showNotification(
@@ -87,12 +48,12 @@ class SyncService {
     }
   }
 
-  static Future<int> pendingCount() async {
-    return await OfflineQueueService.pendingCount();
+  static int pendingCount() {
+    return OfflineQueue.pendingCount;
   }
 
   static void dispose() {
-    _sub?.cancel();
-    _sub = null;
+    OfflineQueue.dispose();
   }
 }
+
