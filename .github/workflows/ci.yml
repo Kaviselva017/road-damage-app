@@ -1,66 +1,164 @@
-name: CI/CD Pipeline
+name: CI
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [main]
   pull_request:
-    branches: [ "main" ]
+    branches: [main]
+
+# Cancel in-progress runs on the same branch/PR to save minutes
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  backend-test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - name: Setup Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: "3.11"
-      - name: Install dependencies
-        run: |
-          pip install -r backend/requirements.txt
-      - name: Run Pytest
-        run: |
-          cd backend
-          pytest tests/ -v --tb=short
-      - name: Upload Test Results
-        if: always()
-        uses: actions/upload-artifact@v3
-        with:
-          name: backend-test-results
-          path: backend/.pytest_cache/
-
+  # ────────────────────────────────────────────────────────────────────────────
+  # JOB 1 — Backend lint (fast feedback, runs first)
+  # ────────────────────────────────────────────────────────────────────────────
   backend-lint:
+    name: Backend Lint (ruff)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - name: Setup Python
-        uses: actions/setup-python@v4
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+          cache: pip
+
       - name: Install ruff
         run: pip install ruff
-      - name: Run Ruff
-        run: ruff check backend/app/ --select=E,F,W --ignore=E501
 
-  dashboard-build:
+      - name: ruff check
+        run: ruff check backend/app/ --select=E,F,W,B,UP,I --ignore=E501
+
+      - name: ruff format check
+        run: ruff format backend/app/ --check
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # JOB 2 — Backend tests (depends on lint passing)
+  # ────────────────────────────────────────────────────────────────────────────
+  backend-test:
+    name: Backend Tests (pytest)
+    needs: [backend-lint]
     runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: test_roadwatch
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    env:
+      DATABASE_URL: postgresql://postgres:test@localhost:5432/test_roadwatch
+      SECRET_KEY: test-secret-key-for-ci-only-not-used-in-prod
+      APP_ENV: development
+      # YOLO disabled in CI — model file not present
+      YOLO_MODEL_PATH: ""
+      YOLO_CONFIDENCE_THRESHOLD: "0.60"
+      # Skip heavy ML deps that are already excluded below
+      SKIP_AI_INIT: "1"
+
     steps:
-      - uses: actions/checkout@v3
-      - name: Setup Node
-        uses: actions/setup-node@v3
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install backend dependencies (excluding heavy ML packages)
+        run: |
+          # Install everything except torch / torchvision / ultralytics
+          # which would time out on CI and are not needed for tests
+          grep -vE "^(torch|torchvision|ultralytics)" \
+            backend/requirements.txt > /tmp/ci_requirements.txt
+          pip install -r /tmp/ci_requirements.txt
+          pip install -r backend/requirements-dev.txt
+
+      - name: Run Alembic migrations
+        working-directory: backend
+        run: alembic upgrade head
+
+      - name: Run pytest
+        working-directory: backend
+        run: pytest tests/ -v --tb=short --timeout=30
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results
+          path: backend/tests/
+          retention-days: 7
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # JOB 3 — Dashboard lint + build (runs in parallel with backend-test)
+  # ────────────────────────────────────────────────────────────────────────────
+  dashboard-check:
+    name: Dashboard Lint + Build (Vite)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
         with:
           node-version: "20"
-      - name: Install dependencies and build
-        run: |
-          cd frontend
-          npm install
-          npm run build
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
 
+      - name: Install npm dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: ESLint (zero warnings)
+        working-directory: frontend
+        run: npm run lint
+
+      - name: Vite build
+        working-directory: frontend
+        run: npm run build
+        env:
+          # Provide dummy env vars so Vite doesn't abort on missing values
+          VITE_API_URL: https://road-damage-appsystem.onrender.com/api
+          VITE_WS_URL: wss://road-damage-appsystem.onrender.com
+
+      - name: Upload dashboard dist
+        uses: actions/upload-artifact@v4
+        with:
+          name: dashboard-dist
+          path: frontend/dist/
+          retention-days: 7
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # JOB 4 — Deploy (only on push to main, after all checks pass)
+  # ────────────────────────────────────────────────────────────────────────────
   deploy:
-    needs: [backend-test, backend-lint, dashboard-build]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    name: Trigger Render Deploy
+    needs: [backend-test, dashboard-check]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
+
     steps:
-      - name: Trigger Render Deploy
+      - name: Trigger Render deploy hook
         run: |
-          curl -X POST ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            -X POST "${{ secrets.RENDER_DEPLOY_HOOK_URL }}")
+          echo "Render deploy hook status: $HTTP_STATUS"
+          if [ "$HTTP_STATUS" != "200" ] && [ "$HTTP_STATUS" != "201" ]; then
+            echo "::error::Render deploy hook returned unexpected status $HTTP_STATUS"
+            exit 1
+          fi
+
+      - name: Verify deploy triggered
+        run: echo "✅ Render deploy triggered successfully"

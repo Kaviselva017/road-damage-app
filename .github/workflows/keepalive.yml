@@ -1,37 +1,41 @@
-name:keepalive
+name: keepalive
 
 on:
   schedule:
-    # Runs every 13 minutes — keeps Render free tier awake
+    # Every 13 minutes — keeps Render free tier awake (avoids spin-down)
+    # 13 min chosen deliberately: avoids GitHub Actions scheduler drift at 14-min boundary
     - cron: '*/13 * * * *'
-    # Runs once per day at 06:00 UTC — keeps Supabase project active
+    # Once daily at 06:00 UTC — prevents Supabase free-tier project from pausing
     - cron: '0 6 * * *'
   workflow_dispatch:
 
 jobs:
   ping:
+    name: Keep services alive
     runs-on: ubuntu-latest
+    # Keepalive must NEVER fail the workflow — failures are informational only
     steps:
       - name: Ping Render backend (prevent spin-down)
         run: |
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+          set +e
+          STATUS=$(curl -f --max-time 30 -s -o /dev/null -w "%{http_code}" \
             https://road-damage-appsystem.onrender.com/healthz)
-          echo "Render health status: $STATUS"
-          if [ "$STATUS" != "200" ]; then
-            echo "WARNING: Render returned $STATUS"
-          fi
+          echo "Render /healthz status: ${STATUS:-connection_failed}"
+          exit 0
 
       - name: Ping Supabase (prevent free-tier project pause)
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
         run: |
+          set +e
           if [ -z "$SUPABASE_URL" ]; then
-            echo "SUPABASE_URL secret not set, skipping"
+            echo "SUPABASE_URL secret not set — skipping Supabase ping"
             exit 0
           fi
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
-            "$SUPABASE_URL/rest/v1/" \
-            -H "apikey: $SUPABASE_ANON_KEY" \
-            -H "Authorization: Bearer $SUPABASE_ANON_KEY")
-          echo "Supabase status: $STATUS"
+          STATUS=$(curl -f --max-time 30 -s -o /dev/null -w "%{http_code}" \
+            "${SUPABASE_URL}/rest/v1/" \
+            -H "apikey: ${SUPABASE_ANON_KEY}" \
+            -H "Authorization: Bearer ${SUPABASE_ANON_KEY}")
+          echo "Supabase REST status: ${STATUS:-connection_failed}"
+          exit 0

@@ -1,5 +1,8 @@
 # Citizen-Based AI Road Damage Reporting System
 
+[![CI](https://github.com/Kaviselva017/road-damage-app/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Kaviselva017/road-damage-app/actions/workflows/ci.yml)
+[![Keep Alive](https://github.com/Kaviselva017/road-damage-app/actions/workflows/keepalive.yml/badge.svg)](https://github.com/Kaviselva017/road-damage-app/actions/workflows/keepalive.yml)
+
 ## Architecture
 
 ```
