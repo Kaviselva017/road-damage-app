@@ -1,13 +1,37 @@
-name: Render Keep Alive
+name:keepalive
 
 on:
   schedule:
-    - cron: "*/14 * * * *"
+    # Runs every 13 minutes — keeps Render free tier awake
+    - cron: '*/13 * * * *'
+    # Runs once per day at 06:00 UTC — keeps Supabase project active
+    - cron: '0 6 * * *'
   workflow_dispatch:
 
 jobs:
   ping:
     runs-on: ubuntu-latest
     steps:
-      - name: Ping backend health endpoint
-        run: curl --retry 3 --max-time 120 -f https://road-damage-appsystem.onrender.com/healthz || exit 0
+      - name: Ping Render backend (prevent spin-down)
+        run: |
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            https://road-damage-appsystem.onrender.com/healthz)
+          echo "Render health status: $STATUS"
+          if [ "$STATUS" != "200" ]; then
+            echo "WARNING: Render returned $STATUS"
+          fi
+
+      - name: Ping Supabase (prevent free-tier project pause)
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          if [ -z "$SUPABASE_URL" ]; then
+            echo "SUPABASE_URL secret not set, skipping"
+            exit 0
+          fi
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            "$SUPABASE_URL/rest/v1/" \
+            -H "apikey: $SUPABASE_ANON_KEY" \
+            -H "Authorization: Bearer $SUPABASE_ANON_KEY")
+          echo "Supabase status: $STATUS"
