@@ -1,6 +1,7 @@
 import sentry_sdk
 from fastapi import Depends, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -19,10 +20,18 @@ def _token(creds: HTTPAuthorizationCredentials = Depends(bearer)) -> str:
 def get_current_user(token: str = Depends(_token), db: Session = Depends(get_db)) -> User:
     payload = decode_token(token)
     if not payload or payload.get("role") != "citizen":
-        raise HTTPException(status_code=401, detail="Invalid citizen token")
-    user = db.query(User).filter(User.id == payload.get("sub")).first()
+        raise HTTPException(
+            status_code=401,
+            detail="Could not validate credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    user = db.execute(select(User).filter(User.id == payload.get("sub"))).scalars().first()
     if not user or not user.is_active:
-        raise HTTPException(status_code=401, detail="User not found or inactive")
+        raise HTTPException(
+            status_code=401,
+            detail="Could not validate credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
     sentry_sdk.set_user({"id": user.id, "email": user.email, "role": "citizen"})
     return user
 
@@ -30,10 +39,18 @@ def get_current_user(token: str = Depends(_token), db: Session = Depends(get_db)
 def get_current_officer(token: str = Depends(_token), db: Session = Depends(get_db)) -> FieldOfficer:
     payload = decode_token(token)
     if not payload or payload.get("role") not in ("officer", "admin"):
-        raise HTTPException(status_code=401, detail="Invalid officer token")
-    officer = db.query(FieldOfficer).filter(FieldOfficer.id == payload.get("sub")).first()
+        raise HTTPException(
+            status_code=401,
+            detail="Could not validate credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    officer = db.execute(select(FieldOfficer).filter(FieldOfficer.id == payload.get("sub"))).scalars().first()
     if not officer or not officer.is_active:
-        raise HTTPException(status_code=401, detail="Officer not found or inactive")
+        raise HTTPException(
+            status_code=401,
+            detail="Could not validate credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
     sentry_sdk.set_user({"id": officer.id, "email": officer.email, "role": payload.get("role")})
     return officer
 

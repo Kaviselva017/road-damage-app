@@ -1,3 +1,10 @@
+import os
+from pathlib import Path
+
+from dotenv import load_dotenv
+from sqlalchemy import create_engine, event
+from sqlalchemy.orm import DeclarativeBase, sessionmaker
+
 """
 RoadWatch — Database configuration
 - Uses modern DeclarativeBase (SQLAlchemy 2.x)
@@ -5,12 +12,6 @@ RoadWatch — Database configuration
 - Supports SQLite (dev) and PostgreSQL (prod)
 """
 
-import os
-from pathlib import Path
-
-from dotenv import load_dotenv
-from sqlalchemy import create_engine, event
-from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
 env_path = Path(__file__).resolve().parent.parent / ".env"
 load_dotenv(dotenv_path=env_path)

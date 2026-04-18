@@ -1,14 +1,14 @@
-"""
-RoadWatch Models — uses plain String for status/severity/damage_type
-so SQLite works without enum migration issues.
-"""
-
 from geoalchemy2 import Geography
 from sqlalchemy import JSON, BigInteger, Boolean, Column, DateTime, Float, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.orm import relationship
 
 from app.database import Base
 from app.utils.datetime_utils import utc_now
+
+"""
+RoadWatch Models — uses plain String for status/severity/damage_type
+so SQLite works without enum migration issues.
+"""
 
 
 class User(Base):

@@ -47,7 +47,7 @@ def verify_firebase_token(id_token: str) -> dict:
     Raises HTTP 401 on invalid/expired token.
     """
     try:
-        # check_revoked=True provides extra security but adds latency (network call to Firebase)  # noqa: E501
+        # check_revoked=True provides extra security but adds latency (network call to Firebase)
         return firebase_auth.verify_id_token(id_token, check_revoked=True)
     except firebase_auth.RevokedIdTokenError as e:
         raise HTTPException(

@@ -1,4 +1,35 @@
-# ruff: noqa: E402, E712, B904, E722
+import asyncio
+import json
+import logging
+import os
+import time
+from contextlib import asynccontextmanager
+from pathlib import Path
+
+import sentry_sdk
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from dotenv import load_dotenv
+from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
+from prometheus_fastapi_instrumentator import Instrumentator
+from pydantic import model_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
+from sentry_sdk.integrations.fastapi import FastApiIntegration
+from sentry_sdk.integrations.logging import LoggingIntegration
+from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
+
+from app.api import admin, auth, complaints, map, messages, officers
+from app.database import Base, engine
+from app.models.models import Complaint, ComplaintOfficer, FieldOfficer, LoginLog, Message, Notification, User  # noqa
+from app.services.auth_service import decode_token
+from app.websockets.complaint_ws import complaint_ws_manager
+from app.ws_manager import manager  # noqa
+
 """
 RoadWatch — FastAPI Application Entry Point (v2.2.0)
 
@@ -9,27 +40,6 @@ Clean, modularized setup with:
   - WebSocket & Background Workers
 """
 
-import asyncio  # noqa: E402
-import json  # noqa: E402
-import logging  # noqa: E402
-import os  # noqa: E402
-import time  # noqa: E402
-from contextlib import asynccontextmanager  # noqa: E402
-from pathlib import Path  # noqa: E402
-
-import sentry_sdk  # noqa: E402
-from apscheduler.schedulers.asyncio import AsyncIOScheduler  # noqa: E402
-from dotenv import load_dotenv  # noqa: E402
-from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect  # noqa: E402
-from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse  # noqa: E402
-from fastapi.staticfiles import StaticFiles  # noqa: E402
-from prometheus_fastapi_instrumentator import Instrumentator  # noqa: E402
-from pydantic import model_validator  # noqa: E402
-from pydantic_settings import BaseSettings, SettingsConfigDict  # noqa: E402
-from sentry_sdk.integrations.fastapi import FastApiIntegration  # noqa: E402
-from sentry_sdk.integrations.logging import LoggingIntegration  # noqa: E402
-from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration  # noqa: E402
 
 # ── Environment & Config ──────────────────────────────────────────────
 env_path = Path(__file__).resolve().parent.parent / ".env"
@@ -89,13 +99,7 @@ def _sentry_before_send(event, hint):
 # Removed module-level sentry init
 
 # ── Core Services & DB ───────────────────────────────────────────────
-from slowapi import Limiter, _rate_limit_exceeded_handler  # noqa: E402
-from slowapi.errors import RateLimitExceeded  # noqa: E402
-from slowapi.util import get_remote_address  # noqa: E402
 
-from app.database import Base, engine  # noqa: E402
-from app.models.models import Complaint, ComplaintOfficer, FieldOfficer, LoginLog, Message, Notification, User  # noqa
-from app.ws_manager import manager  # noqa
 
 Base.metadata.create_all(bind=engine)
 limiter = Limiter(key_func=get_remote_address)
@@ -194,7 +198,6 @@ def _html(name: str):
 
 
 # ── Routes ────────────────────────────────────────────────────────────
-from app.api import admin, auth, complaints, map, messages, officers  # noqa: E402
 
 app.include_router(auth.router, prefix="/api")
 app.include_router(complaints.router, prefix="/api")
@@ -222,8 +225,6 @@ if settings.APP_ENV == "development":
 
 
 # ── WebSockets ────────────────────────────────────────────────────────
-from app.services.auth_service import decode_token  # noqa: E402
-from app.websockets.complaint_ws import complaint_ws_manager  # noqa: E402
 
 
 @app.websocket("/ws/complaints/{complaint_id}")

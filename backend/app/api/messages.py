@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -30,10 +31,10 @@ def get_messages(complaint_id: str, request: Request, db: Session = Depends(get_
     tok = auth.replace("Bearer ", "").strip()
     if not tok or not decode_token(tok):
         raise HTTPException(401, "Not authenticated")
-    c = db.query(Complaint).filter(Complaint.complaint_id == complaint_id).first()
+    c = db.execute(select(Complaint).filter(Complaint.complaint_id == complaint_id)).scalars().first()
     if not c:
         raise HTTPException(404, "Complaint not found")
-    msgs = db.query(Message).filter(Message.complaint_id == complaint_id).order_by(Message.created_at.asc()).all()
+    msgs = db.execute(select(Message).filter(Message.complaint_id == complaint_id).order_by(Message.created_at.asc())).scalars().all()
     # Resolve sender names
     result = []
     name_cache = {}
@@ -41,10 +42,10 @@ def get_messages(complaint_id: str, request: Request, db: Session = Depends(get_
         cache_key = (m.sender_role, m.sender_id)
         if cache_key not in name_cache:
             if m.sender_role == "officer":
-                o = db.query(FieldOfficer).filter(FieldOfficer.id == m.sender_id).first()
+                o = db.execute(select(FieldOfficer).filter(FieldOfficer.id == m.sender_id)).scalars().first()
                 name_cache[cache_key] = o.name if o else "Officer"
             else:
-                u = db.query(User).filter(User.id == m.sender_id).first()
+                u = db.execute(select(User).filter(User.id == m.sender_id)).scalars().first()
                 name_cache[cache_key] = u.name if u else "Citizen"
         result.append(_m(m, name_cache[cache_key]))
     return result
@@ -52,7 +53,7 @@ def get_messages(complaint_id: str, request: Request, db: Session = Depends(get_
 
 @router.post("/{complaint_id}/send-citizen")
 def send_citizen(complaint_id: str, data: MessageSend, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    c = db.query(Complaint).filter(Complaint.complaint_id == complaint_id).first()
+    c = db.execute(select(Complaint).filter(Complaint.complaint_id == complaint_id)).scalars().first()
     if not c:
         raise HTTPException(404, "Complaint not found")
     msg = Message(complaint_id=complaint_id, sender_id=user.id, sender_role="citizen", message=data.message, created_at=datetime.now(timezone.utc))
@@ -64,7 +65,7 @@ def send_citizen(complaint_id: str, data: MessageSend, db: Session = Depends(get
 
 @router.post("/{complaint_id}/send-officer")
 def send_officer(complaint_id: str, data: MessageSend, db: Session = Depends(get_db), officer: FieldOfficer = Depends(get_current_officer)):
-    c = db.query(Complaint).filter(Complaint.complaint_id == complaint_id).first()
+    c = db.execute(select(Complaint).filter(Complaint.complaint_id == complaint_id)).scalars().first()
     if not c:
         raise HTTPException(404, "Complaint not found")
     msg = Message(complaint_id=complaint_id, sender_id=officer.id, sender_role="officer", message=data.message, created_at=datetime.now(timezone.utc))

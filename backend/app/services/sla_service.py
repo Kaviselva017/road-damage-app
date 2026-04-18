@@ -16,7 +16,7 @@ def _now():
 
 def calculate_deadline(db: Session, severity: str) -> datetime | None:
     """Calculate deadline based on SLA config."""
-    config = db.query(SLAConfig).filter(SLAConfig.severity == severity.lower()).first()
+    config = db.execute(select(SLAConfig).filter(SLAConfig.severity == severity.lower())).scalars().first()
     if not config:
         # Default fallback
         return _now() + timedelta(days=3)
@@ -35,7 +35,7 @@ def get_department_for_damage(db: Session, damage_type: str, area_type: str) -> 
     elif "emergency" in area_type.lower() or "hospital" in area_type.lower():
         name = "Emergency"
 
-    dept = db.query(Department).filter(Department.name == name).first()
+    dept = db.execute(select(Department).filter(Department.name == name)).scalars().first()
     return dept.id if dept else None
 
 
@@ -43,12 +43,14 @@ def check_and_escalate(db: Session):
     """Hourly task to escalate overdue complaints."""
     now = _now()
     overdue = (
-        db.query(Complaint)
-        .filter(
-            Complaint.status.in_(["pending", "assigned", "in_progress"]),
-            Complaint.sla_deadline < now,
-            Complaint.escalation_level < 2,  # Max director level
+        db.execute(
+            select(Complaint).filter(
+                Complaint.status.in_(["pending", "assigned", "in_progress"]),
+                Complaint.sla_deadline < now,
+                Complaint.escalation_level < 2,  # Max director level
+            )
         )
+        .scalars()
         .all()
     )
 
@@ -58,7 +60,7 @@ def check_and_escalate(db: Session):
     for c in overdue:
         # Check if it has been long enough since last escalation (or since deadline)
         # We can use escalation_after_hours from SLA config
-        config = db.query(SLAConfig).filter(SLAConfig.severity == (c.severity or "low")).first()
+        config = db.execute(select(SLAConfig).filter(SLAConfig.severity == (c.severity or "low"))).scalars().first()
         esc_hours = config.escalation_after_hours if config else 24
 
         last_mark = c.escalated_at or c.sla_deadline

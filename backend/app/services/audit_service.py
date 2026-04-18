@@ -1,10 +1,10 @@
-# ruff: noqa: E402, E712, B904, E722
 import hashlib
 import json
 import logging
 from datetime import datetime, timezone
 
 from fastapi import Request
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.models import AuditLog
@@ -60,4 +60,4 @@ def verify_log_integrity(log: AuditLog) -> bool:
 
 def export_complaint_history(db: Session, complaint_id: str) -> list[AuditLog]:
     """Retrieve full timeline for a complaint."""
-    return db.query(AuditLog).filter(AuditLog.entity_type == "complaint", AuditLog.entity_id == str(complaint_id)).order_by(AuditLog.created_at.asc()).all()
+    return db.execute(select(AuditLog).filter(AuditLog.entity_type == "complaint", AuditLog.entity_id == str(complaint_id)).order_by(AuditLog.created_at.asc())).scalars().all()

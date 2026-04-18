@@ -2,7 +2,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import func
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -64,7 +64,9 @@ async def get_map_timeline(days: int = Query(30), db: Session = Depends(get_db))
 
     # Group by date
     # SQLite/Postgres compatible date truncation
-    results = db.query(func.date(Complaint.created_at).label("date"), func.count(Complaint.id).label("total"), func.sum(func.case((Complaint.severity == "high", 1), else_=0)).label("high_sev")).filter(Complaint.created_at >= start_date).group_by(func.date(Complaint.created_at)).order_by("date").all()
+    results = (
+        db.execute(select(func.date(Complaint.created_at).label("date"), func.count(Complaint.id).label("total"), func.sum(func.case((Complaint.severity == "high", 1), else_=0)).label("high_sev")).filter(Complaint.created_at >= start_date).group_by(func.date(Complaint.created_at)).order_by("date")).scalars().all()
+    )
 
     data = [{"date": str(r.date), "count": r.total, "high_severity": int(r.high_sev or 0)} for r in results]
     await cache.set(cache_key, data, ttl_seconds=600)

@@ -1,4 +1,18 @@
-# ruff: noqa: E402, E712, B904, E722
+import os
+from dataclasses import dataclass, field
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+
+from dotenv import load_dotenv
+from fastapi import Depends, HTTPException, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from jose import JWTError, jwt
+from passlib.context import CryptContext
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from app.database import get_db
+
 """
 RoadWatch — Auth Service
 Provides JWT creation/decoding PLUS FastAPI dependency injectors.
@@ -9,34 +23,22 @@ New exports used by the complaints router patch:
   - get_current_user       (unchanged)
   - get_current_officer    (unchanged)
 """
-import os
-from dataclasses import dataclass, field
-from pathlib import Path
 
-from dotenv import load_dotenv
 
 env_path = Path(__file__).resolve().parent.parent.parent / ".env"
 load_dotenv(dotenv_path=env_path)
 
-from datetime import datetime, timedelta, timezone
 
-from fastapi import Depends, HTTPException, status
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from jose import JWTError, jwt
-from passlib.context import CryptContext
-from sqlalchemy.orm import Session
-
-from app.database import get_db
-
-SECRET_KEY  = os.getenv("SECRET_KEY", "roadwatch-dev-secret-CHANGE-IN-PRODUCTION-2026")
-ALGORITHM   = os.getenv("ALGORITHM", "HS256")
+SECRET_KEY = os.getenv("SECRET_KEY", "roadwatch-dev-secret-CHANGE-IN-PRODUCTION-2026")
+ALGORITHM = os.getenv("ALGORITHM", "HS256")
 EXPIRE_MINS = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "10080"))  # 7 days
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-bearer      = HTTPBearer(auto_error=False)
+bearer = HTTPBearer(auto_error=False)
 
 
 # ── Password helpers ──────────────────────────────────────────────
+
 
 def hash_password(plain: str) -> str:
     return pwd_context.hash(plain)
@@ -51,9 +53,10 @@ def verify_password(plain: str, hashed: str) -> bool:
 
 # ── Token helpers ─────────────────────────────────────────────────
 
+
 def create_access_token(data: dict, expires_minutes: int | None = None) -> str:
     payload = data.copy()
-    expire  = datetime.now(timezone.utc) + timedelta(minutes=expires_minutes or EXPIRE_MINS)
+    expire = datetime.now(timezone.utc) + timedelta(minutes=expires_minutes or EXPIRE_MINS)
     payload["exp"] = expire
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 
@@ -67,21 +70,21 @@ def decode_token(token: str) -> dict | None:
 
 # ── Auth principal ────────────────────────────────────────────────
 
+
 @dataclass
 class AuthPrincipal:
     """
     Unified auth context accepted by endpoints that handle both citizens
     and officers (e.g. GET /api/complaints/{id}).
     """
-    role:     str          # "citizen" | "officer" | "admin"
-    citizen:  object | None = field(default=None)
-    officer:  object | None = field(default=None)
+
+    role: str  # "citizen" | "officer" | "admin"
+    citizen: object | None = field(default=None)
+    officer: object | None = field(default=None)
 
     @property
     def is_admin(self) -> bool:
-        return self.role == "admin" or bool(
-            self.officer and getattr(self.officer, "is_admin", False)
-        )
+        return self.role == "admin" or bool(self.officer and getattr(self.officer, "is_admin", False))
 
 
 def _extract_token(creds: HTTPAuthorizationCredentials = Depends(bearer)) -> str:
@@ -96,6 +99,7 @@ def _extract_token(creds: HTTPAuthorizationCredentials = Depends(bearer)) -> str
 
 # ── FastAPI dependency: citizen only ──────────────────────────────
 
+
 def get_current_user(
     token: str = Depends(_extract_token),
     db: Session = Depends(get_db),
@@ -105,13 +109,14 @@ def get_current_user(
     payload = decode_token(token)
     if not payload or payload.get("role") != "citizen":
         raise HTTPException(status_code=401, detail="Invalid citizen token")
-    user = db.query(User).filter(User.id == payload.get("sub")).first()
+    user = db.execute(select(User).filter(User.id == payload.get("sub"))).scalars().first()
     if not user or not user.is_active:
         raise HTTPException(status_code=401, detail="User not found or inactive")
     return user
 
 
 # ── FastAPI dependency: officer / admin only ──────────────────────
+
 
 def get_current_officer(
     token: str = Depends(_extract_token),
@@ -122,13 +127,14 @@ def get_current_officer(
     payload = decode_token(token)
     if not payload or payload.get("role") not in ("officer", "admin"):
         raise HTTPException(status_code=401, detail="Invalid officer token")
-    officer = db.query(FieldOfficer).filter(FieldOfficer.id == payload.get("sub")).first()
+    officer = db.execute(select(FieldOfficer).filter(FieldOfficer.id == payload.get("sub"))).scalars().first()
     if not officer or not officer.is_active:
         raise HTTPException(status_code=401, detail="Officer not found or inactive")
     return officer
 
 
 # ── FastAPI dependency: any authenticated principal ───────────────
+
 
 def get_current_principal(
     token: str = Depends(_extract_token),
@@ -146,16 +152,16 @@ def get_current_principal(
         raise HTTPException(status_code=401, detail="Invalid or expired token")
 
     role = payload.get("role", "")
-    sub  = payload.get("sub")
+    sub = payload.get("sub")
 
     if role == "citizen":
-        user = db.query(User).filter(User.id == sub).first()
+        user = db.execute(select(User).filter(User.id == sub)).scalars().first()
         if not user or not user.is_active:
             raise HTTPException(status_code=401, detail="User not found or inactive")
         return AuthPrincipal(role="citizen", citizen=user)
 
     if role in ("officer", "admin"):
-        officer = db.query(FieldOfficer).filter(FieldOfficer.id == sub).first()
+        officer = db.execute(select(FieldOfficer).filter(FieldOfficer.id == sub)).scalars().first()
         if not officer or not officer.is_active:
             raise HTTPException(status_code=401, detail="Officer not found or inactive")
         resolved_role = "admin" if getattr(officer, "is_admin", False) else "officer"
@@ -165,6 +171,7 @@ def get_current_principal(
 
 
 # ── Admin guard ───────────────────────────────────────────────────
+
 
 def get_current_admin(
     officer=Depends(get_current_officer),

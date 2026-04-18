@@ -1,16 +1,16 @@
+from datetime import datetime, timedelta, timezone
+from math import asin, cos, radians, sin, sqrt
+
+from sqlalchemy import func, select
+
+from app.models.models import Complaint
+
 """
 Geo Service
 Handles spatial mapping and query optimizations.
 Since we use PostGIS in production and SQLite locally for dev, we gracefully
 fallback to Haversine calculations when PostGIS operations fail or the dialect isn't postgresql.
 """
-
-from datetime import datetime, timedelta, timezone
-from math import asin, cos, radians, sin, sqrt
-
-from sqlalchemy import func
-
-from app.models.models import Complaint
 
 
 def haversine_distance(lon1, lat1, lon2, lat2):
@@ -28,11 +28,11 @@ def find_nearby_complaints(lat, lng, db, radius_meters=500):
     """Find complaints within a radius."""
     if db.bind.dialect.name == "postgresql":
         point = func.ST_SetSRID(func.ST_MakePoint(lng, lat), 4326)
-        return db.query(Complaint).filter(func.ST_DWithin(Complaint.location, point, radius_meters), Complaint.status != "rejected").all()
+        return db.execute(select(Complaint).filter(func.ST_DWithin(Complaint.location, point, radius_meters), Complaint.status != "rejected")).scalars().all()
     else:
         lat_delta = radius_meters / 111320.0
         lng_delta = radius_meters / (111320.0 * cos(radians(lat)))
-        comps = db.query(Complaint).filter(Complaint.latitude.between(lat - lat_delta, lat + lat_delta), Complaint.longitude.between(lng - lng_delta, lng + lng_delta), Complaint.status != "rejected").all()
+        comps = db.execute(select(Complaint).filter(Complaint.latitude.between(lat - lat_delta, lat + lat_delta), Complaint.longitude.between(lng - lng_delta, lng + lng_delta), Complaint.status != "rejected")).scalars().all()
         return [c for c in comps if haversine_distance(lng, lat, c.longitude, c.latitude) <= radius_meters]
 
 

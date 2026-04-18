@@ -1,3 +1,11 @@
+import hashlib
+import logging
+import os
+import random
+from collections import OrderedDict
+from pathlib import Path
+from typing import Any
+
 """
 RoadWatch AI Service — YOLOv8 Road Damage Detection
 ────────────────────────────────────────────────────
@@ -20,12 +28,6 @@ Class mapping:
   If ≥ 2 distinct normalised classes are detected → "multiple".
 """
 
-import hashlib
-import logging
-import os
-import random
-from collections import OrderedDict
-from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -143,7 +145,7 @@ def is_road_image(image_path: str) -> tuple[bool, float]:
     return True, 0.80
 
 
-def analyze_image(image_path: str) -> dict[str, object]:
+def analyze_image(image_path: str) -> dict[str, Any]:
     """
     Analyse a road-damage image and return a classification dict.
 
@@ -212,7 +214,7 @@ def _build_description(damage_type: str, sev: str, conf: float) -> str:
     return f"{sev.title()} severity {damage_type.replace('_', ' ')} detected with {conf:.0%} confidence."
 
 
-def _yolo_analyze(model, path: str) -> dict[str, object]:
+def _yolo_analyze(model, path: str) -> dict[str, Any]:
     """
     Run full YOLOv8 inference and return the standardised result dict.
 
@@ -274,7 +276,7 @@ def _yolo_analyze(model, path: str) -> dict[str, object]:
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 
-def _mock(path: str) -> dict[str, object]:
+def _mock(path: str) -> dict[str, Any]:
     """
     Deterministic mock — same file always produces the same classification.
     Uses an MD5-seeded RNG so results are reproducible across runs.

@@ -1,10 +1,3 @@
-# ruff: noqa: E402, E712, B904, E722
-"""
-RoadWatch — Complaints API
-Uses plain strings for status/severity/damage_type — no SQLAlchemy Enum issues.
-All datetimes returned with Z suffix for correct browser parsing.
-"""
-
 import logging
 import os
 import tempfile
@@ -15,6 +8,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import JSONResponse
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.database import SessionLocal, get_db
@@ -27,6 +21,13 @@ from app.services import ai_service, audit_service, priority_service, sla_servic
 from app.services.cache_service import cache
 from app.utils import cache_keys, metrics
 from app.ws_manager import manager
+
+"""
+RoadWatch — Complaints API
+Uses plain strings for status/severity/damage_type — no SQLAlchemy Enum issues.
+All datetimes returned with Z suffix for correct browser parsing.
+"""
+
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/complaints", tags=["complaints"])
@@ -98,11 +99,13 @@ def _best_officer(db: Session, address: str = "") -> FieldOfficer | None:
     3. Load Balance: Pick the officer with the fewest 'pending' or 'assigned' cases.
     """
     officers = (
-        db.query(FieldOfficer)
-        .filter(
-            FieldOfficer.is_active == True,
-            FieldOfficer.is_admin == False,
+        db.execute(
+            select(FieldOfficer).filter(
+                FieldOfficer.is_active.is_(True),
+                FieldOfficer.is_admin.is_(False),
+            )
         )
+        .scalars()
         .all()
     )
     if not officers:
@@ -123,13 +126,15 @@ def _best_officer(db: Session, address: str = "") -> FieldOfficer | None:
     # Pick the one with the lowest current workload in the target pool
     return min(
         target_pool,
-        key=lambda o: (
-            db.query(Complaint)
-            .filter(
-                Complaint.officer_id == o.id,
-                Complaint.status.in_(["pending", "assigned"]),
+        key=lambda o: len(
+            db.execute(
+                select(Complaint).filter(
+                    Complaint.officer_id == o.id,
+                    Complaint.status.in_(["pending", "assigned"]),
+                )
             )
-            .count()
+            .scalars()
+            .all()
         ),
     )
 
@@ -137,11 +142,11 @@ def _best_officer(db: Session, address: str = "") -> FieldOfficer | None:
 def _c(c: Complaint, db: Session) -> dict:
     oname, uname = None, None
     if c.officer_id:
-        o = db.query(FieldOfficer).filter(FieldOfficer.id == c.officer_id).first()
+        o = db.execute(select(FieldOfficer).filter(FieldOfficer.id == c.officer_id)).scalars().first()
         oname = o.name if o else None
     u_email, u_phone = None, None
     if c.user_id:
-        u = db.query(User).filter(User.id == c.user_id).first()
+        u = db.execute(select(User).filter(User.id == c.user_id)).scalars().first()
         uname = u.name if u else None
         u_email = u.email if u else None
         u_phone = u.phone if u else None
@@ -181,7 +186,7 @@ async def process_inference_background(complaint_id: str, fpath_str: str, img_by
     # This runs in a worker thread. We need our own DB session.
     db = SessionLocal()
     try:
-        c = db.query(Complaint).filter(Complaint.complaint_id == complaint_id).first()
+        c = db.execute(select(Complaint).filter(Complaint.complaint_id == complaint_id)).scalars().first()
         if not c:
             return
 
@@ -282,7 +287,7 @@ async def process_inference_background(complaint_id: str, fpath_str: str, img_by
                 created_at=_now(),
             )
         )
-        user_record = db.query(User).filter(User.id == user_id).first()
+        user_record = db.execute(select(User).filter(User.id == user_id)).scalars().first()
         if user_record:
             user_record.reward_points = (user_record.reward_points or 0) + 10
 
@@ -307,7 +312,7 @@ async def process_inference_background(complaint_id: str, fpath_str: str, img_by
             if user_record:
                 notify_complaint_submitted(to_email=user_record.email, citizen_name=user_record.name, complaint_id=complaint_id, damage_type=c.damage_type, severity=c.severity, priority_score=c.priority_score, area_type=c.area_type, image_url=full_img_url, location=address, nearby_places=nearby_sensitive)
             if c.officer_id and c.status == "analyzed":
-                officer = db.query(FieldOfficer).filter(FieldOfficer.id == c.officer_id).first()
+                officer = db.execute(select(FieldOfficer).filter(FieldOfficer.id == c.officer_id)).scalars().first()
                 if officer:
                     notify_officer_assignment(
                         to_email=officer.email,
@@ -363,7 +368,7 @@ async def process_inference_background(complaint_id: str, fpath_str: str, img_by
             )
             sentry_sdk.capture_exception(e)
 
-        c = db.query(Complaint).filter(Complaint.complaint_id == complaint_id).first()
+        c = db.execute(select(Complaint).filter(Complaint.complaint_id == complaint_id)).scalars().first()
         if c:
             c.status = "failed"
             c.officer_notes = "System Error: AI inference failed to complete."
@@ -460,7 +465,7 @@ def get_complaint_status(
     id: str,
     db: Session = Depends(get_db),
 ):
-    c = db.query(Complaint).filter((Complaint.complaint_id == id) | (Complaint.id == id if id.isdigit() else False)).first()
+    c = db.execute(select(Complaint).filter((Complaint.complaint_id == id) | (Complaint.id == id if id.isdigit() else False))).scalars().first()
     if not c:
         raise HTTPException(404, "Complaint not found")
 
@@ -490,14 +495,14 @@ async def get_nearby_complaints(lat: float, lng: float, radius: int = 500, db: S
 # ── My complaints ──────────────────────────────────────────────
 @router.get("/my")
 def my_complaints(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    rows = db.query(Complaint).filter(Complaint.user_id == user.id).order_by(Complaint.created_at.desc()).all()
+    rows = db.execute(select(Complaint).filter(Complaint.user_id == user.id).order_by(Complaint.created_at.desc())).scalars().all()
     return [_c(r, db) for r in rows]
 
 
 # ── Priority ranking ───────────────────────────────────────────
 @router.get("/priority/ranking")
 def priority_ranking(db: Session = Depends(get_db), _: FieldOfficer = Depends(get_current_officer)):
-    rows = db.query(Complaint).filter(Complaint.status != "completed").order_by(Complaint.priority_score.desc()).limit(50).all()
+    rows = db.execute(select(Complaint).filter(Complaint.status != "completed").order_by(Complaint.priority_score.desc()).limit(50)).scalars().all()
     return [_c(r, db) for r in rows]
 
 
@@ -505,7 +510,7 @@ def priority_ranking(db: Session = Depends(get_db), _: FieldOfficer = Depends(ge
 @router.get("/budget/recommendations")
 def budget_recommendations(db: Session = Depends(get_db), _: FieldOfficer = Depends(get_current_officer)):
     """Returns budget allocation recommendations based on open complaints."""
-    open_complaints = db.query(Complaint).filter(Complaint.status.in_(["pending", "assigned", "in_progress"])).all()
+    open_complaints = db.execute(select(Complaint).filter(Complaint.status.in_(["pending", "assigned", "in_progress"]))).scalars().all()
 
     cost_map = {
         "pothole": 15000,
@@ -538,13 +543,13 @@ def budget_recommendations(db: Session = Depends(get_db), _: FieldOfficer = Depe
 # ── Notifications ──────────────────────────────────────────────
 @router.get("/notifications/my")
 def my_notifications(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    rows = db.query(Notification).filter(Notification.user_id == user.id).order_by(Notification.created_at.desc()).limit(50).all()
+    rows = db.execute(select(Notification).filter(Notification.user_id == user.id).order_by(Notification.created_at.desc()).limit(50)).scalars().all()
     return [{"id": n.id, "user_id": n.user_id, "complaint_id": n.complaint_id, "message": n.message, "type": n.type, "is_read": n.is_read, "created_at": _iso(n.created_at)} for n in rows]
 
 
 @router.post("/notifications/read-all")
 def read_all(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    db.query(Notification).filter(Notification.user_id == user.id, Notification.is_read == False).update({"is_read": True})
+    select(Notification).filter(Notification.user_id == user.id, Notification.is_read.is_(False)).update({"is_read": True})
     db.commit()
     return {"status": "ok"}
 
@@ -566,7 +571,7 @@ async def list_complaints(
     if cached:
         return cached
 
-    q = db.query(Complaint)
+    q = select(Complaint)
     if not officer.is_admin:
         q = q.filter((Complaint.officer_id == officer.id) | (Complaint.status == "pending"))
     if status:
@@ -597,9 +602,9 @@ def officer_download_report(
     try:
         from fpdf import FPDF
     except ImportError:
-        raise HTTPException(500, "PDF library not available")
+        raise HTTPException(500, "PDF library not available") from None
 
-    complaints = db.query(Complaint).filter(Complaint.officer_id == officer.id).order_by(Complaint.created_at.desc()).all()
+    complaints = db.execute(select(Complaint).filter(Complaint.officer_id == officer.id).order_by(Complaint.created_at.desc())).scalars().all()
 
     class OfficerPDF(FPDF):
         def header(self):
@@ -742,7 +747,7 @@ def get_complaint(
     # Allow access with valid token OR if user is already authenticated via session
     if token_str and not decode_token(token_str):
         raise HTTPException(401, "Invalid token")
-    c = db.query(Complaint).filter(Complaint.complaint_id == complaint_id).first()
+    c = db.execute(select(Complaint).filter(Complaint.complaint_id == complaint_id)).scalars().first()
     if not c:
         raise HTTPException(404, "Complaint not found")
     return _c(c, db)
@@ -759,7 +764,7 @@ async def update_status(
 ):
     if data.status not in VALID_STATUSES:
         raise HTTPException(400, f"Invalid status. Use: {VALID_STATUSES}")
-    c = db.query(Complaint).filter(Complaint.complaint_id == complaint_id).first()
+    c = db.execute(select(Complaint).filter(Complaint.complaint_id == complaint_id)).scalars().first()
     if not c:
         raise HTTPException(404, "Complaint not found")
 
@@ -771,7 +776,7 @@ async def update_status(
         c.resolved_at = _now()
         # Automate: Reward citizen with bonus points upon successful repair
         if c.user_id:
-            user = db.query(User).filter(User.id == c.user_id).first()
+            user = db.execute(select(User).filter(User.id == c.user_id)).scalars().first()
             if user:
                 user.reward_points = (user.reward_points or 0) + 5
 
@@ -797,7 +802,7 @@ async def update_status(
         try:
             from app.services.notification_service import notify_status_update
 
-            user = db.query(User).filter(User.id == c.user_id).first()
+            user = db.execute(select(User).filter(User.id == c.user_id)).scalars().first()
             if user:
                 base_url = os.getenv("BASE_URL", "https://road-damage-appsystem.onrender.com")
                 full_img_url = f"{base_url}{c.image_url}" if c.image_url else ""
@@ -812,7 +817,7 @@ async def update_status(
         try:
             from app.services.fcm_service import send_status_update
 
-            token_user = db.query(User).filter(User.id == c.user_id).first()
+            token_user = db.execute(select(User).filter(User.id == c.user_id)).scalars().first()
             if token_user and token_user.fcm_token:
                 background_tasks.add_task(send_status_update, token_user.fcm_token, complaint_id, data.status)
         except Exception as ex:
@@ -844,7 +849,7 @@ def fund(
     db: Session = Depends(get_db),
     officer: FieldOfficer = Depends(get_current_officer),
 ):
-    c = db.query(Complaint).filter(Complaint.complaint_id == complaint_id).first()
+    c = db.execute(select(Complaint).filter(Complaint.complaint_id == complaint_id)).scalars().first()
     if not c:
         raise HTTPException(404, "Complaint not found")
     c.allocated_fund = data.amount
@@ -870,7 +875,7 @@ def fund(
         try:
             from app.services.notification_service import notify_fund_allocated
 
-            user = db.query(User).filter(User.id == c.user_id).first()
+            user = db.execute(select(User).filter(User.id == c.user_id)).scalars().first()
             if user:
                 notify_fund_allocated(user.email, user.name, complaint_id, data.amount, data.note or "")
         except Exception as e:
@@ -893,7 +898,7 @@ def fund(
 
 @router.get("/{complaint_id}/sla")
 def get_complaint_sla(complaint_id: str, db: Session = Depends(get_db)):
-    c = db.query(Complaint).filter(Complaint.complaint_id == complaint_id).first()
+    c = db.execute(select(Complaint).filter(Complaint.complaint_id == complaint_id)).scalars().first()
     if not c or not c.sla_deadline:
         raise HTTPException(404, "SLA data not available")
 
@@ -916,7 +921,7 @@ def get_complaint_sla(complaint_id: str, db: Session = Depends(get_db)):
 
 @router.post("/{complaint_id}/resolve")
 async def resolve_complaint(complaint_id: str, background_tasks: BackgroundTasks, proof: UploadFile = File(...), db: Session = Depends(get_db), officer: FieldOfficer = Depends(get_current_officer)):
-    c = db.query(Complaint).filter(Complaint.complaint_id == complaint_id).first()
+    c = db.execute(select(Complaint).filter(Complaint.complaint_id == complaint_id)).scalars().first()
     if not c:
         raise HTTPException(404, "Not found")
 
@@ -943,7 +948,7 @@ async def resolve_complaint(complaint_id: str, background_tasks: BackgroundTasks
 
     # Notify user via Push
     try:
-        user = db.query(User).filter(User.id == c.user_id).first()
+        user = db.execute(select(User).filter(User.id == c.user_id)).scalars().first()
         if user and user.fcm_token:
             from app.services.fcm_service import send_status_update
 

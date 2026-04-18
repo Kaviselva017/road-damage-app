@@ -1,3 +1,8 @@
+import json
+import logging
+
+from fastapi import WebSocket
+
 """
 RoadWatch — WebSocket Connection Manager
 
@@ -6,10 +11,6 @@ router.  Import `manager` from here everywhere — never instantiate a second
 ConnectionManager.
 """
 
-import json
-import logging
-
-from fastapi import WebSocket
 
 logger = logging.getLogger(__name__)
 

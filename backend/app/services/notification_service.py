@@ -1,11 +1,3 @@
-"""
-RoadWatch — Notification Service
-Primary:  Gmail SMTP (add SMTP_USER + SMTP_PASS to Render env)
-Fallback: Resend API (add RESEND_API_KEY to Render env)
-
-If neither is configured, emails are silently skipped — the app still works.
-"""
-
 import json
 import logging
 import os
@@ -17,6 +9,15 @@ from email.mime.text import MIMEText
 from pathlib import Path
 
 from dotenv import load_dotenv
+
+"""
+RoadWatch — Notification Service
+Primary:  Gmail SMTP (add SMTP_USER + SMTP_PASS to Render env)
+Fallback: Resend API (add RESEND_API_KEY to Render env)
+
+If neither is configured, emails are silently skipped — the app still works.
+"""
+
 
 # Ensure .env is loaded before reading variables
 env_path = Path(__file__).resolve().parent.parent.parent / ".env"

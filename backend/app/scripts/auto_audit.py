@@ -1,14 +1,15 @@
-# ruff: noqa: E402, E712, B904, E722
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-# Add backend to path
-sys.path.append(str(Path(__file__).resolve().parent.parent.parent))
+from sqlalchemy import select
 
 from app.database import SessionLocal
 from app.models.models import Complaint, FieldOfficer
 from app.services.notification_service import send_email
+
+# Add backend to path
+sys.path.append(str(Path(__file__).resolve().parent.parent.parent))
 
 
 def run_audit():
@@ -18,12 +19,12 @@ def run_audit():
     try:
         # 1. Detect Stale Complaints (Pending/Assigned for > 48 hours)
         threshold = datetime.now(timezone.utc) - timedelta(hours=48)
-        stale = db.query(Complaint).filter(Complaint.status.in_(["pending", "assigned"]), Complaint.created_at <= threshold).all()
+        stale = db.execute(select(Complaint).filter(Complaint.status.in_(["pending", "assigned"]), Complaint.created_at <= threshold)).scalars().all()
 
         if stale:
             print(f"Found {len(stale)} stale complaints.")
             # Notify Admin
-            admin = db.query(FieldOfficer).filter(FieldOfficer.is_admin).first()
+            admin = db.execute(select(FieldOfficer).filter(FieldOfficer.is_admin)).scalars().first()
             if admin:
                 subject = f"Audit Alert: {len(stale)} Complaints require attention"
                 body = "<h2>Audit Report</h2><p>The following complaints have been pending/assigned for more than 48 hours without progress:</p><ul>"

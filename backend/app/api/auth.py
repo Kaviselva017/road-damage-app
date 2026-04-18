@@ -1,9 +1,3 @@
-# ruff: noqa: E402, E712, B904, E722
-"""
-RoadWatch Auth API
-Endpoints used by login.html, citizen.html, admin.html — matched exactly.
-"""
-
 import logging
 import os
 from datetime import datetime, timezone
@@ -11,6 +5,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
 from passlib.context import CryptContext
 from pydantic import BaseModel
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -19,6 +14,12 @@ from app.main import limiter
 from app.models.models import FieldOfficer, LoginLog, User
 from app.services import audit_service
 from app.services.auth_service import create_access_token
+
+"""
+RoadWatch Auth API
+Endpoints used by login.html, citizen.html, admin.html — matched exactly.
+"""
+
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 pwd_ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -81,7 +82,7 @@ class FcmTokenUpdate(BaseModel):
 def citizen_register(request: Request, payload: CitizenRegister, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     """POST /api/auth/register — login.html & citizen.html"""
     try:
-        if db.query(User).filter(User.email == payload.email).first():
+        if db.execute(select(User).filter(User.email == payload.email)).scalars().first():
             raise HTTPException(status_code=400, detail="Email already registered")
         user = User(
             name=payload.name,
@@ -119,7 +120,7 @@ def citizen_register(request: Request, payload: CitizenRegister, background_task
 @limiter.limit(os.getenv("RATE_LIMIT_AUTH", "20/minute"))
 def citizen_login(payload: CitizenLogin, request: Request, db: Session = Depends(get_db)):
     """POST /api/auth/login — login.html & citizen.html"""
-    user = db.query(User).filter(User.email == payload.email).first()
+    user = db.execute(select(User).filter(User.email == payload.email)).scalars().first()
     if not user or not pwd_ctx.verify(payload.password, user.hashed_password):
         raise HTTPException(status_code=401, detail="Invalid credentials")
     if not user.is_active:
@@ -153,7 +154,7 @@ def citizen_login(payload: CitizenLogin, request: Request, db: Session = Depends
 @router.post("/officer/login")
 def officer_login(payload: OfficerLogin, request: Request, db: Session = Depends(get_db)):
     """POST /api/auth/officer/login — login.html (officer+admin) & admin.html doLogin()"""
-    officer = db.query(FieldOfficer).filter(FieldOfficer.email == payload.email).first()
+    officer = db.execute(select(FieldOfficer).filter(FieldOfficer.email == payload.email)).scalars().first()
     if not officer or not pwd_ctx.verify(payload.password, officer.hashed_password):
         raise HTTPException(status_code=401, detail="Invalid credentials")
     if not officer.is_active:
@@ -193,7 +194,7 @@ def officer_register(
     current_admin: FieldOfficer = Depends(get_current_admin),
 ):
     """POST /api/auth/officer/register — admin.html Add Officer modal"""
-    if db.query(FieldOfficer).filter(FieldOfficer.email == payload.email).first():
+    if db.execute(select(FieldOfficer).filter(FieldOfficer.email == payload.email)).scalars().first():
         raise HTTPException(status_code=400, detail="Email already registered")
     officer = FieldOfficer(
         name=payload.name,
@@ -253,7 +254,7 @@ def get_login_logs(
     _: FieldOfficer = Depends(get_current_admin),
 ):
     """GET /api/auth/logs — returns all login logs (admin only)"""
-    rows = db.query(LoginLog).order_by(LoginLog.logged_in_at.desc()).limit(200).all()
+    rows = db.execute(select(LoginLog).order_by(LoginLog.logged_in_at.desc()).limit(200)).scalars().all()
     return [
         {
             "id": r.id,
