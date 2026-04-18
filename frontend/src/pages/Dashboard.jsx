@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../services/AuthContext';
 import { api } from '../services/api';
 import { formatDateTime } from '../utils/dateTime';
+import { useAdminFeed } from '../hooks/useAdminFeed';
 
 const SEVERITY_COLORS = { high: '#e05c5c', medium: '#f5a623', low: '#3ecfb2' };
 const STATUS_COLORS = {
@@ -16,6 +17,7 @@ export default function Dashboard() {
   const [complaints, setComplaints] = useState([]);
   const [filter, setFilter] = useState({ status: '', severity: '' });
   const [loading, setLoading] = useState(true);
+  const { unseenCount } = useAdminFeed();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -74,8 +76,31 @@ export default function Dashboard() {
         </div>
         <div style={{ display: 'flex', gap: 12 }}>
           {isAdmin && (
-            <button onClick={() => navigate('/admin')} style={{...styles.btnOutline, borderColor: '#f5a623', color: '#f5a623'}}>
+            <button
+              onClick={() => navigate('/admin')}
+              style={{ ...styles.btnOutline, borderColor: '#f5a623', color: '#f5a623', position: 'relative' }}
+            >
               ⚙️ Admin Panel
+              {unseenCount > 0 && (
+                <span style={{
+                  position: 'absolute',
+                  top: '-6px',
+                  right: '-8px',
+                  background: '#EF4444',
+                  color: '#fff',
+                  borderRadius: '50%',
+                  width: '18px',
+                  height: '18px',
+                  fontSize: '10px',
+                  fontWeight: 'bold',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  lineHeight: 1,
+                }}>
+                  {unseenCount > 99 ? '99+' : unseenCount}
+                </span>
+              )}
             </button>
           )}
           <button onClick={downloadPDF} style={styles.btnPdf} disabled={loading}>

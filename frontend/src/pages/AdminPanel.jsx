@@ -3,7 +3,8 @@ import PropTypes from 'prop-types'
 import { useAuth } from '../services/AuthContext'
 import { useNavigate } from 'react-router-dom'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, PieChart, Pie, Legend, Cell, ResponsiveContainer } from 'recharts'
-import { useComplaintsRealtime } from '../hooks/useComplaintsRealtime'
+import { useAdminFeed } from '../hooks/useAdminFeed'
+import AdminFeedPanel from '../components/AdminFeedPanel'
 
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api'
 
@@ -21,7 +22,7 @@ export default function AdminPanel() {
   const [activeTab, setActiveTab] = useState('Overview')
   const [toasts, setToasts] = useState([])
 
-  const { complaints: realtimeComplaints, isConnected } = useComplaintsRealtime()
+  const { events, isConnected, markAsSeen, clearEvents } = useAdminFeed()
   const feedEndRef = useRef(null)
 
   useEffect(() => {
@@ -30,7 +31,11 @@ export default function AdminPanel() {
 
   useEffect(() => {
     feedEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [realtimeComplaints])
+  }, [events])
+
+  useEffect(() => {
+    markAsSeen()
+  }, [markAsSeen])
 
   const showToast = useCallback((msg, type = 'success') => {
     const id = Date.now()
@@ -42,7 +47,8 @@ export default function AdminPanel() {
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh', background: '#0d0f14', color: '#e8eaf0', fontFamily: 'system-ui, sans-serif' }}>
-      <div style={{ flex: 1, padding: '24px 32px', overflowY: 'auto' }}>
+      <div style={{ display: 'flex', gap: '16px', height: '100%', width: '100%' }}>
+        <div style={{ flex: 1, padding: '24px 32px', overflowY: 'auto' }}>
         <div style={styles.header}>
           <div>
             <h1 style={styles.title}>Admin Panel <span style={{fontSize:12, color: isConnected?'#10b981':'#ef4444', verticalAlign: 'middle', marginLeft: 8}}>● {isConnected?'Live':'Offline'}</span></h1>
@@ -62,28 +68,13 @@ export default function AdminPanel() {
             </button>
           ))}
         </div>
-
         <div style={{ paddingBottom: 60 }}>
           {activeTab === 'Overview' && <OverviewTab token={token} />}
           {activeTab === 'Officers' && <OfficersTab token={token} currentOfficerId={user?.id} showToast={showToast} />}
         </div>
       </div>
-
-      {/* Activity Feed Sidebar */}
-      <div style={{ width: 300, background: '#161a23', borderLeft: '1px solid #252b38', display: 'flex', flexDirection: 'column' }}>
-        <div style={{ padding: '20px', borderBottom: '1px solid #252b38' }}>
-          <h3 style={{ margin: 0, fontSize: 16 }}>Live Activity Feed</h3>
-        </div>
-        <div style={{ flex: 1, overflowY: 'auto', padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {realtimeComplaints.length === 0 ? <div style={{color: '#7a8299', fontSize: 13, textAlign: 'center', marginTop: 20}}>Waiting for live updates...</div> : null}
-          {realtimeComplaints.map((e, i) => (
-            <div key={i} style={{ background: '#0d0f14', padding: 12, borderRadius: 8, border: '1px solid #252b38', fontSize: 13, lineHeight: '1.4' }}>
-               <span role="img" aria-label="live">📡</span> Live Update: Complaint {e.complaint_id} is now {e.status}
-            </div>
-          ))}
-          <div ref={feedEndRef} />
-        </div>
-      </div>
+      <AdminFeedPanel events={events} isConnected={isConnected} onClear={clearEvents} />
+    </div>
 
       {/* Toasts */}
       <div style={styles.toastContainer}>

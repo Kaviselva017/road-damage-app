@@ -14,7 +14,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import PropTypes from 'prop-types';
 import { useNavigate } from 'react-router-dom';
-import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, CircleMarker, Tooltip, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { useAuth } from '../services/AuthContext';
@@ -45,20 +45,6 @@ function svgMarker(color) {
     <circle cx="12" cy="12" r="10" fill="${color}" fill-opacity="0.9" stroke="#ffffff" stroke-width="2"/>
   </svg>`;
   
-  return L.divIcon({
-    className: 'custom-svg-marker',
-    html: svgString,
-    iconSize: [24, 24],
-    iconAnchor: [12, 12],
-    popupAnchor: [0, -14],
-  });
-}
-
-function svgOfficerMarker() {
-  const svgString = `<svg width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-    <circle cx="12" cy="12" r="10" fill="#3B82F6" stroke="#ffffff" stroke-width="2"/>
-    <text x="12" y="16" font-size="10" font-weight="bold" fill="white" text-anchor="middle">O</text>
-  </svg>`;
   return L.divIcon({
     className: 'custom-svg-marker',
     html: svgString,
@@ -119,34 +105,36 @@ export default function MapView() {
   const [loading,       setLoading]       = useState(true);
   const [error,         setError]         = useState('');
   
-  const { events } = useAdminFeed(token);
-  const [officerLocations, setOfficerLocations] = useState({});
+  const { events } = useAdminFeed();
 
+  // Seed officer locations from REST endpoint on mount
+  const [officerLocations, setOfficerLocations] = useState({});
   useEffect(() => {
-    const fetchOfficersUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
-    fetch(`${fetchOfficersUrl}/admin/officers/locations`, { headers: { Authorization: `Bearer ${token}` } })
-      .then(res => res.json())
-      .then(data => {
-        if(Array.isArray(data)){
-           const mapData = {};
-           data.forEach(d => mapData[d.officer_id] = d);
-           setOfficerLocations(mapData);
+    const base = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
+    fetch(`${base}/admin/officers/locations`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (Array.isArray(data)) {
+          const seed = {};
+          data.forEach((d) => { seed[d.officer_id] = d; });
+          setOfficerLocations(seed);
         }
       })
       .catch(console.error);
   }, [token]);
 
-  useEffect(() => {
-    if(events.length > 0) {
-      const lastEvent = events[events.length - 1];
-      if(lastEvent.event === 'officer_location') {
-        setOfficerLocations(prev => ({
-          ...prev,
-          [lastEvent.data.officer_id]: lastEvent.data
-        }));
+  // Merge live WS officer_location events on top of the REST seed
+  const officerMarkers = useMemo(() => {
+    const merged = { ...officerLocations };
+    events.forEach((e) => {
+      if (e.event === 'officer_location') {
+        merged[e.data.officer_id] = e.data;
       }
-    }
-  }, [events]);
+    });
+    return merged;
+  }, [events, officerLocations]);
 
   // ── Fetch complaints on mount ─────────────────────────────────────────────
   const fetchComplaints = useCallback(async () => {
@@ -338,20 +326,21 @@ export default function MapView() {
             </Marker>
           ))}
           
-          {/* Active Officers */}
-          {Object.values(officerLocations).map(o => (
-            <Marker
+          {/* Active Officers — CircleMarker + Tooltip (spec) */}
+          {Object.values(officerMarkers).map((o) => (
+            <CircleMarker
               key={`officer-${o.officer_id}`}
-              position={[o.lat, o.lng]}
-              icon={svgOfficerMarker()}
+              center={[o.lat, o.lng]}
+              radius={10}
+              pathOptions={{ color: '#3B82F6', fillColor: '#3B82F6', fillOpacity: 0.85 }}
             >
-              <Popup offset={[0, -10]}>
-                <div style={{fontFamily: 'system-ui', fontSize: 13, color: '#1e2434'}}>
-                  <strong style={{fontSize: 14}}>{o.name}</strong><br/>
-                  <span style={{color: '#6b7280'}}>Zone:</span> {o.zone}
+              <Tooltip direction="top" offset={[0, -12]} opacity={1} permanent={false}>
+                <div style={{ fontFamily: 'system-ui', fontSize: 12, lineHeight: '1.4' }}>
+                  <strong>{o.name}</strong><br />
+                  Zone: {o.zone}
                 </div>
-              </Popup>
-            </Marker>
+              </Tooltip>
+            </CircleMarker>
           ))}
         </MapContainer>
 
