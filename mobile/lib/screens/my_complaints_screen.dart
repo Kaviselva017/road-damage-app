@@ -82,7 +82,7 @@ class _MyComplaintsScreenState extends State<MyComplaintsScreen> {
             return const Center(child: CircularProgressIndicator());
           }
           if (snap.hasError) {
-            return Center(child: const Text('Error: ${snap.error}'));
+            return Center(child: Text('Error: ${snap.error}'));
           }
           final complaints = snap.data ?? [];
           if (complaints.isEmpty) {
@@ -97,20 +97,16 @@ class _MyComplaintsScreenState extends State<MyComplaintsScreen> {
             itemBuilder: (_, i) {
               final c = complaints[i];
               return InkWell(
-                onTap: () async {
-                  final token = await context.read<ApiService>().getToken();
-                  if (!mounted) return;
-                  if (token != null) {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => ComplaintTrackerScreen(
-                          complaintId: c['complaint_id'],
-                          initialStatus: c['status'],
-                        ),
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => ComplaintTrackerScreen(
+                        complaintId: c['complaint_id'] as String,
+                        initialStatus: c['status'] as String? ?? 'pending',
                       ),
-                    );
-                  }
+                    ),
+                  );
                 },
                 child: Card(
                   color: Colors.grey[850],
