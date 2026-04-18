@@ -133,6 +133,7 @@ class _ReportScreenState extends State<ReportScreen> {
       imageQuality: 85,
       maxWidth: 1920,
     );
+    if (!mounted) return;
     if (file != null) setState(() => _image = File(file.path));
   }
 
@@ -257,11 +258,13 @@ class _ReportScreenState extends State<ReportScreen> {
             (_priorityPreview?['nearby_places'] as List?)?.join(', '),
         image: _image!,
       );
+      if (!mounted) return;
       setState(() {
         _result = complaint['complaint_id'];
         _isLoading = false;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() { _error = e.toString(); _isLoading = false; });
     }
   }

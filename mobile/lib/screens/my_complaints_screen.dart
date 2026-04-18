@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../services/api_service.dart';
 import 'complaint_detail_screen.dart';
+import 'complaint_tracker_screen.dart';
 
 class MyComplaintsScreen extends StatefulWidget {
   const MyComplaintsScreen({super.key});
@@ -81,7 +82,7 @@ class _MyComplaintsScreenState extends State<MyComplaintsScreen> {
             return const Center(child: CircularProgressIndicator());
           }
           if (snap.hasError) {
-            return Center(child: Text('Error: ${snap.error}'));
+            return Center(child: const Text('Error: ${snap.error}'));
           }
           final complaints = snap.data ?? [];
           if (complaints.isEmpty) {
@@ -98,13 +99,14 @@ class _MyComplaintsScreenState extends State<MyComplaintsScreen> {
               return InkWell(
                 onTap: () async {
                   final token = await context.read<ApiService>().getToken();
-                  if (token != null && mounted) {
+                  if (!mounted) return;
+                  if (token != null) {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) => ComplaintDetailScreen(
-                          complaint: c,
-                          token: token,
+                        builder: (_) => ComplaintTrackerScreen(
+                          complaintId: c['complaint_id'],
+                          initialStatus: c['status'],
                         ),
                       ),
                     );

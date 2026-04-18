@@ -34,9 +34,8 @@ class _HomeScreenState extends State<HomeScreen> {
             icon: const Icon(Icons.logout),
             onPressed: () async {
               await context.read<ApiService>().logout();
-              if (mounted) {
-                Navigator.pushReplacementNamed(context, '/login');
-              }
+              if (!mounted) return;
+              Navigator.pushReplacementNamed(context, '/login');
             },
           )
         ],

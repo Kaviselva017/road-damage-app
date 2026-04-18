@@ -27,8 +27,9 @@ class _SplashScreenState extends State<SplashScreen> {
 
     if (loggedIn) {
       final token = await api.getToken();
+      if (!mounted) return;
       if (token != null) {
-        PushNotificationService.init(token);
+        await PushNotificationService.init(token);
       }
       Navigator.pushReplacementNamed(context, '/home');
     } else {

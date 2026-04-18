@@ -17,7 +17,7 @@ class WarmupService {
       if (!hasResponded && context.mounted && scaffoldMessenger != null) {
         scaffoldMessenger.showSnackBar(
           const SnackBar(
-            content: Text('Connecting to server...'),
+            content: const Text('Connecting to server...'),
             duration: Duration(days: 1), // Keep open indefinitely
             behavior: SnackBarBehavior.floating,
           ),

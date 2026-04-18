@@ -1,7 +1,10 @@
 import 'package:firebase_core/firebase_core.dart';
+import 'dart:developer' as dev;
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:flutter_jailbreak_detection/flutter_jailbreak_detection.dart';
 import 'screens/splash_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/home_screen.dart';
@@ -13,36 +16,49 @@ import 'services/local_notification_helper.dart';
 
 @pragma('vm:entry-point')
 Future<void> _firebaseBackgroundHandler(RemoteMessage message) async {
-  // If you re-generate firebase_options.yaml via flutterfire, you'd uncomment the options line below.
-  await Firebase.initializeApp(/* options: DefaultFirebaseOptions.currentPlatform */);
-  print("Handling a background message: ${message.messageId}");
+  await Firebase.initializeApp();
+  dev.log("Handling a background message: ${message.messageId}");
 }
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
-  // Initialize Firebase (Assuming DefaultFirebaseOptions is in firebase_options.dart)
-  // await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-  await Firebase.initializeApp(); // Keeping without options to prevent compile errors currently since not generated
-  
-  // Register background handler
+  await Firebase.initializeApp();
   FirebaseMessaging.onBackgroundMessage(_firebaseBackgroundHandler);
+  
+  // Root/Jailbreak Detection
+  bool isJailbroken = false;
+  try {
+    isJailbroken = await FlutterJailbreakDetection.jailbroken;
+  } catch (_) {}
+
+  // Initialize Supabase
+  await Supabase.initialize(
+    url: const String.fromEnvironment('SUPABASE_URL'),
+    anonKey: const String.fromEnvironment('SUPABASE_ANON_KEY'),
+  );
 
   runApp(
     MultiProvider(
       providers: [
         Provider<ApiService>(create: (_) => ApiService()),
       ],
-      child: const RoadDamageApp(),
+      child: RoadDamageApp(isJailbroken: isJailbroken),
     ),
   );
 }
 
 class RoadDamageApp extends StatelessWidget {
-  const RoadDamageApp({super.key});
+  final bool isJailbroken;
+  const RoadDamageApp({super.key, required this.isJailbroken});
 
   @override
   Widget build(BuildContext context) {
+    if (isJailbroken) {
+      // In a real app, we might show a persistent warning banner.
+      dev.log("SECURITY WARNING: Device is rooted/jailbroken.");
+    }
+
     return MaterialApp(
       title: 'RoadWatch',
       debugShowCheckedModeBanner: false,

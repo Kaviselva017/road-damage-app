@@ -1,12 +1,14 @@
 import 'dart:io';
+import 'dart:developer' as dev;
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'api_service.dart';
 
 // Top-level function for background messaging
+@pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   // Handle background message
-  print("Handling a background message: ${message.messageId}");
+  dev.log("Handling a background message: ${message.messageId}");
 }
 
 class NotificationService {
@@ -27,16 +29,16 @@ class NotificationService {
     );
 
     if (settings.authorizationStatus == AuthorizationStatus.authorized) {
-      print('User granted permission');
+      dev.log('User granted permission');
       
       // 2. Get Token
       String? token = await _fcm.getToken();
       if (token != null) {
-        print('FCM Token: $token');
+        dev.log('FCM Token: $token');
         try {
            await _api.updateFcmToken(token);
         } catch (e) {
-           print('Failed to send FCM token to backend: $e');
+           dev.log('Failed to send FCM token to backend: $e');
         }
       }
       

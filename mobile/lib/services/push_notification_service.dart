@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:developer' as dev;
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -17,7 +18,7 @@ class PushNotificationService {
     );
 
     if (settings.authorizationStatus != AuthorizationStatus.authorized) {
-      print('User declined or has not accepted FCM permission');
+      dev.log('User declined or has not accepted FCM permission');
       return;
     }
 
@@ -57,7 +58,7 @@ class PushNotificationService {
 
     // 5. Handle Foreground Messages
     FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-      print('Received message in foreground: ${message.messageId}');
+      dev.log('Received message in foreground: ${message.messageId}');
       showLocalNotification(message);
     });
 
@@ -78,9 +79,9 @@ class PushNotificationService {
       await prefs.setString('fcm_token', token);
       final api = ApiService(); 
       await api.updateFcmToken(token);
-      print('FCM token synchronized with backend.');
+      dev.log('FCM token synchronized with backend.');
     } catch (e) {
-      print('Error synchronizing FCM token: $e');
+      dev.log('Error synchronizing FCM token: $e');
     }
   }
 

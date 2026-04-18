@@ -1,4 +1,5 @@
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'dart:developer' as dev;
 
 class LocalNotificationHelper {
   static final FlutterLocalNotificationsPlugin _notificationsPlugin =
@@ -15,7 +16,7 @@ class LocalNotificationHelper {
       initializationSettings,
       onDidReceiveNotificationResponse: (NotificationResponse response) {
         // Handle notification tap in foreground if needed
-        print('Notification tapped: ${response.payload}');
+        dev.log('Notification tapped: ${response.payload}');
       },
     );
 

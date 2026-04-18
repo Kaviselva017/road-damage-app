@@ -6,11 +6,9 @@ class ComplaintDetailScreen extends StatefulWidget {
   final Map<String, dynamic> complaint;
   final String token;
 
-  const ComplaintDetailScreen({
-    Key? key,
-    required this.complaint,
+  const ComplaintDetailScreen({super.key, required this.complaint,
     required this.token,
-  }) : super(key: key);
+  });
 
   @override
   State<ComplaintDetailScreen> createState() => _ComplaintDetailScreenState();
