@@ -167,38 +167,99 @@ npm run build   # Production build
 
 ## API Endpoints
 
+### Authentication (Firebase)
+
 | Method | Endpoint | Description | Auth |
 |--------|----------|-------------|------|
-| POST | /api/auth/register | Citizen registration | No |
-| POST | /api/auth/login | Citizen login | No |
-| POST | /api/auth/officer/register | Officer registration | Admin |
-| POST | /api/auth/officer/login | Officer login | No |
-| POST | /api/complaints/submit | Submit complaint + image | Citizen |
-| GET | /api/complaints/my | Get my complaints | Citizen |
-| GET | /api/complaints/ | List officer complaints | Officer |
-| GET | /api/complaints/{id} | Get complaint details | Owner / Assigned Officer / Admin |
+| POST | /api/auth/sync-user | Register or login citizen via Firebase ID token | Firebase JWT |
+| POST | /api/auth/sync-officer | Register or login officer via Firebase ID token | Firebase JWT |
+| PUT | /api/auth/fcm-token | Update FCM push notification token | Bearer |
+
+### Complaints
+
+| Method | Endpoint | Description | Auth |
+|--------|----------|-------------|------|
+| POST | /api/complaints/submit | Submit complaint with image + GPS | Bearer |
+| GET | /api/complaints/my | Get authenticated citizen's complaints | Bearer |
+| GET | /api/complaints/{id}/status | Poll complaint analysis status | Bearer |
+| GET | /api/complaints/nearby | Complaints within radius (meters) | Bearer |
+| GET | /api/complaints/ | List all complaints (officer view) | Officer |
 | PATCH | /api/complaints/{id}/status | Update repair status | Officer |
+| POST | /api/complaints/{id}/resolve | Close complaint with proof photo | Officer |
+
+### Maps & Analytics
+
+| Method | Endpoint | Description | Auth |
+|--------|----------|-------------|------|
+| GET | /api/map/heatmap | Clustered complaint heatmap data | None |
+| GET | /api/map/hotspots | Top damage hotspots ranked by severity | Officer |
+| GET | /api/map/timeline | Daily complaint counts (7/30/90 days) | None |
+
+### Admin
+
+| Method | Endpoint | Description | Auth |
+|--------|----------|-------------|------|
+| GET | /api/admin/stats | System-wide statistics | Admin |
+| GET | /api/admin/officers | List all field officers | Admin |
+| POST | /api/admin/officers | Register new officer | Admin |
+| GET | /api/admin/sla/dashboard | SLA compliance overview | Admin |
+| GET | /api/admin/audit/complaint/{id} | Full audit trail | Admin |
 
 Full interactive docs: http://localhost:8000/docs
-Health check: http://localhost:8000/healthz
 
 ---
 
 ## Environment Variables
 
-| Variable | Description |
-|----------|-------------|
-| DATABASE_URL | PostgreSQL connection string |
-| SECRET_KEY | JWT signing secret (keep secret!) |
-| APP_ENV | `development` locally, `production` in deployed environments |
-| CORS_ORIGINS | Comma-separated allowed frontend origins |
-| YOLO_MODEL_PATH | Path to trained .pt model file |
-| RESEND_API_KEY | Primary email provider API key for hosted deployments |
-| SMTP_USER | Optional SMTP username for local fallback email delivery |
-| SMTP_PASS | Optional SMTP password for local fallback email delivery |
-| EMAIL_FROM | Sender name and email address |
-| ADMIN_EMAIL | Recipient for high-severity admin alerts |
-| BASE_URL | Public app base URL used in notification links |
+### Core
+
+| Variable | Description | Required |
+|----------|-------------|----------|
+| APP_ENV | `development` or `production` | Yes |
+| APP_VERSION | App version string e.g. `1.0.0` | Yes |
+| CORS_ORIGINS | Comma-separated allowed frontend origins | Yes |
+
+### Database (Supabase)
+
+| Variable | Description | Required |
+|----------|-------------|----------|
+| DATABASE_URL | `postgresql://postgres:[pw]@db.xxxx.supabase.co:5432/postgres` | Yes |
+| SUPABASE_URL | `https://xxxx.supabase.co` | Yes |
+| SUPABASE_SERVICE_KEY | Service role secret key | Yes |
+| SUPABASE_ANON_KEY | Public anon key | Yes |
+
+### Authentication (Firebase)
+
+| Variable | Description | Required |
+|----------|-------------|----------|
+| FIREBASE_PROJECT_ID | Firebase project ID | Yes |
+| FIREBASE_SERVICE_ACCOUNT_JSON | Base64-encoded service account JSON | Yes |
+
+### AI Model
+
+| Variable | Description | Required |
+|----------|-------------|----------|
+| YOLO_MODEL_PATH | Path to trained model e.g. `ai_model/best.pt` | Yes |
+| YOLO_CONFIDENCE_THRESHOLD | Minimum detection confidence (default: `0.60`) | No |
+
+### Cache (Upstash Redis)
+
+| Variable | Description | Required |
+|----------|-------------|----------|
+| REDIS_URL | Redis connection URL (supports `rediss://`) | No |
+| MAX_UPLOAD_SIZE_MB | Max photo upload size in MB (default: `10`) | No |
+
+### Notifications
+
+| Variable | Description | Required |
+|----------|-------------|----------|
+| RESEND_API_KEY | Resend email API key | No |
+
+### Observability
+
+| Variable | Description | Required |
+|----------|-------------|----------|
+| SENTRY_DSN | Sentry backend DSN | No |
 
 ---
 
