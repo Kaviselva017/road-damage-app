@@ -16,6 +16,17 @@ export default defineConfig({
   ],
   build: {
     sourcemap: true, // Required for Sentry to map errors to original source code
-    chunkSizeWarningLimit: 2000,
-  }
+    chunkSizeWarningLimit: 600,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'vendor-react': ['react', 'react-dom', 'react-router-dom'],
+          'vendor-maps': ['react-leaflet', 'leaflet'],
+          'vendor-charts': ['recharts'],
+          'vendor-firebase': ['firebase/app', 'firebase/auth'],
+          'vendor-supabase': ['@supabase/supabase-js'],
+        },
+      },
+    },
+  },
 })

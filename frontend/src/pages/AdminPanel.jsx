@@ -1,9 +1,11 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { useAuth } from '../services/AuthContext';
-import { useNavigate } from 'react-router-dom';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, PieChart, Pie, Legend, Cell, ResponsiveContainer } from 'recharts';
+import { useState, useEffect, useRef, useCallback, Fragment } from 'react'
+import PropTypes from 'prop-types'
+import { useAuth } from '../services/AuthContext'
+import { useNavigate } from 'react-router-dom'
+import { BarChart, Bar, XAxis, YAxis, Tooltip, PieChart, Pie, Legend, Cell, ResponsiveContainer } from 'recharts'
+import { useComplaintsRealtime } from '../hooks/useComplaintsRealtime'
 
-const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
+const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api'
 
 const STATUS_COLORS = {
   pending: '#F59E0B',
@@ -11,51 +13,76 @@ const STATUS_COLORS = {
   in_progress: '#8B5CF6',
   completed: '#10B981',
   rejected: '#EF4444'
-};
+}
 
 export default function AdminPanel() {
-  const { token, isAdmin, user } = useAuth(); // assuming user has id parsed from token
-  const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState('Overview');
-  const [toasts, setToasts] = useState([]);
+  const { token, isAdmin, user } = useAuth()
+  const navigate = useNavigate()
+  const [activeTab, setActiveTab] = useState('Overview')
+  const [toasts, setToasts] = useState([])
+
+  const { complaints: realtimeComplaints, isConnected } = useComplaintsRealtime()
+  const feedEndRef = useRef(null)
 
   useEffect(() => {
-    if (!isAdmin) navigate('/');
-  }, [isAdmin, navigate]);
+    if (!isAdmin) navigate('/')
+  }, [isAdmin, navigate])
 
-  const showToast = (msg, type = 'success') => {
-    const id = Date.now();
-    setToasts(prev => [...prev, { id, msg, type }]);
+  useEffect(() => {
+    feedEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [realtimeComplaints])
+
+  const showToast = useCallback((msg, type = 'success') => {
+    const id = Date.now()
+    setToasts(prev => [...prev, { id, msg, type }])
     setTimeout(() => {
-      setToasts(prev => prev.filter(t => t.id !== id));
-    }, 3000);
-  };
+      setToasts(prev => prev.filter(t => t.id !== id))
+    }, 3000)
+  }, [])
 
   return (
-    <div style={styles.container}>
-      <div style={styles.header}>
-        <div>
-          <h1 style={styles.title}>Admin Panel</h1>
-          <p style={styles.subtitle}>System configuration and personnel management</p>
+    <div style={{ display: 'flex', minHeight: '100vh', background: '#0d0f14', color: '#e8eaf0', fontFamily: 'system-ui, sans-serif' }}>
+      <div style={{ flex: 1, padding: '24px 32px', overflowY: 'auto' }}>
+        <div style={styles.header}>
+          <div>
+            <h1 style={styles.title}>Admin Panel <span style={{fontSize:12, color: isConnected?'#10b981':'#ef4444', verticalAlign: 'middle', marginLeft: 8}}>● {isConnected?'Live':'Offline'}</span></h1>
+            <p style={styles.subtitle}>System configuration and personnel management</p>
+          </div>
+          <button onClick={() => navigate('/')} style={styles.btnOutline}>← Back to Dashboard</button>
         </div>
-        <button onClick={() => navigate('/')} style={styles.btnOutline}>← Back to Dashboard</button>
+
+        <div style={styles.tabsWrap}>
+          {['Overview', 'Officers'].map(tab => (
+            <button
+              key={tab}
+              style={{ ...styles.tabBtn, borderBottomColor: activeTab === tab ? '#3B82F6' : 'transparent', color: activeTab === tab ? '#e8eaf0' : '#7a8299' }}
+              onClick={() => setActiveTab(tab)}
+            >
+              {tab}
+            </button>
+          ))}
+        </div>
+
+        <div style={{ paddingBottom: 60 }}>
+          {activeTab === 'Overview' && <OverviewTab token={token} />}
+          {activeTab === 'Officers' && <OfficersTab token={token} currentOfficerId={user?.id} showToast={showToast} />}
+        </div>
       </div>
 
-      <div style={styles.tabsWrap}>
-        {['Overview', 'Officers'].map(tab => (
-          <button
-            key={tab}
-            style={{ ...styles.tabBtn, borderBottomColor: activeTab === tab ? '#3B82F6' : 'transparent', color: activeTab === tab ? '#e8eaf0' : '#7a8299' }}
-            onClick={() => setActiveTab(tab)}
-          >
-            {tab}
-          </button>
-        ))}
-      </div>
-
-      <div style={{ flex: 1, paddingBottom: 60 }}>
-        {activeTab === 'Overview' && <OverviewTab token={token} />}
-        {activeTab === 'Officers' && <OfficersTab token={token} currentOfficerId={user?.id} showToast={showToast} />}
+      {/* Activity Feed Sidebar */}
+      <div style={{ width: 300, background: '#161a23', borderLeft: '1px solid #252b38', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ padding: '20px', borderBottom: '1px solid #252b38' }}>
+          <h3 style={{ margin: 0, fontSize: 16 }}>Live Activity Feed</h3>
+        </div>
+        <div style={{ flex: 1, overflowY: 'auto', padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {realtimeComplaints.length === 0 ? <div style={{color: '#7a8299', fontSize: 13, textAlign: 'center', marginTop: 20}}>Waiting for live updates...</div> : null}
+          {realtimeComplaints.map((e, i) => (
+            <div key={i} style={{ background: '#0d0f14', padding: 12, borderRadius: 8, border: '1px solid #252b38', fontSize: 13, lineHeight: '1.4' }}>
+               <span role="img" aria-label="live">📡</span> Live Update: Complaint {e.complaint_id} is now {e.status}
+            </div>
+          ))}
+          <div ref={feedEndRef} />
+        </div>
       </div>
 
       {/* Toasts */}
@@ -67,22 +94,22 @@ export default function AdminPanel() {
         ))}
       </div>
     </div>
-  );
+  )
 }
 
 function OverviewTab({ token }) {
-  const [stats, setStats] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState(null)
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     fetch(`${BASE_URL}/admin/stats`, { headers: { Authorization: `Bearer ${token}` } })
       .then(res => res.json())
       .then(data => { setStats(data); setLoading(false); })
-      .catch(console.error);
-  }, [token]);
+      .catch(console.error)
+  }, [token])
 
-  if (loading) return <div style={styles.loading}>Loading Overview...</div>;
-  if (!stats) return <div style={styles.loading}>Failed to load stats.</div>;
+  if (loading) return <div style={styles.loading}>Loading Overview...</div>
+  if (!stats) return <div style={styles.loading}>Failed to load stats.</div>
 
   return (
     <div>
@@ -129,7 +156,7 @@ function OverviewTab({ token }) {
         </div>
       </div>
     </div>
-  );
+  )
 }
 
 function StatCard({ label, value, color = '#f5a623' }) {
@@ -138,50 +165,50 @@ function StatCard({ label, value, color = '#f5a623' }) {
       <div style={{ fontSize: 28, fontWeight: 800, color }}>{value}</div>
       <div style={{ fontSize: 13, color: '#7a8299', marginTop: 4 }}>{label}</div>
     </div>
-  );
+  )
 }
 
 function OfficersTab({ token, currentOfficerId, showToast }) {
-  const [officers, setOfficers] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [addMode, setAddMode] = useState(false);
-  
-  // Cache for stats expansion
-  const [expandedRow, setExpandedRow] = useState(null);
-  const statsCache = useRef(new Map());
-  const [expandedData, setExpandedData] = useState(null);
-  
-  const [editingId, setEditingId] = useState(null);
+  const [officers, setOfficers] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [addMode, setAddMode] = useState(false)
 
-  const load = () => {
-    setLoading(true);
+  // Cache for stats expansion
+  const [expandedRow, setExpandedRow] = useState(null)
+  const statsCache = useRef(new Map())
+  const [expandedData, setExpandedData] = useState(null)
+
+  const [editingId, setEditingId] = useState(null)
+
+  const load = useCallback(() => {
+    setLoading(true)
     fetch(`${BASE_URL}/admin/officers`, { headers: { Authorization: `Bearer ${token}` } })
       .then(res => res.json())
       .then(d => { setOfficers(d); setLoading(false); })
-      .catch(console.error);
-  };
+      .catch(console.error)
+  }, [token])
 
-  useEffect(() => { load(); }, [token]);
+  useEffect(() => { load() }, [load])
 
   const handleAdd = async (e) => {
-    e.preventDefault();
-    const fd = new FormData(e.target);
-    const body = Object.fromEntries(fd.entries());
-    
+    e.preventDefault()
+    const fd = new FormData(e.target)
+    const body = Object.fromEntries(fd.entries())
+
     try {
       const res = await fetch(`${BASE_URL}/admin/officers`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify(body)
-      });
-      if (!res.ok) throw new Error((await res.json()).detail || 'Failed');
-      showToast('Officer created successfully');
-      setAddMode(false);
-      load();
+      })
+      if (!res.ok) throw new Error((await res.json()).detail || 'Failed')
+      showToast('Officer created successfully')
+      setAddMode(false)
+      load()
     } catch (err) {
-      showToast(err.message, 'error');
+      showToast(err.message, 'error')
     }
-  };
+  }
 
   const handleToggleActive = async (id, isCurrentlyActive) => {
     try {
@@ -189,36 +216,36 @@ function OfficersTab({ token, currentOfficerId, showToast }) {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ is_active: !isCurrentlyActive })
-      });
-      if (!res.ok) throw new Error('Toggle failed');
-      showToast(isCurrentlyActive ? 'Officer deactivated' : 'Officer activated');
-      load();
+      })
+      if (!res.ok) throw new Error('Toggle failed')
+      showToast(isCurrentlyActive ? 'Officer deactivated' : 'Officer activated')
+      load()
     } catch (err) {
-      showToast(err.message, 'error');
+      showToast(err.message, 'error')
     }
-  };
+  }
 
   const handleRowClick = async (off, e) => {
     // Ignore clicks on buttons/inputs
-    if (e.target.tagName.toLowerCase() === 'button' || e.target.tagName.toLowerCase() === 'input') return;
-    
+    if (e.target.tagName.toLowerCase() === 'button' || e.target.tagName.toLowerCase() === 'input') return
+
     if (expandedRow === off.id) {
-      setExpandedRow(null);
-      return;
+      setExpandedRow(null)
+      return
     }
-    setExpandedRow(off.id);
-    setExpandedData(null);
+    setExpandedRow(off.id)
+    setExpandedData(null)
     if (statsCache.current.has(off.id)) {
-      setExpandedData(statsCache.current.get(off.id));
+      setExpandedData(statsCache.current.get(off.id))
     } else {
       try {
-        const r = await fetch(`${BASE_URL}/admin/officers/${off.id}/stats`, { headers: { Authorization: `Bearer ${token}` }});
-        const d = await r.json();
-        statsCache.current.set(off.id, d);
-        setExpandedData(d);
-      } catch (err) { console.error(err); }
+        const r = await fetch(`${BASE_URL}/admin/officers/${off.id}/stats`, { headers: { Authorization: `Bearer ${token}` }})
+        const d = await r.json()
+        statsCache.current.set(off.id, d)
+        setExpandedData(d)
+      } catch (err) { console.error(err) }
     }
-  };
+  }
 
   return (
     <div>
@@ -262,7 +289,7 @@ function OfficersTab({ token, currentOfficerId, showToast }) {
             </thead>
             <tbody>
               {officers.map(o => (
-                <React.Fragment key={o.id}>
+                <Fragment key={o.id}>
                   {editingId === o.id ? (
                     <InlineEditRow o={o} setEditingId={setEditingId} token={token} load={load} showToast={showToast} />
                   ) : (
@@ -280,9 +307,9 @@ function OfficersTab({ token, currentOfficerId, showToast }) {
                       <td style={styles.td}>
                         <div style={{ display: 'flex', gap: 8 }}>
                           <button onClick={() => setEditingId(o.id)} style={styles.btnSmall}>Edit</button>
-                          <button 
+                          <button
                             disabled={o.id === currentOfficerId}
-                            onClick={() => handleToggleActive(o.id, o.is_active)} 
+                            onClick={() => handleToggleActive(o.id, o.is_active)}
                             style={{ ...styles.btnSmall, color: o.id === currentOfficerId ? '#7a8299' : (o.is_active ? '#EF4444' : '#10B981') }}
                           >
                             {o.is_active ? 'Deactivate' : 'Activate'}
@@ -326,34 +353,34 @@ function OfficersTab({ token, currentOfficerId, showToast }) {
                       </td>
                     </tr>
                   )}
-                </React.Fragment>
+                </Fragment>
               ))}
             </tbody>
           </table>
         </div>
       )}
     </div>
-  );
+  )
 }
 
 function InlineEditRow({ o, setEditingId, token, load, showToast }) {
-  const [form, setForm] = useState({ name: o.name, zone: o.zone || '' });
-  
+  const [form, setForm] = useState({ name: o.name, zone: o.zone || '' })
+
   const handleSave = async () => {
     try {
       const res = await fetch(`${BASE_URL}/admin/officers/${o.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify(form)
-      });
-      if (!res.ok) throw new Error('Update failed');
-      showToast('Changes saved');
-      setEditingId(null);
-      load();
+      })
+      if (!res.ok) throw new Error('Update failed')
+      showToast('Changes saved')
+      setEditingId(null)
+      load()
     } catch(e) {
-      showToast(e.message, 'error');
+      showToast(e.message, 'error')
     }
-  };
+  }
 
   return (
     <tr style={{ background: '#1c2130' }}>
@@ -373,7 +400,31 @@ function InlineEditRow({ o, setEditingId, token, load, showToast }) {
         </div>
       </td>
     </tr>
-  );
+  )
+}
+
+InlineEditRow.propTypes = {
+  o: PropTypes.object.isRequired,
+  setEditingId: PropTypes.func.isRequired,
+  token: PropTypes.string.isRequired,
+  load: PropTypes.func.isRequired,
+  showToast: PropTypes.func.isRequired,
+}
+
+OverviewTab.propTypes = {
+  token: PropTypes.string.isRequired,
+}
+
+StatCard.propTypes = {
+  label: PropTypes.string.isRequired,
+  value: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
+  color: PropTypes.string,
+}
+
+OfficersTab.propTypes = {
+  token: PropTypes.string.isRequired,
+  currentOfficerId: PropTypes.number,
+  showToast: PropTypes.func.isRequired,
 }
 
 const styles = {
@@ -401,4 +452,4 @@ const styles = {
   loading: { padding: 40, textAlign: 'center', color: '#7a8299' },
   toastContainer: { position: 'fixed', bottom: 24, right: 24, display: 'flex', flexDirection: 'column', gap: 10, zIndex: 9999 },
   toast: { padding: '12px 20px', borderRadius: 8, color: '#fff', fontWeight: 600, boxShadow: '0 4px 12px rgba(0,0,0,0.15)', animation: 'slideIn 0.3s ease' }
-};
+}

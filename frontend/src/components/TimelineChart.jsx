@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 const TimelineChart = () => {
@@ -6,7 +6,7 @@ const TimelineChart = () => {
   const [days, setDays] = useState(30);
   const [loading, setLoading] = useState(true);
 
-  const fetchData = React.useCallback(async (d) => {
+  const fetchData = useCallback(async (d) => {
     setLoading(true);
     try {
       const response = await fetch(`/api/map/timeline?days=${d}`);

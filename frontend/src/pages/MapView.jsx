@@ -11,7 +11,8 @@
  *  • Back-to-dashboard nav button
  */
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
+import PropTypes from 'prop-types';
 import { useNavigate } from 'react-router-dom';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
@@ -26,6 +27,7 @@ import {
   TILE_URL,
   TILE_ATTRIBUTION
 } from '../config/mapsConfig';
+import { useAdminFeed } from '../hooks/useAdminFeed';
 
 // ── Severity → colour mapping (exact spec values) ─────────────────────────────
 function markerColor(complaint) {
@@ -43,6 +45,20 @@ function svgMarker(color) {
     <circle cx="12" cy="12" r="10" fill="${color}" fill-opacity="0.9" stroke="#ffffff" stroke-width="2"/>
   </svg>`;
   
+  return L.divIcon({
+    className: 'custom-svg-marker',
+    html: svgString,
+    iconSize: [24, 24],
+    iconAnchor: [12, 12],
+    popupAnchor: [0, -14],
+  });
+}
+
+function svgOfficerMarker() {
+  const svgString = `<svg width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="12" cy="12" r="10" fill="#3B82F6" stroke="#ffffff" stroke-width="2"/>
+    <text x="12" y="16" font-size="10" font-weight="bold" fill="white" text-anchor="middle">O</text>
+  </svg>`;
   return L.divIcon({
     className: 'custom-svg-marker',
     html: svgString,
@@ -86,6 +102,11 @@ function MapUpdater({ center, zoom }) {
   return null;
 }
 
+MapUpdater.propTypes = {
+  center: PropTypes.arrayOf(PropTypes.number),
+  zoom: PropTypes.number,
+};
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Component
 // ─────────────────────────────────────────────────────────────────────────────
@@ -97,6 +118,35 @@ export default function MapView() {
   const [activeFilter,  setActiveFilter]  = useState('All');
   const [loading,       setLoading]       = useState(true);
   const [error,         setError]         = useState('');
+  
+  const { events } = useAdminFeed(token);
+  const [officerLocations, setOfficerLocations] = useState({});
+
+  useEffect(() => {
+    const fetchOfficersUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
+    fetch(`${fetchOfficersUrl}/admin/officers/locations`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(res => res.json())
+      .then(data => {
+        if(Array.isArray(data)){
+           const mapData = {};
+           data.forEach(d => mapData[d.officer_id] = d);
+           setOfficerLocations(mapData);
+        }
+      })
+      .catch(console.error);
+  }, [token]);
+
+  useEffect(() => {
+    if(events.length > 0) {
+      const lastEvent = events[events.length - 1];
+      if(lastEvent.event === 'officer_location') {
+        setOfficerLocations(prev => ({
+          ...prev,
+          [lastEvent.data.officer_id]: lastEvent.data
+        }));
+      }
+    }
+  }, [events]);
 
   // ── Fetch complaints on mount ─────────────────────────────────────────────
   const fetchComplaints = useCallback(async () => {
@@ -283,6 +333,22 @@ export default function MapView() {
                   >
                     View Details →
                   </button>
+                </div>
+              </Popup>
+            </Marker>
+          ))}
+          
+          {/* Active Officers */}
+          {Object.values(officerLocations).map(o => (
+            <Marker
+              key={`officer-${o.officer_id}`}
+              position={[o.lat, o.lng]}
+              icon={svgOfficerMarker()}
+            >
+              <Popup offset={[0, -10]}>
+                <div style={{fontFamily: 'system-ui', fontSize: 13, color: '#1e2434'}}>
+                  <strong style={{fontSize: 14}}>{o.name}</strong><br/>
+                  <span style={{color: '#6b7280'}}>Zone:</span> {o.zone}
                 </div>
               </Popup>
             </Marker>

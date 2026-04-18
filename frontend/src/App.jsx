@@ -1,4 +1,4 @@
-import React from 'react';
+import PropTypes from 'prop-types';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
@@ -48,3 +48,6 @@ export default function App() {
     </Sentry.ErrorBoundary>
   );
 }
+
+ProtectedRoute.propTypes = { children: PropTypes.node.isRequired };
+AdminRoute.propTypes = { children: PropTypes.node.isRequired };

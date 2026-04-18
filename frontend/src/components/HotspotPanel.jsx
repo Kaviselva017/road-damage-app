@@ -1,97 +1,115 @@
-import React, { useEffect, useState } from 'react';
-import { useMap } from 'react-leaflet';
-import { ChevronRight, ChevronLeft, AlertTriangle_icon, DollarSign, MapPin } from 'lucide-react';
+import { useEffect, useState } from 'react'
+import PropTypes from 'prop-types'
+import { useMap } from 'react-leaflet'
 
 const HotspotPanel = ({ token }) => {
-  const map = useMap();
-  const [hotspots, setHotspots] = useState([]);
-  const [collapsed, setCollapsed] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const map = useMap()
+  const [hotspots, setHotspots] = useState([])
+  const [collapsed, setCollapsed] = useState(false)
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     const fetchHotspots = async () => {
       try {
         const response = await fetch('/api/map/hotspots?min_count=3', {
           headers: { 'Authorization': `Bearer ${token}` }
-        });
-        if (!response.ok) throw new Error('Auth required');
-        const data = await response.json();
-        setHotspots(data.slice(0, 10)); // Top 10
+        })
+        if (!response.ok) throw new Error('Auth required')
+        const data = await response.json()
+        setHotspots(data.slice(0, 10)) // Top 10
       } catch (err) {
-        console.error(err);
+        console.error(err)
       } finally {
-        setLoading(false);
+        setLoading(false)
       }
-    };
-    if (token) fetchHotspots();
-  }, [token]);
+    }
+    if (token) fetchHotspots()
+  }, [token])
 
   const handleFlyTo = (lat, lng) => {
-    map.flyTo([lat, lng], 15, { duration: 1 });
-  };
+    map.flyTo([lat, lng], 15, { duration: 1 })
+  }
 
   const getSeverityColor = (sev) => {
     switch (sev.toLowerCase()) {
-      case 'critical': return 'bg-red-600 text-white';
-      case 'high':     return 'bg-orange-500 text-white';
-      case 'medium':   return 'bg-yellow-400 text-black';
-      default:         return 'bg-blue-500 text-white';
+      case 'critical': return { background: '#dc2626', color: '#fff' }
+      case 'high':     return { background: '#f97316', color: '#fff' }
+      case 'medium':   return { background: '#facc15', color: '#000' }
+      default:         return { background: '#3b82f6', color: '#fff' }
     }
-  };
+  }
 
   return (
-    <div className={`fixed right-0 top-0 h-screen transition-all duration-300 z-[1001] bg-white shadow-2xl flex ${collapsed ? 'w-0' : 'w-80'}`}>
-      <button 
+    <div style={{
+      position: 'fixed', right: 0, top: 0, height: '100vh',
+      transition: 'width 0.3s', zIndex: 1001,
+      background: '#fff', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)',
+      display: 'flex', width: collapsed ? 0 : 320, overflow: 'hidden'
+    }}>
+      <button
         onClick={() => setCollapsed(!collapsed)}
-        className="absolute left-[-40px] top-1/2 -translate-y-1/2 bg-white p-2 rounded-l-xl shadow-lg border-r-0 border border-gray-200"
+        style={{
+          position: 'absolute', left: -40, top: '50%', transform: 'translateY(-50%)',
+          background: '#fff', border: '1px solid #e5e7eb', borderRight: 'none',
+          borderRadius: '12px 0 0 12px', padding: '8px', cursor: 'pointer',
+          boxShadow: '-2px 0 8px rgba(0,0,0,0.1)'
+        }}
       >
-        {collapsed ? <ChevronLeft size={24} /> : <ChevronRight size={24} />}
+        {collapsed ? '‹' : '›'}
       </button>
 
       {!collapsed && (
-        <div className="flex-1 flex flex-col overflow-hidden">
-          <div className="p-6 border-b bg-slate-900 text-white">
-            <h2 className="text-xl font-bold flex items-center gap-2">
-              <AlertTriangle_icon className="text-yellow-400" size={20} />
-              Damage Hotspots
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          <div style={{ padding: '24px', borderBottom: '1px solid #e5e7eb', background: '#0f172a', color: '#fff' }}>
+            <h2 style={{ fontSize: 18, fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
+              ⚠️ Damage Hotspots
             </h2>
-            <p className="text-xs text-slate-400 mt-1">Highest priority resolution zones</p>
+            <p style={{ fontSize: 11, color: '#94a3b8', marginTop: 4, marginBottom: 0 }}>Highest priority resolution zones</p>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-4 space-y-3">
+          <div style={{ flex: 1, overflowY: 'auto', padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
             {loading ? (
-              <div className="flex flex-col items-center justify-center h-40 gap-2 text-gray-400">
-                <div className="animate-spin h-6 w-6 border-2 border-primary border-t-transparent rounded-full" />
-                <span className="text-sm">Identifying hotspots...</span>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 160, gap: 8, color: '#9ca3af' }}>
+                <div style={{ width: 24, height: 24, border: '2px solid #e5e7eb', borderTop: '2px solid #3b82f6', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+                <span style={{ fontSize: 14 }}>Identifying hotspots...</span>
               </div>
             ) : hotspots.map((h, idx) => (
-              <div 
+              <div
                 key={idx}
                 onClick={() => handleFlyTo(h.lat, h.lng)}
-                className="group p-4 rounded-xl border border-gray-100 hover:border-primary/30 hover:bg-primary/5 cursor-pointer transition-all shadow-sm"
+                style={{
+                  padding: 16, borderRadius: 12, border: '1px solid #f3f4f6',
+                  cursor: 'pointer', transition: 'all 0.15s',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.06)'
+                }}
               >
-                <div className="flex justify-between items-start mb-2">
-                  <span className="text-xs font-bold text-gray-400">#{idx + 1}</span>
-                  <span className={`text-[10px] px-2 py-0.5 rounded-full uppercase font-black ${getSeverityColor(h.max_severity)}`}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: '#9ca3af' }}>#{idx + 1}</span>
+                  <span style={{
+                    fontSize: 10, padding: '2px 8px', borderRadius: 999,
+                    fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.05em',
+                    ...getSeverityColor(h.max_severity)
+                  }}>
                     {h.max_severity}
                   </span>
                 </div>
-                
-                <h3 className="font-bold text-gray-800 capitalize truncate">{h.dominant_damage_type} Cluster</h3>
-                <div className="flex items-center gap-1 text-xs text-gray-500 mt-1">
-                  <MapPin size={12} />
-                  <span>{h.count} active reports nearby</span>
+
+                <h3 style={{ fontWeight: 700, color: '#1e293b', fontSize: 14, margin: '0 0 4px', textTransform: 'capitalize', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {h.dominant_damage_type} Cluster
+                </h3>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: '#6b7280', marginBottom: 12 }}>
+                  📍 {h.count} active reports nearby
                 </div>
 
-                <div className="mt-4 flex items-center justify-between">
-                  <div className="flex flex-col">
-                    <span className="text-[10px] text-gray-400 uppercase font-medium">Est. Repair Cost</span>
-                    <span className="text-sm font-bold text-slate-900 flex items-center">
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column' }}>
+                    <span style={{ fontSize: 10, color: '#9ca3af', textTransform: 'uppercase', fontWeight: 500 }}>Est. Repair Cost</span>
+                    <span style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>
                       ₹{h.estimated_repair_cost.toLocaleString()}
                     </span>
                   </div>
-                  <div className="h-8 w-8 bg-gray-50 rounded-lg flex items-center justify-center group-hover:bg-primary group-hover:text-white transition-colors">
-                    <ChevronRight size={16} />
+                  <div style={{ width: 32, height: 32, background: '#f8fafc', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 }}>
+                    ›
                   </div>
                 </div>
               </div>
@@ -100,7 +118,11 @@ const HotspotPanel = ({ token }) => {
         </div>
       )}
     </div>
-  );
-};
+  )
+}
 
-export default HotspotPanel;
+export default HotspotPanel
+
+HotspotPanel.propTypes = {
+  token: PropTypes.string,
+}

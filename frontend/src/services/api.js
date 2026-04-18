@@ -41,12 +41,6 @@ export function getOfficerSocketUrl() {
 }
 
 export const api = {
-  officerLogin: (email, password) =>
-    request('/auth/officer/login', {
-      method: 'POST',
-      body: JSON.stringify({ email, password }),
-    }),
-
   getComplaints: (token, params = {}) => {
     const query = new URLSearchParams(params).toString();
     return request(`/complaints${query ? '?' + query : ''}`, {}, token);

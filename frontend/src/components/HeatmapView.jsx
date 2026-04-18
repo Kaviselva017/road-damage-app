@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
+import PropTypes from 'prop-types';
 import { useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet.heat';
@@ -75,3 +76,7 @@ const HeatmapView = ({ gridSize = 500 }) => {
 };
 
 export default HeatmapView;
+
+HeatmapView.propTypes = {
+  gridSize: PropTypes.number,
+};

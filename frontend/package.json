@@ -4,12 +4,15 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "lint": "eslint src --ext js,jsx --report-unused-disable-directives --max-warnings 0"
   },
   "dependencies": {
     "@sentry/react": "^7.120.4",
-    "jwt-decode": "^4.0.0",
+    "@supabase/supabase-js": "^2.39.0",
+    "firebase": "^10.8.0",
     "leaflet": "^1.9.4",
+    "prop-types": "^15.8.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-leaflet": "^4.2.1",
@@ -19,6 +22,9 @@
   "devDependencies": {
     "@sentry/vite-plugin": "^2.23.1",
     "@vitejs/plugin-react": "^4.2.1",
+    "eslint": "^8.57.1",
+    "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-react-hooks": "^7.1.1",
     "vite": "^5.2.11"
   }
 }

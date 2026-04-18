@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../services/AuthContext';
 import { api } from '../services/api';
@@ -17,7 +17,7 @@ export default function Dashboard() {
   const [filter, setFilter] = useState({ status: '', severity: '' });
   const [loading, setLoading] = useState(true);
 
-  const load = React.useCallback(async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     try {
       const params = {};
