@@ -4,7 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:provider/provider.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:path_provider/path_provider.dart';
 import '../services/api_service.dart';
+import '../services/offline_queue_service.dart';
 
 /// ── Direct Priority Analyser (no server dependency) ──────────
 /// Computes area type and priority score directly from GPS coordinates
@@ -244,18 +247,51 @@ class _ReportScreenState extends State<ReportScreen> {
     }
 
     try {
+      // ── Check Connectivity ──
+      final connectivityResult = await Connectivity().checkConnectivity();
+      final isOnline = connectivityResult.contains(ConnectivityResult.mobile) ||
+          connectivityResult.contains(ConnectivityResult.wifi);
+
+      if (!isOnline) {
+        // ── Handle Offline Storage ──
+        final dir = await getApplicationDocumentsDirectory();
+        final timestamp = DateTime.now().millisecondsSinceEpoch;
+        final savedPath = '${dir.path}/offline_$timestamp.jpg';
+        
+        // Save file to local docs
+        final bytes = await _image!.readAsBytes();
+        await File(savedPath).writeAsBytes(bytes);
+
+        await OfflineQueueService.enqueue(
+          imagePath: savedPath,
+          latitude: _position!.latitude,
+          longitude: _position!.longitude,
+          address: _priorityPreview?['address'] as String?,
+          nearbyPlaces: (_priorityPreview?['nearby_places'] as List?)?.join(', '),
+        );
+
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('No internet. Report saved — will auto-submit when connected.',
+                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            backgroundColor: Colors.amber,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        Navigator.pushReplacementNamed(context, '/home');
+        return;
+      }
+
       final api = context.read<ApiService>();
       final complaint = await api.submitComplaint(
         latitude: _position!.latitude,
         longitude: _position!.longitude,
         address: _priorityPreview?['address'] as String?,
         areaType: _priorityPreview?['area_type'] as String?,
-        impactScore:
-            (_priorityPreview?['impact_score'] as num?)?.toDouble(),
-        sensitiveLocationCount:
-            (_priorityPreview?['sensitive_location_count'] as num?)?.toInt(),
-        nearbySensitive:
-            (_priorityPreview?['nearby_places'] as List?)?.join(', '),
+        impactScore: (_priorityPreview?['impact_score'] as num?)?.toDouble(),
+        sensitiveLocationCount: (_priorityPreview?['sensitive_location_count'] as num?)?.toInt(),
+        nearbySensitive: (_priorityPreview?['nearby_places'] as List?)?.join(', '),
         image: _image!,
       );
       if (!mounted) return;
@@ -265,7 +301,10 @@ class _ReportScreenState extends State<ReportScreen> {
       });
     } catch (e) {
       if (!mounted) return;
-      setState(() { _error = e.toString(); _isLoading = false; });
+      setState(() {
+        _error = e.toString();
+        _isLoading = false;
+      });
     }
   }
 

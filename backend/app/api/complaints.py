@@ -18,9 +18,13 @@ from app.models.models import Complaint, ComplaintOfficer, FieldOfficer, Notific
 from app.schemas.complaint import ComplaintStatusOut
 from app.schemas.schemas import FundUpdate, StatusUpdate
 from app.services import ai_service, audit_service, priority_service, sla_service, storage_service, weather_service
+from app.services.pdf_service import generate_bulk_pdf, generate_complaint_pdf
 from app.services.cache_service import cache
 from app.utils import cache_keys, metrics
 from app.ws_manager import manager
+from app.models.models import AuditLog
+import io
+from fastapi.responses import StreamingResponse
 
 """
 RoadWatch — Complaints API
@@ -599,6 +603,73 @@ async def list_complaints(
 
     await cache.set(ckey, data, ttl_seconds=30)
     return data
+
+
+@router.get("/{id}/export/pdf")
+async def export_complaint_pdf(
+    id: str,
+    db: Session = Depends(get_db),
+    officer: FieldOfficer = Depends(get_current_officer),
+):
+    """Export detailed PDF for a single complaint with official header and audit trail."""
+    c = db.execute(select(Complaint).filter((Complaint.complaint_id == id) | (Complaint.id == id if id.isdigit() else False))).scalars().first()
+    if not c:
+        raise HTTPException(404, "Complaint not found")
+    
+    # Fetch last 10 audit logs
+    logs = db.execute(
+        select(AuditLog)
+        .filter(AuditLog.entity_type == "complaint", AuditLog.entity_id == c.complaint_id)
+        .order_by(AuditLog.created_at.desc())
+        .limit(10)
+    ).scalars().all()
+    
+    pdf_bytes = await generate_complaint_pdf(c, logs, db)
+    
+    return StreamingResponse(
+        io.BytesIO(pdf_bytes),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename=complaint_{c.complaint_id}.pdf"}
+    )
+
+
+@router.get("/export/bulk")
+async def export_bulk_pdf(
+    status: str | None = None,
+    start_date: datetime | None = None,
+    end_date: datetime | None = None,
+    limit: int = 50,
+    db: Session = Depends(get_db),
+    officer: FieldOfficer = Depends(get_current_officer),
+):
+    """Export bulk PDF summary for up to 50 complaints. Admin only."""
+    if not officer.is_admin:
+        raise HTTPException(403, "Admin privileges required for bulk export")
+        
+    if limit > 50:
+        limit = 50
+
+    q = select(Complaint)
+    if status:
+        q = q.filter(Complaint.status == status)
+    if start_date:
+        q = q.filter(Complaint.created_at >= start_date)
+    if end_date:
+        q = q.filter(Complaint.created_at <= end_date)
+    
+    rows = db.execute(q.order_by(Complaint.created_at.desc()).limit(limit)).scalars().all()
+    
+    if not rows:
+        raise HTTPException(404, "No complaints found matching criteria")
+        
+    pdf_bytes = await generate_bulk_pdf(rows, db)
+    TS = datetime.now().strftime("%Y%m%d_%H%M")
+    
+    return StreamingResponse(
+        io.BytesIO(pdf_bytes),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename=roadwatch_bulk_report_{TS}.pdf"}
+    )
 
 
 # ── Officer PDF Report Download ────────────────────────────────

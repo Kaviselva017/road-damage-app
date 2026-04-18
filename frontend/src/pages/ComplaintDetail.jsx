@@ -16,6 +16,7 @@ export default function ComplaintDetail() {
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     api.getComplaint(token, id).then(c => {
@@ -35,15 +36,61 @@ export default function ComplaintDetail() {
     setSaving(false);
   };
 
+  const handleExportPDF = async () => {
+    setExporting(true);
+    try {
+      const BASE_API = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
+      const response = await fetch(`${BASE_API}/complaints/${id}/export/pdf`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!response.ok) throw new Error('Export failed');
+      
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `complaint_${complaint.complaint_id}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      alert(`Failed to export PDF: ${e.message}`);
+    }
+    setExporting(false);
+  };
+
   if (!complaint) return <div style={{ color: '#fff', padding: 40, background: '#0d0f14', minHeight: '100vh' }}>Loading...</div>;
 
   const BASE = import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:8000';
 
   return (
     <div style={{ minHeight: '100vh', background: '#0d0f14', color: '#e8eaf0', padding: '24px 32px', fontFamily: 'system-ui, sans-serif' }}>
-      <button onClick={() => navigate('/')} style={{ background: 'none', border: 'none', color: '#7a8299', cursor: 'pointer', marginBottom: 20, fontSize: 14 }}>
-        ← Back to Dashboard
-      </button>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+        <button onClick={() => navigate('/')} style={{ background: 'none', border: 'none', color: '#7a8299', cursor: 'pointer', fontSize: 14 }}>
+          ← Back to Dashboard
+        </button>
+        {token && (
+          <button
+            onClick={handleExportPDF}
+            disabled={exporting}
+            style={{
+              background: '#252b38',
+              color: '#fff',
+              border: '1px solid #3ecfb2',
+              borderRadius: 8,
+              padding: '8px 16px',
+              fontSize: 13,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              transition: 'all 0.2s'
+            }}>
+            {exporting ? '⏳ Generating PDF...' : '📄 Export Official PDF'}
+          </button>
+        )}
+      </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, maxWidth: 1000 }}>
         {/* Left: Image + AI results */}

@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../services/api_service.dart';
 import '../services/push_notification_service.dart';
+import '../widgets/pending_badge.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -46,6 +47,8 @@ class _HomeScreenState extends State<HomeScreen> {
           mainAxisAlignment: MainAxisAlignment.center,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            const Center(child: PendingBadge()),
+            const SizedBox(height: 16),
             const Text('Welcome to RoadWatch',
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
@@ -94,9 +97,11 @@ class _ActionCard extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(24),
         decoration: BoxDecoration(
-          color: color.withOpacity(0.1),
+          color: Color.fromRGBO(color.r.toInt(), color.g.toInt(), color.b.toInt(), 0.1),
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: color.withOpacity(0.4)),
+          border: Border.all(
+            color: Color.fromRGBO(color.r.toInt(), color.g.toInt(), color.b.toInt(), 0.4),
+          ),
         ),
         child: Row(children: [
           Icon(icon, color: color, size: 40),

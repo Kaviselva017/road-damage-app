@@ -13,6 +13,7 @@ import 'screens/my_complaints_screen.dart';
 import 'services/api_service.dart';
 import 'services/push_notification_service.dart';
 import 'services/local_notification_helper.dart';
+import 'services/sync_service.dart';
 
 @pragma('vm:entry-point')
 Future<void> _firebaseBackgroundHandler(RemoteMessage message) async {
@@ -24,6 +25,7 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
   await Firebase.initializeApp();
+  await SyncService.init();
   FirebaseMessaging.onBackgroundMessage(_firebaseBackgroundHandler);
   
   // Root/Jailbreak Detection
