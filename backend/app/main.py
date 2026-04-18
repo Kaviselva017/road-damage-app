@@ -214,7 +214,7 @@ def root():
 
 @app.get("/healthz", include_in_schema=False)
 def health():
-    return {"status": "ok", "sentry": "configured" if os.getenv("SENTRY_DSN") else "not_configured", "env": settings.APP_ENV}
+    return {"status": "ok", "sentry": "configured" if os.getenv("SENTRY_DSN") else "not_configured", "environment": settings.APP_ENV}
 
 
 if settings.APP_ENV == "development":
