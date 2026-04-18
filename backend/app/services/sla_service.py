@@ -66,6 +66,21 @@ def check_and_escalate(db: Session):
         last_mark = c.escalated_at or c.sla_deadline
         if now > (last_mark + timedelta(hours=esc_hours)):
             c.escalation_level += 1
+
+            import asyncio
+            try:
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    from app.websockets.location_ws import location_manager
+                    asyncio.create_task(
+                        location_manager.broadcast_to_admins("escalation", {
+                            "complaint_id": c.complaint_id,
+                            "level": c.escalation_level,
+                            "severity": c.severity
+                        })
+                    )
+            except Exception:
+                pass
             c.escalated_at = now
 
             level_name = "Supervisor" if c.escalation_level == 1 else "Director"

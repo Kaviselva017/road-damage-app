@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.models import Complaint, FieldOfficer
 from app.services.auth_service import get_current_officer, hash_password
+from app.services.cache_service import cache
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -135,3 +136,18 @@ def officer_stats(officer_id: int, db: Session = Depends(get_db), _: FieldOffice
         return {"complaint_id": c.complaint_id or f"RD-{c.id:06d}", "damage_type": c.damage_type, "status": c.status, "created_at": c.created_at.isoformat() if c.created_at else None}
 
     return {"total_assigned": len(comps), "completed": completed, "in_progress": in_prog, "pending": pending, "avg_resolution_hours": avg_res, "recent_complaints": [_mini(c) for c in comps[:5]]}
+
+
+@router.get("/officers/locations")
+async def get_officer_locations(_: FieldOfficer = Depends(require_admin)):
+    data = await cache.list("officer:location:")
+    valid = []
+    now = datetime.now(timezone.utc)
+    for entry in data:
+        try:
+            up = datetime.fromisoformat(entry.get("updated_at"))
+            if (now - up).total_seconds() <= 300:
+                valid.append(entry)
+        except (ValueError, TypeError):
+            pass
+    return valid

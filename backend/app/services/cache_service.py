@@ -13,6 +13,7 @@ class CacheInterface(Protocol):
     async def set(self, key: str, value: Any, ttl: int = 60) -> None: ...
     async def delete(self, key: str) -> None: ...
     async def delete_pattern(self, pattern: str) -> None: ...
+    async def list(self, prefix: str) -> list[Any]: ...
     async def flush_all(self) -> None: ...
 
 
@@ -30,6 +31,9 @@ class NoOpCache:
 
     async def delete_pattern(self, pattern: str) -> None:
         pass
+
+    async def list(self, prefix: str) -> list[Any]:
+        return []
 
     async def flush_all(self) -> None:
         pass
@@ -72,6 +76,17 @@ class RedisCache:
                 await self.redis.delete(*keys)
         except Exception as e:
             logger.error(f"Redis Pattern DEL error for {pattern}: {e}")
+
+    async def list(self, prefix: str) -> list[Any]:
+        try:
+            keys = await self.redis.keys(f"{prefix}*")
+            if not keys:
+                return []
+            vals = await self.redis.mget(keys)
+            return [json.loads(str(v)) for v in vals if v]
+        except Exception as e:
+            logger.error(f"Redis LIST error for {prefix}: {e}")
+            return []
 
     async def flush_all(self) -> None:
         try:

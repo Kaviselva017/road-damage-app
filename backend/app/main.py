@@ -251,3 +251,77 @@ async def websocket_complaint_status(websocket: WebSocket, complaint_id: str, to
         complaint_ws_manager.disconnect(complaint_id, websocket)
     finally:
         ping_task.cancel()
+
+
+@app.websocket("/ws/officers/location")
+async def websocket_officer_location(websocket: WebSocket, token: str = None):
+    from app.services.auth_service import decode_token
+    from app.websockets.location_ws import location_manager
+    officer = decode_token(token) if token else None
+    if not officer:
+        await websocket.close(code=4001)
+        return
+
+    await location_manager.connect_officer(officer.id, websocket)
+
+    async def keep_alive():
+        while True:
+            await asyncio.sleep(25)
+            try:
+                await websocket.send_text(json.dumps({"type": "ping"}))
+            except Exception:
+                break
+
+    ping_task = asyncio.create_task(keep_alive())
+    try:
+        while True:
+            data_str = await websocket.receive_text()
+            try:
+                data = json.loads(data_str)
+                lat = float(data.get("lat"))
+                lng = float(data.get("lng"))
+                if -90 <= lat <= 90 and -180 <= lng <= 180:
+                    await location_manager.update_location(
+                        officer.id, officer.name, officer.zone, lat, lng
+                    )
+            except (ValueError, TypeError, json.JSONDecodeError):
+                pass
+    except WebSocketDisconnect:
+        pass
+    except Exception:
+        pass
+    finally:
+        location_manager.disconnect_officer(officer.id)
+        ping_task.cancel()
+
+
+@app.websocket("/ws/admin/feed")
+async def websocket_admin_feed(websocket: WebSocket, token: str = None):
+    from app.services.auth_service import decode_token
+    from app.websockets.location_ws import location_manager
+    officer = decode_token(token) if token else None
+    if not officer or not getattr(officer, "is_admin", False):
+        await websocket.close(code=4003)
+        return
+
+    await location_manager.connect_admin(websocket)
+
+    async def keep_alive():
+        while True:
+            await asyncio.sleep(25)
+            try:
+                await websocket.send_text(json.dumps({"type": "ping"}))
+            except Exception:
+                break
+
+    ping_task = asyncio.create_task(keep_alive())
+    try:
+        while True:
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        pass
+    except Exception:
+        pass
+    finally:
+        location_manager.disconnect_admin(websocket)
+        ping_task.cancel()

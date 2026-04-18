@@ -347,6 +347,20 @@ async def process_inference_background(complaint_id: str, fpath_str: str, img_by
             from app.services.cache_service import cache as cache_service
 
             await cache_service.delete_pattern("map:*")
+
+            from app.websockets.location_ws import location_manager
+            try:
+                await location_manager.broadcast_to_admins("new_complaint", {
+                    "complaint_id": c.complaint_id,
+                    "damage_type": c.damage_type,
+                    "severity": c.severity,
+                    "lat": c.latitude,
+                    "lng": c.longitude,
+                    "priority_score": c.priority_score,
+                    "created_at": c.created_at.isoformat() if c.created_at else None
+                })
+            except Exception:
+                pass
         except Exception as e:
             logger.warning(f"Background broadcast error: {e}")
 
@@ -830,6 +844,12 @@ async def update_status(
 
     try:
         await manager.broadcast_status_update(c)
+        from app.websockets.location_ws import location_manager
+        await location_manager.broadcast_to_admins("status_changed", {
+            "complaint_id": complaint_id,
+            "new_status": data.status,
+            "officer_id": officer.id
+        })
     except Exception:
         pass
 
