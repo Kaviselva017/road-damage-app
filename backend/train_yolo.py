@@ -21,7 +21,8 @@ STEP 3: Copy model to ai_model/road_damage_yolov8.pt
 # Option C: Roboflow public dataset (easiest, auto-downloads)
 #   https://universe.roboflow.com/search?q=road+damage+pothole
 
-import os, yaml
+import os
+import yaml
 from pathlib import Path
 
 def download_from_roboflow():
@@ -94,7 +95,7 @@ def train(data_yaml: str, epochs: int = 50, imgsz: int = 640):
     if best_model.exists():
         import shutil
         shutil.copy(best_model, "ai_model/road_damage_yolov8.pt")
-        print(f"\n✅ Model saved to: ai_model/road_damage_yolov8.pt")
+        print("\n✅ Model saved to: ai_model/road_damage_yolov8.pt")
         print(f"   mAP50: {results.results_dict.get('metrics/mAP50(B)', 0):.3f}")
         print(f"   mAP50-95: {results.results_dict.get('metrics/mAP50-95(B)', 0):.3f}")
     return results
@@ -134,7 +135,7 @@ if __name__ == "__main__":
             args.data = data_dir
 
     if args.mode in ("train", "all") and args.data:
-        print(f"\n[2/3] Creating dataset config...")
+        print("\n[2/3] Creating dataset config...")
         yaml_path = create_dataset_yaml(args.data)
         print(f"      Config: {yaml_path}")
         print(f"\n[3/3] Training YOLOv8 (epochs={args.epochs}, imgsz={args.imgsz})...")

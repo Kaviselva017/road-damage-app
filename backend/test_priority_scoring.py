@@ -33,7 +33,6 @@ def login() -> str | None:
 def write_test_image() -> str:
     fd, path = tempfile.mkstemp(suffix=".jpg")
     os.close(fd)
-    import random
     with open("uploads/81da090e1a864842af48e408c043d284.jpg", "rb") as f:
         base_img = f.read()
     with open(path, "wb") as handle:

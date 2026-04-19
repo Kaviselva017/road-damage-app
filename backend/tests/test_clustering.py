@@ -1,4 +1,11 @@
+import os
 import pytest
+
+pytestmark = pytest.mark.skipif(
+    os.getenv("DATABASE_URL", "sqlite://").startswith("sqlite"),
+    reason="Clustering requires PostGIS — skipped on SQLite"
+)
+
 from unittest.mock import MagicMock
 from app.services.clustering_service import cluster_complaints, get_hotspots
 from app.models.models import Complaint

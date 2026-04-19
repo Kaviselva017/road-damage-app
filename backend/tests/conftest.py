@@ -1,22 +1,90 @@
+import io
+import os
+
 import pytest
 import pytest_asyncio
-from httpx import AsyncClient, ASGITransport
-from sqlalchemy import create_engine
-from sqlalchemy.pool import StaticPool
+from httpx import ASGITransport, AsyncClient
+from PIL import Image
+from sqlalchemy import create_engine, event as sa_event
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
 
 from app.main import app
 from app.database import Base, get_db
 
-# Use in-memory SQLite for testing
+
+# ── Rate limiter: completely disable during tests ──────────────────────────────
+@pytest.fixture(autouse=True)
+def _disable_rate_limiter(monkeypatch):
+    from app.limiter import limiter
+
+    monkeypatch.setattr(limiter, "enabled", False, raising=False)
+    try:
+        limiter.reset()
+    except Exception:
+        pass
+    yield
+    try:
+        limiter.reset()
+    except Exception:
+        pass
+
+
+# ── APScheduler: prevent start during test collection ─────────────────────────
+@pytest.fixture(autouse=True, scope="session")
+def _disable_scheduler():
+    """Prevent APScheduler from starting during tests."""
+    import app.main as main_mod
+
+    main_mod._SCHEDULER_STARTED = True  # signal already started
+    yield
+
+
+# ── In-memory SQLite for testing ───────────────────────────────────────────────
 SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:"
+
+from sqlalchemy.ext.compiler import compiles
+from geoalchemy2.types import Geography
+
+
+@compiles(Geography, "sqlite")
+def compile_geography(type_, compiler, **kw):
+    type_.spatial_index = False
+    type_.management = False
+    return "TEXT"
+
 
 engine = create_engine(
     SQLALCHEMY_DATABASE_URL,
     connect_args={"check_same_thread": False},
     poolclass=StaticPool,
 )
+
+
+def register_sqlite_geo_stubs(dbapi_conn, connection_record=None):
+    """Register no-op stubs for every PostGIS/GeoAlchemy2 function SQLite lacks."""
+    noop1 = lambda x: x
+    noop2 = lambda x, y: x
+    for fn_name in (
+        "AsBinary", "AsEWKB", "ST_GeomFromEWKT", "ST_GeogFromText",
+        "ST_AsText", "ST_AsEWKT", "ST_AsBinary", "ST_AsEWKB",
+        "ST_GeomFromText", "ST_GeomFromWKB",
+    ):
+        dbapi_conn.create_function(fn_name, 1, noop1)
+    for fn_name in ("ST_SetSRID", "ST_DWithin"):
+        dbapi_conn.create_function(fn_name, 2, noop2)
+    # ST_MakePoint(lng, lat) → just return None (we never read location in SQLite)
+    dbapi_conn.create_function("ST_MakePoint", 2, lambda x, y: None)
+    # 3-arg variants
+    dbapi_conn.create_function("ST_DWithin", 3, lambda x, y, z: False)
+    dbapi_conn.create_function("ST_SetSRID", 2, lambda x, y: x)
+
+
+sa_event.listen(engine, "connect", register_sqlite_geo_stubs)
+
+
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
 
 @pytest.fixture(scope="function")
 def session():
@@ -28,6 +96,21 @@ def session():
     finally:
         db.close()
 
+
+@pytest.fixture(scope="function")
+def db_session(session):
+    """Alias used by auth/phone tests."""
+    def override_get_db():
+        try:
+            yield session
+        finally:
+            pass
+
+    app.dependency_overrides[get_db] = override_get_db
+    yield session
+    app.dependency_overrides.clear()
+
+
 @pytest.fixture(scope="function")
 def client(session):
     def override_get_db():
@@ -37,8 +120,22 @@ def client(session):
             pass
 
     app.dependency_overrides[get_db] = override_get_db
+
+    # Patch SessionLocal everywhere it's used directly (background tasks)
+    # so they use the test engine with GeoAlchemy2 stubs instead of production.
+    import app.database as _db_mod
+    import app.api.complaints as _complaints_mod
+
+    orig_sl = _db_mod.SessionLocal
+    _db_mod.SessionLocal = TestingSessionLocal
+    _complaints_mod.SessionLocal = TestingSessionLocal
+
     yield app
+
+    _db_mod.SessionLocal = orig_sl
+    _complaints_mod.SessionLocal = orig_sl
     app.dependency_overrides.clear()
+
 
 @pytest_asyncio.fixture(scope="function")
 async def async_client(client):
@@ -46,73 +143,115 @@ async def async_client(client):
     async with AsyncClient(transport=transport, base_url="http://testserver") as ac:
         yield ac
 
+
+# ── Google-auth era fixtures ──────────────────────────────────────────
+
+@pytest.fixture
+def test_user(db_session):
+    """A user with google_sub but NO phone_number (new sign-up state)."""
+    from app.models.models import User
+
+    user = User(
+        name="Test User",
+        email="testuser@gmail.com",
+        google_sub="google_test_123",
+        is_active=True,
+    )
+    db_session.add(user)
+    db_session.commit()
+    db_session.refresh(user)
+    return user
+
+
+@pytest.fixture
+def second_user(db_session):
+    from app.models.models import User
+
+    user = User(
+        name="Second User",
+        email="second@gmail.com",
+        google_sub="google_second_456",
+        is_active=True,
+    )
+    db_session.add(user)
+    db_session.commit()
+    db_session.refresh(user)
+    return user
+
+
+@pytest.fixture
+def test_user_no_phone(db_session):
+    """User with google_sub but explicitly no phone_number."""
+    from app.models.models import User
+
+    user = User(
+        name="No Phone User",
+        email="nophone@gmail.com",
+        google_sub="google_nophone_789",
+        is_active=True,
+    )
+    db_session.add(user)
+    db_session.commit()
+    db_session.refresh(user)
+    return user
+
+
+@pytest.fixture
+def auth_headers(db_session):
+    """Returns a callable that creates a Bearer header with a valid access token for any user."""
+    from app.api.auth import _make_access_token
+
+    def _make(user):
+        token = _make_access_token(user.id, user.google_sub or "")
+        return {"Authorization": f"Bearer {token}"}
+
+    return _make
+
+
+# ── Legacy fixtures (async) ───────────────────────────────────────────
+
 @pytest_asyncio.fixture(scope="function")
-async def citizen_token(async_client):
-    await async_client.post("/api/auth/register", json={
-        "name": "Test Citizen",
-        "email": "citizen@test.com",
-        "phone": "1234567890",
-        "password": "password123"
-    })
-    res = await async_client.post("/api/auth/login", json={
-        "email": "citizen@test.com",
-        "password": "password123"
-    })
-    return res.json().get("access_token")
+async def citizen_token(db_session, test_user):
+    """Legacy fixture — kept for backward compat with older tests."""
+    from app.api.auth import _make_access_token
+
+    # Ensure user has a phone number so they pass require_phone_complete
+    test_user.phone_number = "+919999988888"
+    db_session.commit()
+    return _make_access_token(test_user.id, test_user.google_sub or "")
+
 
 @pytest_asyncio.fixture(scope="function")
 async def officer_token(async_client, session):
     from app.models.models import FieldOfficer
-    from app.api.auth import pwd_ctx
-    officer = FieldOfficer(
-        name="Test Officer",
-        email="officer@test.com",
-        phone="0987654321",
-        hashed_password=pwd_ctx.hash("password123"),
-        zone="North",
-        is_admin=True,
-        is_active=True
-    )
-    session.add(officer)
-    session.commit()
-    
-    res = await async_client.post("/api/auth/officer/login", json={
-        "email": "officer@test.com",
-        "password": "password123"
-    })
-    return res.json().get("access_token")
+    from app.services.auth_service import create_access_token, hash_password
+
+    # Try to find existing officer to avoid UNIQUE constraint failed if we're reusing the session
+    officer = session.query(FieldOfficer).filter_by(email="officer@test.com").first()
+    if not officer:
+        officer = FieldOfficer(
+            name="Test Officer",
+            email="officer@test.com",
+            phone_number="0987654321",
+            hashed_password=hash_password("password123"),
+            zone="North",
+            is_admin=True,
+            is_active=True,
+        )
+        session.add(officer)
+        session.commit()
+        session.refresh(officer)
+
+    # Use create_access_token to ensure logic matches what decode_token expects
+    token = create_access_token({"sub": str(officer.id), "role": "admin"})
+    return token
+
 
 @pytest.fixture
 def dummy_image():
-    # 1x1 valid jpeg bytes, padded to >1000 bytes to pass ai_service validation
-    img_bytes = (
-        b'\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x01\x00H\x00H\x00\x00'
-        b'\xff\xdb\x00C\x00\x08\x06\x06\x07\x06\x05\x08\x07\x07\x07\t\t\x08\n'
-        b'\x0c\x14\r\x0c\x0b\x0b\x0c\x19\x12\x13\x0f\x14\x1d\x1a\x1f\x1e\x1d\x1a'
-        b'\x1c\x1c $.\' ",#\x1c\x1c(7),01444\x1f\'9=82<.342\xff\xdb\x00C\x01'
-        b'\t\t\t\x0c\x0b\x0c\x18\r\r\x182!\x1c!2222222222222222222222222222'
-        b'222222222222222222\xff\xc0\x00\x11\x08\x00\x01\x00\x01\x03\x01"\x00'
-        b'\x02\x11\x01\x03\x11\x01\xff\xc4\x00\x1f\x00\x00\x01\x05\x01\x01\x01'
-        b'\x01\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x01\x02\x03\x04\x05\x06'
-        b'\x07\x08\t\n\x0b\xff\xc4\x00\xb5\x10\x00\x02\x01\x03\x03\x02\x04\x03'
-        b'\x05\x05\x04\x04\x00\x00\x01}\x01\x02\x03\x00\x04\x11\x05\x12!1A\x06'
-        b'\x13Qa\x07"q\x142\x81\x91\xa1\x08#B\xb1\xc1\x15R\xd1\xf0$3br\x82\t\n'
-        b'\x16\x17\x18\x19\x1a%&\'()*456789:CDEFGHIJSTUVWXYZcdefghijstuvwxyz'
-        b'\x83\x84\x85\x86\x87\x88\x89\x8a\x92\x93\x94\x95\x96\x97\x98\x99\x9a'
-        b'\xa2\xa3\xa4\xa5\xa6\xa7\xa8\xa9\xaa\xb2\xb3\xb4\xb5\xb6\xb7\xb8\xb9'
-        b'\xba\xc2\xc3\xc4\xc5\xc6\xc7\xc8\xc9\xca\xd2\xd3\xd4\xd5\xd6\xd7\xd8'
-        b'\xd9\xda\xe1\xe2\xe3\xe4\xe5\xe6\xe7\xe8\xe9\xea\xf1\xf2\xf3\xf4\xf5'
-        b'\xf6\xf7\xf8\xf9\xfa\xff\xc4\x00\x1f\x01\x00\x03\x01\x01\x01\x01\x01'
-        b'\x01\x01\x01\x01\x00\x00\x00\x00\x00\x00\x01\x02\x03\x04\x05\x06\x07'
-        b'\x08\t\n\x0b\xff\xc4\x00\xb5\x11\x00\x02\x01\x02\x04\x04\x03\x04\x07'
-        b'\x05\x04\x04\x00\x01\x02w\x00\x01\x02\x03\x11\x04\x05!1\x06\x12AQ\x07'
-        b'aq\x13"2\x81\x08\x14B\x91\xa1\xb1\xc1\t#3R\xf0\x15br\xd1\n\x16$4\xe1'
-        b'%\xf1\x17\x18\x19\x1a&\'()*56789:CDEFGHIJSTUVWXYZcdefghijstuvwxyz'
-        b'\x82\x83\x84\x85\x86\x87\x88\x89\x8a\x92\x93\x94\x95\x96\x97\x98\x99'
-        b'\x9a\xa2\xa3\xa4\xa5\xa6\xa7\xa8\xa9\xaa\xb2\xb3\xb4\xb5\xb6\xb7\xb8'
-        b'\xb9\xba\xc2\xc3\xc4\xc5\xc6\xc7\xc8\xc9\xca\xd2\xd3\xd4\xd5\xd6\xd7'
-        b'\xd8\xd9\xda\xe2\xe3\xe4\xe5\xe6\xe7\xe8\xe9\xea\xf2\xf3\xf4\xf5\xf6'
-        b'\xf7\xf8\xf9\xfa\xff\xda\x00\x0c\x03\x01\x00\x02\x11\x03\x11\x00?\x00'
-        b'\xfd\xfc\xa2\x8a(\x0f\xff\xd9'
-    )
-    return img_bytes + (b'\x00' * 500)
+    """Generate a real valid JPEG in-memory using Pillow."""
+    buf = io.BytesIO()
+    img = Image.new("RGB", (100, 100), color=(255, 0, 0))
+    img.save(buf, format="JPEG", quality=85)
+    buf.seek(0)
+    return buf.read()

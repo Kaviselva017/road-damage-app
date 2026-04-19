@@ -2,8 +2,13 @@ from geoalchemy2 import Geography
 from sqlalchemy import JSON, BigInteger, Boolean, Column, DateTime, Float, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.orm import relationship
 
-from app.database import Base, _is_sqlite
+from app.database import Base
 from app.utils.datetime_utils import utc_now
+
+"""
+RoadWatch Models — uses plain String for status/severity/damage_type
+so SQLite works without enum migration issues.
+"""
 
 
 class User(Base):
@@ -11,11 +16,15 @@ class User(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, nullable=False)
     email = Column(String, unique=True, index=True, nullable=False)
-    phone = Column(String, nullable=True)
-    hashed_password = Column(String, nullable=False)
+    phone_number = Column(String, nullable=True)
+    hashed_password = Column(String, nullable=True)
+    google_sub = Column(String, nullable=True, unique=True, index=True)
     is_active = Column(Boolean, default=True)
     reward_points = Column(Integer, default=0)
     fcm_token = Column(String, nullable=True)
+    picture_url = Column(String, nullable=True)
+    phone_verified_at = Column(DateTime, nullable=True)
+    last_login_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=utc_now)
 
     complaints = relationship("Complaint", back_populates="user")
@@ -47,7 +56,7 @@ class FieldOfficer(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, nullable=False)
     email = Column(String, unique=True, index=True, nullable=False)
-    phone = Column(String, nullable=True)
+    phone_number = Column(String, nullable=True)
     hashed_password = Column(String, nullable=False)
     zone = Column(String, nullable=True)
     is_admin = Column(Boolean, default=False)
@@ -62,12 +71,11 @@ class FieldOfficer(Base):
 class Complaint(Base):
     __tablename__ = "complaints"
     __table_args__ = (
-        Index("ix_complaints_location", "location", postgresql_using="gist") if not _is_sqlite else None,
+        Index("ix_complaints_location", "location", postgresql_using="gist"),
         Index("ix_complaints_status", "status"),
         Index("ix_complaints_created_at", "created_at"),
         Index("ix_complaints_user_id", "user_id"),
     )
-    __table_args__ = tuple(x for x in __table_args__ if x is not None)
     id = Column(Integer, primary_key=True, index=True)
     complaint_id = Column(String, unique=True, index=True, nullable=False)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
@@ -75,10 +83,7 @@ class Complaint(Base):
 
     latitude = Column(Float, nullable=False)
     longitude = Column(Float, nullable=False)
-    if _is_sqlite:
-        location = Column(Text, nullable=True)
-    else:
-        location = Column(Geography(geometry_type="POINT", srid=4326), nullable=True)
+    location = Column(Geography(geometry_type="POINT", srid=4326), nullable=True)
     address = Column(Text, nullable=True)
     area_type = Column(String, default="residential")
     nearby_places = Column(Text, nullable=True)
@@ -93,6 +98,10 @@ class Complaint(Base):
     detected_damage_type = Column(String, nullable=True)
     confidence_score = Column(Float, nullable=True)
     analyzed_at = Column(DateTime, nullable=True)
+
+    # DamageResult fields — immutable AI output, never overwritten by officers
+    ai_class = Column(String, nullable=True)     # pothole | crack | surface_damage | multiple
+    ai_severity = Column(String, nullable=True)  # critical | high | medium | low
 
     status = Column(String, default="pending")
     officer_notes = Column(Text, nullable=True)
@@ -177,7 +186,7 @@ class LoginLog(Base):
 
 class AuditLog(Base):
     __tablename__ = "audit_logs"
-    id = Column(BigInteger, primary_key=True, index=True)
+    id = Column(BigInteger, primary_key=True, index=True, autoincrement=True)
     entity_type = Column(String, index=True, nullable=False)  # complaint/user/officer
     entity_id = Column(String, index=True, nullable=False)
     action = Column(String, nullable=False)  # created/status_changed/resolved/accessed
@@ -188,4 +197,4 @@ class AuditLog(Base):
     ip_address = Column(String, nullable=True)
     user_agent = Column(String, nullable=True)
     created_at = Column(DateTime, default=utc_now)
-    checksum = Column(String, nullable=False)
+    checksum = Column(String, nullable=False, server_default="")

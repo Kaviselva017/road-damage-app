@@ -1,269 +1,307 @@
-import logging
-import os
-from datetime import datetime, timezone
+"""
+RoadWatch — Auth API (Google OAuth2 + Phone verification)
+AUTH-1: Google Sign-In, JWT access/refresh tokens, rotation, logout
+AUTH-2: Phone number collection, E.164 validation, uniqueness
+"""
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
-from passlib.context import CryptContext
-from pydantic import BaseModel
-from sqlalchemy import select
+import uuid
+import os
+from datetime import datetime, timedelta, timezone
+
+import bcrypt
+import phonenumbers
+from phonenumbers import NumberParseException
+from fastapi import APIRouter, Depends, HTTPException, Request, Header, BackgroundTasks
+from pydantic import BaseModel, field_validator
 from sqlalchemy.orm import Session
+from jose import JWTError, jwt
 
 from app.database import get_db
-from app.dependencies import get_current_admin, get_current_user
-from app.middleware.rate_limit import limiter
-from app.models.models import FieldOfficer, LoginLog, User
-from app.services import audit_service
-from app.services.auth_service import create_access_token
+from app.models.models import User
+from app.services.google_auth_service import google_auth_service
+from app.dependencies import get_current_user, get_current_temp_user
 
-"""
-RoadWatch Auth API
-Endpoints used by login.html, citizen.html, admin.html — matched exactly.
-"""
-
+from app.services.token_service import (
+    issue_token_pair, rotate_refresh_token,
+    revoke_all_user_tokens, make_revocation_token, consume_revocation_token,
+)
+from app.middleware.security import (
+    blacklist_jti, record_auth_failure,
+    clear_auth_failures, is_account_locked, lock_account, AUTH_FAIL_LIMIT,
+)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
-pwd_ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
+JWT_SECRET       = os.getenv("JWT_SECRET_KEY", "changeme")
+REFRESH_SECRET   = os.getenv("REFRESH_SECRET_KEY", "changeme2")
+ACCESS_EXPIRE    = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "15"))
+REFRESH_EXPIRE   = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "7"))
+ALGORITHM        = "HS256"
+TEMP_EXPIRE_MIN  = 10
 
-def _now():
-    return datetime.now(timezone.utc)
+# ── helpers ──────────────────────────────────────────────────────────────────
 
+def _make_access_token(user_id: int, google_sub: str) -> str:
+    exp = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_EXPIRE)
+    return jwt.encode(
+        {"sub": str(user_id), "google_sub": google_sub,
+         "jti": str(uuid.uuid4()), "exp": exp},
+        JWT_SECRET, algorithm=ALGORITHM
+    )
 
-def _iso(dt):
-    if dt is None:
-        return None
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
-    return dt.isoformat().replace("+00:00", "Z")
+def _make_refresh_token(user_id: int, google_sub: str) -> str:
+    exp = datetime.now(timezone.utc) + timedelta(days=REFRESH_EXPIRE)
+    return jwt.encode(
+        {"sub": str(user_id), "google_sub": google_sub,
+         "jti": str(uuid.uuid4()), "type": "refresh", "exp": exp},
+        REFRESH_SECRET, algorithm=ALGORITHM
+    )
 
+def _make_temp_token(user_id: int) -> str:
+    exp = datetime.now(timezone.utc) + timedelta(minutes=TEMP_EXPIRE_MIN)
+    return jwt.encode(
+        {"sub": str(user_id), "type": "temp", "exp": exp},
+        JWT_SECRET, algorithm=ALGORITHM
+    )
 
-def _make_token(data: dict) -> str:
-    """Create a JWT using the shared auth_service (same SECRET_KEY)."""
-    return create_access_token(data)
+def _hash(token: str) -> str:
+    import hashlib
+    # SHA-256 first to avoid bcrypt's 72-byte truncation (JWTs share prefixes)
+    digest = hashlib.sha256(token.encode()).hexdigest()
+    return bcrypt.hashpw(digest.encode(), bcrypt.gensalt()).decode()
 
+def _verify_hash(token: str, hashed: str) -> bool:
+    import hashlib
+    digest = hashlib.sha256(token.encode()).hexdigest()
+    return bcrypt.checkpw(digest.encode(), hashed.encode())
 
-# ── Schemas ───────────────────────────────────────────────────────────────────
+# ── schemas ───────────────────────────────────────────────────────────────────
 
+class GoogleLoginRequest(BaseModel):
+    id_token: str
 
-class CitizenRegister(BaseModel):
-    name: str
-    email: str
-    password: str
-    phone: str | None = None
+class RefreshRequest(BaseModel):
+    refresh_token: str
 
+class LogoutRequest(BaseModel):
+    refresh_token: str
 
-class CitizenLogin(BaseModel):
-    email: str
-    password: str
+class PhoneRequest(BaseModel):
+    phone_number: str
 
+    @field_validator("phone_number")
+    @classmethod
+    def normalise_e164(cls, v: str) -> str:
+        try:
+            parsed = phonenumbers.parse(v, None)
+        except NumberParseException:
+            raise ValueError("Invalid phone number. Use +CountryCodeNumber e.g. +919876543210")
+        if not phonenumbers.is_valid_number(parsed):
+            raise ValueError("Invalid phone number. Use +CountryCodeNumber e.g. +919876543210")
+        return phonenumbers.format_number(parsed, phonenumbers.PhoneNumberFormat.E164)
 
-class OfficerLogin(BaseModel):
-    email: str
-    password: str
+# ── routes ────────────────────────────────────────────────────────────────────
 
-
-class OfficerCreate(BaseModel):
-    name: str
-    email: str
-    password: str
-    zone: str | None = None
-    phone: str | None = None
-
-
-class FcmTokenUpdate(BaseModel):
-    fcm_token: str
-
-
-# ── Citizen Register ──────────────────────────────────────────────────────────
-
-
-@router.post("/register", status_code=status.HTTP_201_CREATED)
-@limiter.limit(os.getenv("RATE_LIMIT_AUTH", "20/minute"))
-def citizen_register(request: Request, payload: CitizenRegister, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
-    """POST /api/auth/register — login.html & citizen.html"""
+@router.post("/google")
+async def google_login(
+    body: GoogleLoginRequest,
+    request: Request,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+):
     try:
-        if db.execute(select(User).filter(User.email == payload.email)).scalars().first():
-            raise HTTPException(status_code=400, detail="Email already registered")
+        g_user = google_auth_service.verify_id_token(body.id_token)
+    except HTTPException:
+        # Count failures per Google sub (use raw token prefix as identifier)
+        identifier = body.id_token[:32]
+        count = record_auth_failure(identifier)
+        if count >= AUTH_FAIL_LIMIT:
+            lock_account(identifier)
+        raise
+
+    if not g_user.email_verified:
+        raise HTTPException(status_code=403, detail="Email not verified by Google")
+
+    user = db.query(User).filter(User.google_sub == g_user.sub).first()
+    is_new = False
+
+    if is_account_locked(g_user.sub):
+        raise HTTPException(status_code=423,
+                            detail="Account temporarily locked. Check your email.")
+
+    if not user:
+        is_new = True
         user = User(
-            name=payload.name,
-            email=payload.email,
-            hashed_password=pwd_ctx.hash(payload.password),
-            phone=payload.phone,
-            reward_points=0,
-            is_active=True,
+            google_sub=g_user.sub, email=g_user.email,
+            name=g_user.name, picture_url=g_user.picture,
+            last_login_at=datetime.now(timezone.utc),
         )
         db.add(user)
         db.commit()
         db.refresh(user)
+    else:
+        user.name = g_user.name
+        user.picture_url = g_user.picture
+        user.last_login_at = datetime.now(timezone.utc)
+        db.commit()
 
-        # Send welcome email in background
-        try:
-            from app.services.notification_service import notify_welcome
+    clear_auth_failures(g_user.sub)
 
-            background_tasks.add_task(notify_welcome, to_email=user.email, citizen_name=user.name)
-        except Exception as e:
-            logging.getLogger("roadwatch").warning(f"Failed to queue welcome email: {e}")
+    if is_new:
+        from app.services.email_templates import welcome_email
+        from app.services.email_service import email_service
+        subj, html = welcome_email(user.name, user.email)
+        background_tasks.add_task(email_service.send_email_sync, user.email, subj, html)
 
-        token = _make_token({"sub": str(user.id), "role": "citizen"})
-        return {"access_token": token, "token_type": "bearer", "name": user.name}
-    except HTTPException:
-        raise
-    except Exception as e:
-        logging.getLogger("roadwatch").error(f"Registration failed: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Internal server error") from e
+    if not user.phone_number:
+        return {"requires_phone": True, "temp_token": _make_temp_token(user.id)}
 
-
-# ── Citizen Login ─────────────────────────────────────────────────────────────
-
-
-@router.post("/login")
-@limiter.limit(os.getenv("RATE_LIMIT_AUTH", "20/minute"))
-def citizen_login(payload: CitizenLogin, request: Request, db: Session = Depends(get_db)):
-    """POST /api/auth/login — login.html & citizen.html"""
-    user = db.execute(select(User).filter(User.email == payload.email)).scalars().first()
-    if not user or not pwd_ctx.verify(payload.password, user.hashed_password):
-        raise HTTPException(status_code=401, detail="Invalid credentials")
-    if not user.is_active:
-        raise HTTPException(status_code=403, detail="Account inactive")
-    token = _make_token({"sub": str(user.id), "role": "citizen"})
-    # Log the login
-    db.add(
-        LoginLog(
-            email=payload.email,
-            role="citizen",
-            ip_address=request.client.host if request.client else None,
-            logged_in_at=_now(),
-        )
-    )
-    db.commit()
-
-    # AUDIT: User Access
-    audit_service.log_event(db, "user", str(user.id), "accessed", actor_id=user.id, actor_role="citizen", request=request)
-
+    pair = issue_token_pair(user, db, request)
     return {
-        "access_token": token,
-        "token_type": "bearer",
-        "name": user.name,
-        "reward_points": user.reward_points or 0,
+        "requires_phone": False,
+        "access_token":  pair.access_token,
+        "refresh_token": pair.refresh_token,
+        "user": {"id": user.id, "name": user.name,
+                 "email": user.email, "picture": user.picture_url},
     }
 
 
-# ── Officer / Admin Login ─────────────────────────────────────────────────────
-
-
-@router.post("/officer/login")
-def officer_login(payload: OfficerLogin, request: Request, db: Session = Depends(get_db)):
-    """POST /api/auth/officer/login — login.html (officer+admin) & admin.html doLogin()"""
-    officer = db.execute(select(FieldOfficer).filter(FieldOfficer.email == payload.email)).scalars().first()
-    if not officer or not pwd_ctx.verify(payload.password, officer.hashed_password):
-        raise HTTPException(status_code=401, detail="Invalid credentials")
-    if not officer.is_active:
-        raise HTTPException(status_code=403, detail="Account inactive")
-    officer.last_login = _now()
-    role = "admin" if officer.is_admin else "officer"
-    # Log the login
-    db.add(
-        LoginLog(
-            email=payload.email,
-            role=role,
-            ip_address=request.client.host if request.client else None,
-            logged_in_at=_now(),
-        )
-    )
-    db.commit()
-    token = _make_token({"sub": str(officer.id), "role": role})
-
-    # AUDIT: Officer Access
-    audit_service.log_event(db, "officer", str(officer.id), "accessed", actor_id=officer.id, actor_role=role, request=request)
-
-    return {
-        "access_token": token,
-        "token_type": "bearer",
-        "name": officer.name,
-        "role": role,
-    }
-
-
-# ── Create Officer (admin only) ───────────────────────────────────────────────
-
-
-@router.post("/officer/register", status_code=status.HTTP_201_CREATED)
-def officer_register(
-    payload: OfficerCreate,
+@router.post("/refresh")
+def refresh_token(
+    body: RefreshRequest,
+    request: Request,
     db: Session = Depends(get_db),
-    current_admin: FieldOfficer = Depends(get_current_admin),
 ):
-    """POST /api/auth/officer/register — admin.html Add Officer modal"""
-    if db.execute(select(FieldOfficer).filter(FieldOfficer.email == payload.email)).scalars().first():
-        raise HTTPException(status_code=400, detail="Email already registered")
-    officer = FieldOfficer(
-        name=payload.name,
-        email=payload.email,
-        hashed_password=pwd_ctx.hash(payload.password),
-        phone=payload.phone,
-        zone=payload.zone,
-        is_admin=False,
-        is_active=True,
-    )
-    db.add(officer)
-    db.commit()
-    db.refresh(officer)
-    return {"message": "Officer created", "id": officer.id, "name": officer.name}
+    pair, _ = rotate_refresh_token(body.refresh_token, db, request)
+    return {"access_token": pair.access_token, "refresh_token": pair.refresh_token}
 
 
-# ── /me ───────────────────────────────────────────────────────────────────────
+@router.post("/logout")
+def logout(
+    body: LogoutRequest,
+    authorization: str = Header(...),
+    db: Session = Depends(get_db),
+):
+    # Blacklist the current access token
+    token = authorization.removeprefix("Bearer ").strip()
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[ALGORITHM])
+        jti = payload.get("jti", "")
+        exp = payload.get("exp", 0)
+        ttl = max(0, int(exp - datetime.now(timezone.utc).timestamp()))
+        blacklist_jti(jti, ttl)
+    except JWTError:
+        pass  # already invalid — fine
+
+    # Revoke the refresh token record
+    try:
+        rp = jwt.decode(body.refresh_token, REFRESH_SECRET, algorithms=[ALGORITHM])
+        from app.models.refresh_token import RefreshToken
+        rec = db.query(RefreshToken).filter(
+            RefreshToken.jti == rp.get("jti")
+        ).first()
+        if rec:
+            rec.revoked = True
+            db.commit()
+    except JWTError:
+        pass
+
+    return {"message": "Logged out"}
+
+
+@router.post("/logout-all")
+def logout_all_devices(
+    authorization: str = Header(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    revoke_all_user_tokens(current_user.id, db)
+    revoke_token = make_revocation_token(current_user.id, db)
+    return {"message": "All sessions revoked", "revoke_token": revoke_token}
+
+
+@router.get("/revoke-all")
+def revoke_all_via_email_link(
+    token: str,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+):
+    """One-time link from suspicious login email — no auth header needed."""
+    user_id = consume_revocation_token(token, db)
+    revoke_all_user_tokens(user_id, db)
+
+    user = db.query(User).filter(User.id == user_id).first()
+    if user:
+        from app.services.email_service import email_service
+        # Send confirmation — reuse status_update as a simple notify
+        background_tasks.add_task(email_service.send_email_sync,
+            user.email,
+            "All devices signed out — Road Damage Reporter",
+            f"<p>Hi {user.name}, all sessions have been signed out successfully.</p>"
+            f"<p>If you didn't request this, please contact support.</p>",
+        )
+
+    return {"message": "All sessions signed out. You can now sign in again safely."}
 
 
 @router.get("/me")
 def get_me(current_user: User = Depends(get_current_user)):
-    """GET /api/auth/me — citizen.html fetchUserPoints()"""
     return {
-        "id": current_user.id,
-        "name": current_user.name,
-        "email": current_user.email,
-        "reward_points": current_user.reward_points or 0,
+        "id": current_user.id, "name": current_user.name,
+        "email": current_user.email, "picture": current_user.picture_url,
+        "phone": current_user.phone_number,
     }
 
 
-@router.patch("/fcm-token")
-def update_fcm_token(payload: FcmTokenUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    """PATCH /api/auth/fcm-token — update FCM token for push notifications."""
-    if payload.fcm_token == "":
-        current_user.fcm_token = None
-    else:
-        current_user.fcm_token = payload.fcm_token
-    db.commit()
-    return {"status": "ok"}
-
-
-@router.get("/admin/me")
-def get_admin_me(current_admin: FieldOfficer = Depends(get_current_admin)):
-    return {
-        "id": current_admin.id,
-        "name": current_admin.name,
-        "email": current_admin.email,
-    }
-
-
-# ── Login Logs (admin only) ──────────────────────────────────────────────────
-
-
-@router.get("/logs")
-def get_login_logs(
+@router.post("/phone")
+def set_phone(
+    body: PhoneRequest,
+    request: Request,
     db: Session = Depends(get_db),
-    _: FieldOfficer = Depends(get_current_admin),
+    user: User = Depends(get_current_temp_user),
 ):
-    """GET /api/auth/logs — returns all login logs (admin only)"""
-    rows = db.execute(select(LoginLog).order_by(LoginLog.logged_in_at.desc()).limit(200)).scalars().all()
-    return [
-        {
-            "id": r.id,
-            "email": r.email,
-            "role": r.role,
-            "ip_address": r.ip_address,
-            "logged_in_at": _iso(r.logged_in_at),
-            "logged_out_at": _iso(r.logged_out_at),
-            "session_minutes": r.session_minutes,
-        }
-        for r in rows
-    ]
+    # Uniqueness check
+    existing = db.query(User).filter(
+        User.phone_number == body.phone_number,
+        User.id != user.id
+    ).first()
+    if existing:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "error": "phone_already_registered",
+                "message": "This number is linked to another account.",
+            },
+        )
+
+    user.phone_number = body.phone_number
+    user.phone_verified_at = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(user)
+
+    # Issue full token pair now that profile is complete
+    pair = issue_token_pair(user, db, request)
+
+    return {
+        "access_token": pair.access_token,
+        "refresh_token": pair.refresh_token,
+        "user": {
+            "id": user.id, "name": user.name, "email": user.email,
+            "picture": user.picture_url, "phone": user.phone_number,
+        },
+    }
+
+
+@router.get("/check-phone")
+def check_phone_availability(phone: str, db: Session = Depends(get_db)):
+    """Real-time availability check — rate limited 10 req/min per IP."""
+    try:
+        parsed = phonenumbers.parse(phone, None)
+        if not phonenumbers.is_valid_number(parsed):
+            return {"available": False, "reason": "invalid_format"}
+        normalised = phonenumbers.format_number(parsed, phonenumbers.PhoneNumberFormat.E164)
+    except NumberParseException:
+        return {"available": False, "reason": "invalid_format"}
+
+    taken = db.query(User).filter(User.phone_number == normalised).first()
+    return {"available": taken is None}

@@ -1,6 +1,6 @@
 import os
 from sqlalchemy import text
-from app.database import SessionLocal, engine, Base
+from app.database import SessionLocal, engine
 
 print("Checking DATABASE_URL...")
 print(f"URL: {os.getenv('DATABASE_URL')}")

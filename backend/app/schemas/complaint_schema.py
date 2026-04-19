@@ -42,7 +42,7 @@ class ComplaintCreate(BaseModel):
             v.file.seek(0)
         except ValueError as e:
             raise e
-        except Exception as e:
+        except Exception:
             raise ValueError("Invalid image file")
             
         return v

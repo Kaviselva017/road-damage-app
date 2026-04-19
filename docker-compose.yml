@@ -109,44 +109,44 @@ services:
     depends_on:
       - prometheus
 
-  # ── Celery Worker ──────────────────────────────────────────────
-  worker:
+  celery-worker:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    restart: unless-stopped
-    command: celery -A app.tasks worker --loglevel=info --concurrency=2
+    command: celery -A app.celery_app worker --loglevel=info -Q inference,default -c 2
     environment:
-      APP_ENV: development
-      DATABASE_URL: postgresql://road_user:road_pass@db:5432/road_damage_db
-      SECRET_KEY: ${SECRET_KEY:-change-me-in-production-use-secrets-token-hex-32}
-      CELERY_BROKER_URL: redis://redis:6379/0
-      CELERY_RESULT_BACKEND: redis://redis:6379/1
-      REDIS_URL: redis://redis:6379/0
-      YOLO_MODEL_PATH: /app/ai_model/road_damage_yolov8.pt
-      UPLOAD_DIR: /app/uploads
-    volumes:
-      - uploads_data:/app/uploads
-      - ./ai_model:/app/ai_model:ro
-    depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_started
-
-  # ── Flower (Celery monitoring UI) ──────────────────────────────
-  flower:
-    image: mher/flower:1.2.0
-    restart: unless-stopped
-    command: celery --broker=redis://redis:6379/0 flower --port=5555
-    ports:
-      - "5555:5555"
-    environment:
-      CELERY_BROKER_URL: redis://redis:6379/0
-      CELERY_RESULT_BACKEND: redis://redis:6379/1
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=${REDIS_URL}
+      - YOLO_MODEL_PATH=${YOLO_MODEL_PATH}
+      - USE_ONNX=${USE_ONNX:-false}
+      - CLAHE_ENABLED=${CLAHE_ENABLED:-true}
     depends_on:
       - redis
-      - worker
+      - db
+    restart: unless-stopped
+    volumes:
+      - ./ai_model:/app/ai_model:ro
+
+  celery-beat:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: celery -A app.celery_app beat --loglevel=info
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=${REDIS_URL}
+    depends_on:
+      - redis
+    restart: unless-stopped
+
+  flower:
+    image: mher/flower:2.0
+    command: celery flower --broker=${REDIS_URL} --port=5555
+    ports:
+      - "5555:5555"
+    depends_on:
+      - redis
+    restart: unless-stopped
 
 
 volumes:

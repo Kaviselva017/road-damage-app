@@ -1,4 +1,3 @@
-import os
 import sys
 from pathlib import Path
 
@@ -51,7 +50,6 @@ def main():
     
     # If bad.jpg doesn't exist, create a dummy transparent pixel image
     if not test_img_path.exists():
-        import io
         from PIL import Image
         img = Image.new('RGB', (100, 100), color = 'gray')
         img.save(test_img_path, format="JPEG")

@@ -13,7 +13,7 @@ from app.models.models import Complaint, FieldOfficer
 from app.schemas.heatmap import ClusterPoint, Hotspot
 from app.services import clustering_service
 from app.services.cache_service import cache
-from app.middleware.rate_limit import limiter
+from app.limiter import limiter
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/map", tags=["map"])

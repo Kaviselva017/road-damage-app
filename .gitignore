@@ -85,3 +85,5 @@ backend/alembic/versions/__pycache__/
 *.db-wal
 *.txt
 !requirements.txt
+
+*.zip

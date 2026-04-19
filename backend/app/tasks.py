@@ -121,7 +121,7 @@ def run_inference(self, complaint_id: str, image_path: str,
 
     try:
         from sqlalchemy import select
-        from app.models.models import Complaint, ComplaintOfficer, FieldOfficer, Notification, User
+        from app.models.models import Complaint, Notification, User
         from app.services import ai_service, priority_service, sla_service, storage_service
 
         logger.info("[CeleryTask] Starting inference for %s", complaint_id)

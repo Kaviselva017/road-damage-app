@@ -3,7 +3,6 @@ RoadWatch Full System Test Suite
 Tests every endpoint and feature line by line
 """
 import atexit
-import json
 import os
 import re
 import requests
@@ -45,19 +44,19 @@ def check(name, condition, expected="", actual="", warning=False):
 def post(url, **kwargs):
     try:
         return requests.post(url, timeout=8, **kwargs)
-    except Exception as e:
+    except Exception:
         return None
 
 def get(url, **kwargs):
     try:
         return requests.get(url, timeout=8, **kwargs)
-    except Exception as e:
+    except Exception:
         return None
 
 def patch(url, **kwargs):
     try:
         return requests.patch(url, timeout=8, **kwargs)
-    except Exception as e:
+    except Exception:
         return None
 
 def ok_status(response, *codes):
@@ -307,7 +306,6 @@ print("\n── 4. COMPLAINT SUBMISSION ─────────────�
 
 # Create a test image
 img_path = os.path.join(os.environ.get("TEMP", os.getcwd()), "test_road.jpg")
-import random
 try:
     with open("uploads/81da090e1a864842af48e408c043d284.jpg", "rb") as f:
         base_img = f.read()
@@ -536,7 +534,6 @@ if complaint_id:
 print("\n── 10. AI SERVICE ────────────────────────────────────")
 try:
     sys.path.insert(0, '/tmp')
-    import importlib.util
     project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     model_path = os.path.join(project_root, "backend", "ai_model", "road_damage_yolov8.pt")
     check("AI model file exists", os.path.exists(model_path), "file exists", "not found" if not os.path.exists(model_path) else "found", warning=True)

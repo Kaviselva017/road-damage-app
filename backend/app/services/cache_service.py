@@ -23,7 +23,7 @@ class NoOpCache:
     async def get(self, key: str) -> Any | None:
         return None
 
-    async def set(self, key: str, value: Any, ttl_seconds: int = 60) -> None:
+    async def set(self, key: str, value: Any, ttl_seconds: int | None = None, **kwargs) -> None:
         pass
 
     async def delete(self, key: str) -> None:

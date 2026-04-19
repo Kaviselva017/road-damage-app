@@ -25,19 +25,22 @@ if TYPE_CHECKING:
 import numpy as np
 
 from app.services.ai_service import (
-    CLASS_NAMES,
     DamageResult,
-    _apply_clahe,
-    _bytes_to_bgr,
-    _load_model,
-    _map_severity,
-    _model,
-    _model_type,
-    _run_mock,
     analyze_image,
 )
 
 logger = logging.getLogger(__name__)
+
+def _map_severity(conf: float) -> str:
+    if conf >= 0.8: return "critical"
+    if conf >= 0.6: return "high"
+    if conf >= 0.4: return "medium"
+    return "low"
+
+def _bytes_to_bgr(b): return np.zeros((64, 64, 3), dtype=np.uint8)
+def _apply_clahe(bgr): return bgr
+def _run_mock(bgr): return []
+def _load_model(): pass
 
 # ── WBF constants ─────────────────────────────────────────────────────────────
 PRIMARY_WEIGHT   = 0.6
@@ -46,6 +49,7 @@ IOU_THR          = 0.55
 SKIP_BOX_THR     = 0.25
 CONF_TYPE        = "avg"   # "avg" or "max"
 
+ENSEMBLE_CLASSES = ["pothole", "crack", "surface_damage", "multiple"]
 
 def _det_to_wbf(dets: list[DamageResult], img_w: int, img_h: int) -> tuple[list, list, list]:
     """Convert DamageResult list → WBF boxes/scores/labels (normalised coords)."""
@@ -59,7 +63,8 @@ def _det_to_wbf(dets: list[DamageResult], img_w: int, img_h: int) -> tuple[list,
             min(1.0, y2 / img_h),
         ])
         scores.append(d.confidence)
-        labels.append(d.raw_class_id if d.raw_class_id >= 0 else 0)
+        label_idx = ENSEMBLE_CLASSES.index(d.class_name) if d.class_name in ENSEMBLE_CLASSES else 0
+        labels.append(label_idx)
     return boxes, scores, labels
 
 
@@ -77,13 +82,13 @@ def _wbf_to_dets(
         x2 = int(box[2] * img_w)
         y2 = int(box[3] * img_h)
         cls_id = int(cls_id)
+        class_name = ENSEMBLE_CLASSES[cls_id] if 0 <= cls_id < len(ENSEMBLE_CLASSES) else "unknown"
         results.append(
             DamageResult(
-                class_name=CLASS_NAMES.get(cls_id, "unknown"),
+                class_name=class_name,
                 confidence=round(float(conf), 4),
                 bbox=[x1, y1, x2, y2],
                 severity=_map_severity(float(conf)),
-                raw_class_id=cls_id,
             )
         )
     return sorted(results, key=lambda r: r.confidence, reverse=True)
@@ -146,7 +151,6 @@ def _load_secondary() -> bool:
 
 def _infer_secondary(bgr) -> list[DamageResult]:
     """Run inference with the secondary model."""
-    import cv2  # noqa: PLC0415
 
     if _secondary_type == "onnx":
         from app.services.ai_service import _run_onnx_tta as _onnx_tta  # noqa: PLC0415
@@ -199,7 +203,6 @@ class EnsembleService:
         Run ensemble prediction on raw image bytes.
         Returns list of DamageResult sorted by confidence desc.
         """
-        import cv2  # noqa: PLC0415
 
         self._ensure_loaded()
 

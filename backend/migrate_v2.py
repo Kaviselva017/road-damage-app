@@ -3,13 +3,15 @@ Migration v2 — adds new columns safely without losing data
 Run from: D:\python\road-damage-app\backend\
 python ..\migrate_v2.py
 """
-import sqlite3, os, sys
+import sqlite3
+import os
+import sys
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "backend", "road_damage.db")
 if not os.path.exists(DB_PATH):
     DB_PATH = "road_damage.db"
 if not os.path.exists(DB_PATH):
-    print(f"ERROR: Cannot find road_damage.db. Run from D:\\python\\road-damage-app\\backend\\")
+    print("ERROR: Cannot find road_damage.db. Run from D:\\python\\road-damage-app\\backend\\")
     sys.exit(1)
 
 conn = sqlite3.connect(DB_PATH)

@@ -12,8 +12,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.database import SessionLocal, get_db
-from app.dependencies import get_current_officer, get_current_user
-from app.middleware.rate_limit import limiter
+from app.dependencies import get_current_officer, get_current_user, require_phone_complete
+from app.limiter import limiter
 from app.models.models import Complaint, ComplaintOfficer, FieldOfficer, Notification, User
 from app.schemas.complaint import ComplaintStatusOut
 from app.schemas.schemas import FundUpdate, StatusUpdate
@@ -38,9 +38,10 @@ router = APIRouter(prefix="/complaints", tags=["complaints"])
 
 UPLOAD_DIR = os.getenv("UPLOAD_DIR", "uploads")
 Path(UPLOAD_DIR).mkdir(parents=True, exist_ok=True)
+USE_CELERY = os.getenv("USE_CELERY", "false").lower() == "true"
 
 VALID_STATUSES = {"pending", "assigned", "in_progress", "completed", "rejected"}
-VALID_SEVERITIES = {"high", "medium", "low"}
+VALID_SEVERITIES = {"critical", "high", "medium", "low"}
 VALID_DAMAGES = {"pothole", "crack", "surface_damage", "multiple"}
 
 
@@ -73,7 +74,7 @@ def _area(addr: str) -> str:
 
 
 def _priority(sev: str, dmg: str, area: str, nearby_sensitive: str = "") -> float:
-    s = {"high": 35, "medium": 20, "low": 10}.get(sev, 10)
+    s = {"critical": 50, "high": 35, "medium": 20, "low": 10}.get(sev, 10)
     d = {"pothole": 5, "multiple": 8, "crack": 3, "surface_damage": 2}.get(dmg, 0)
     a = {"hospital": 35, "school": 30, "highway": 28, "crowd_place": 25, "market": 22, "residential": 12}.get(area, 12)
     t = {"hospital": 22, "school": 20, "market": 20, "highway": 18, "crowd_place": 18, "residential": 10}.get(area, 10)
@@ -153,7 +154,7 @@ def _c(c: Complaint, db: Session) -> dict:
         u = db.execute(select(User).filter(User.id == c.user_id)).scalars().first()
         uname = u.name if u else None
         u_email = u.email if u else None
-        u_phone = u.phone if u else None
+        u_phone = u.phone_number if u else None
     return {
         "id": c.id,
         "complaint_id": c.complaint_id,
@@ -215,13 +216,15 @@ async def process_inference_background(complaint_id: str, fpath_str: str, img_by
 
         image_url = storage_service.upload_file(img_bytes, filename, content_type)
 
-        if ai["ai_confidence"] < 0.10:
+        if ai.confidence < 0.10:
             metrics.AI_INFERENCE_TOTAL.labels(result="undetected").inc()
             c.detected_damage_type = None
             c.confidence_score = None
             c.analyzed_at = _now()
+            c.ai_class = None
+            c.ai_severity = "low"
 
-            # Legacy defaults for undetected
+            # Defaults for undetected
             c.damage_type = "unknown"
             c.severity = "low"
             c.ai_confidence = 0.0
@@ -234,38 +237,37 @@ async def process_inference_background(complaint_id: str, fpath_str: str, img_by
             db.commit()
         else:
             area = _area(nearby_sensitive or address or "")
-            priority = _priority(ai["severity"], ai["damage_type"], area, nearby_sensitive or "")
+            priority = _priority(ai.severity, ai.class_name, area, nearby_sensitive or "")
             officer = _best_officer(db, address or "")
 
-            # New Background task fields
-            c.detected_damage_type = ai["damage_type"]
-            c.confidence_score = ai["ai_confidence"]
+            # Typed DamageResult fields
+            c.ai_class = ai.class_name
+            c.ai_severity = ai.severity
+            c.detected_damage_type = ai.class_name
+            c.confidence_score = ai.confidence
             c.analyzed_at = _now()
 
-            # Legacy mappings
-            c.damage_type = ai["damage_type"]
-            c.severity = ai["severity"]
-            c.ai_confidence = ai["ai_confidence"]
-            c.description = ai["description"]
+            # Mapped complaint fields
+            c.damage_type = ai.class_name
+            c.severity = ai.severity
+            c.ai_confidence = ai.confidence
+            c.description = ai.description
             c.priority_score = priority
             c.image_url = image_url
             c.area_type = area
 
             # SLA & Routing
-            c.department_id = sla_service.get_department_for_damage(db, ai["damage_type"], area)
+            c.department_id = sla_service.get_department_for_damage(db, ai.class_name, area)
 
-            # --- Advanced Priority Scoring ---
+            # Advanced Priority Scoring
             weather_risk = await weather_service.fetch_weather_risk(c.latitude, c.longitude)
-            # Fetch nearby sensitive from area metadata or logic
             nearby = area if "hospital" in area.lower() or "school" in area.lower() else ""
 
-            p_res = priority_service.calculate_priority_score(damage_type=ai["damage_type"], severity=ai["severity"], confidence=ai["ai_confidence"], area_type=area, nearby_sensitive=nearby, report_count=c.report_count or 1, latitude=c.latitude, longitude=c.longitude, weather_risk=weather_risk, db=db)
+            p_res = priority_service.calculate_priority_score(damage_type=ai.class_name, severity=ai.severity, confidence=ai.confidence, area_type=area, nearby_sensitive=nearby, report_count=c.report_count or 1, latitude=c.latitude, longitude=c.longitude, weather_risk=weather_risk, db=db)
 
             c.priority_score = p_res["score"]
             c.urgency_label = p_res["urgency_label"]
             c.priority_breakdown = p_res["factors"]
-
-            # Use recommended SLA if it matches or overrides previous simple logic
             c.sla_deadline = _now() + timedelta(hours=p_res["recommended_sla_hours"])
 
             if officer:
@@ -275,7 +277,7 @@ async def process_inference_background(complaint_id: str, fpath_str: str, img_by
             else:
                 c.status = "analyzed"
 
-            metrics.AI_INFERENCE_DURATION_SECONDS.labels(damage_type=ai["damage_type"]).observe(inf_duration)
+            metrics.AI_INFERENCE_DURATION_SECONDS.labels(damage_type=ai.class_name).observe(inf_duration)
             metrics.AI_INFERENCE_TOTAL.labels(result="detected").inc()
 
             db.commit()
@@ -332,36 +334,20 @@ async def process_inference_background(complaint_id: str, fpath_str: str, img_by
                         notes=c.description,
                         nearby_places=nearby_sensitive,
                     )
-            if c.severity == "high":
+            if c.severity in ("critical", "high"):
                 notify_admin_emergency(complaint_id=complaint_id, severity=c.severity, damage_type=c.damage_type, address=address or "", priority_score=c.priority_score, latitude=c.latitude, longitude=c.longitude, image_url=full_img_url)
         except Exception as e:
             logger.warning(f"[Email Background] failed inside task: {e}")
 
-            # WS & Map Cache Invalidation
+        # WS & Map Cache Invalidation
         try:
             # Broadcast new complaint to any listeners
             await manager.broadcast_new_complaint(c)
 
-            # Broadcast status update for complaint-room subscribers
+            # Broadcast status update for specifics
             from app.websockets.complaint_ws import complaint_ws_manager
-            await complaint_ws_manager.broadcast_status(
-                complaint_id=c.complaint_id,
-                status=c.status,
-                extra_data={"damage_type": c.damage_type, "confidence": c.confidence_score or c.ai_confidence}
-            )
 
-            # ── User-keyed WS: inference_complete ────────────────────────────────
-            if c.user_id:
-                from app.api.ws import build_inference_payload, manager as user_ws_manager
-                await user_ws_manager.send(
-                    str(c.user_id),
-                    build_inference_payload(
-                        complaint_id=c.complaint_id,
-                        damage_type=c.detected_damage_type or c.damage_type or "unknown",
-                        confidence=round(c.confidence_score or c.ai_confidence or 0.0, 4),
-                        severity=c.severity or "medium",
-                    ),
-                )
+            await complaint_ws_manager.broadcast_status(complaint_id=c.complaint_id, status=c.status, extra_data={"damage_type": c.damage_type, "confidence": c.confidence_score or c.ai_confidence})
 
             # Invalidate map cache
             from app.services.cache_service import cache as cache_service
@@ -423,48 +409,26 @@ async def submit(
     background_tasks: BackgroundTasks,
     latitude: float = Form(...),
     longitude: float = Form(...),
-    description: str = Form(""),
     address: str | None = Form(None),
     nearby_sensitive: str | None = Form(None),
+    description: str | None = Form(None),
     image: UploadFile = File(...),
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_phone_complete),
 ):
     start_time = time.perf_counter()
     if not image or not image.filename:
         raise HTTPException(400, "Missing image file")
 
-    from app.schemas.complaint_schema import ComplaintCreate
-    from pydantic import ValidationError
-    from fastapi.exceptions import RequestValidationError
-    
-    try:
-        complaint_data = ComplaintCreate(
-            latitude=latitude,
-            longitude=longitude,
-            description=description,
-            image=image
-        )
-        # Apply the stripped description, bounded lat/lng back
-        description = complaint_data.description
-        latitude = complaint_data.latitude
-        longitude = complaint_data.longitude
-    except ValidationError as e:
-        raise RequestValidationError(e.errors())
+    if not (-90 <= latitude <= 90) or not (-180 <= longitude <= 180):
+        return JSONResponse(status_code=422, content={"detail": "Latitude must be between -90 and 90, longitude between -180 and 180"})
 
-    from app.utils.image_validator import validate_image
-    from fastapi.responses import JSONResponse
+    from app.utils.file_validators import validate_image
 
-    is_valid, error_msg = await validate_image(image)
-    if not is_valid:
-        # Tests assert 422 for invalid images as well in Pydantic logic / validators
-        # Pydantic image validation is already running, but we also run the manual util just in case it yields a specific format or for redundancy.
-        # Actually Pydantic image validator might have caught it, but if not we still fail it here.
-        # Ensure we return 422 if invalid image according to our test cases: "upload a .txt renamed to .jpg, assert 422"
-        return JSONResponse(status_code=422, content={"detail": error_msg})
+    img_bytes, error_resp = await validate_image(image)
+    if error_resp:
+        return error_resp
 
-    await image.seek(0)
-    img_bytes = await image.read()
     img_hash = ai_service.image_hash(img_bytes)
 
     # Use Geo Service for proximity duplicate detection
@@ -477,6 +441,8 @@ async def submit(
         return JSONResponse(status_code=409, content={"detail": "Similar damage already reported nearby", "code": "DUPLICATE"})
 
     # Invalidate Cache
+    from app.services.cache_service import cache
+    from app.utils import cache_keys
     background_tasks.add_task(cache.delete_pattern, cache_keys.NEARBY_PATTERN)
     background_tasks.add_task(cache.delete_pattern, cache_keys.COMPLAINTS_LIST_PATTERN)
 
@@ -514,30 +480,26 @@ async def submit(
 
     content_type = image.content_type or "image/jpeg"
 
-    # Fire and forget inference — use Celery if available, else BackgroundTasks
-    _use_celery = os.getenv("CELERY_ENABLED", "false").lower() in ("1", "true", "yes")
-    if _use_celery:
-        try:
-            from app.tasks import run_inference
-            run_inference.delay(
-                complaint_id=cid,
-                image_path=str(fpath),
-                image_bytes_hex=img_bytes.hex(),
-                filename=image.filename,
-                content_type=content_type,
-                address=address,
-                nearby_sensitive=nearby_sensitive,
-                user_id=user.id,
-            )
-            logger.info("Dispatched Celery inference task for %s", cid)
-        except Exception as celery_exc:
-            logger.warning("Celery dispatch failed (%s), falling back to BackgroundTasks", celery_exc)
-            background_tasks.add_task(process_inference_background, cid, str(fpath), img_bytes, image.filename, content_type, address, nearby_sensitive, user.id)
+    # Fire and forget inference
+    if USE_CELERY:
+        from app.tasks.inference_task import run_inference
+        run_inference.apply_async(
+            kwargs={
+                "complaint_id":    cid,
+                "fpath_str":       str(fpath),
+                "img_bytes_hex":   img_bytes.hex(),
+                "filename":        image.filename,
+                "content_type":    content_type,
+                "address":         address,
+                "nearby_sensitive": nearby_sensitive,
+                "user_id":         user.id,
+            },
+            queue="inference",
+        )
     else:
         background_tasks.add_task(process_inference_background, cid, str(fpath), img_bytes, image.filename, content_type, address, nearby_sensitive, user.id)
 
     return JSONResponse(status_code=202, content={"complaint_id": cid, "status": "pending", "message": "Complaint saved. AI Inference running in background."})
-
 
 
 # ── Status Poller ──────────────────────────────────────────────
@@ -661,7 +623,8 @@ async def list_complaints(
         q = q.filter(Complaint.severity == severity)
 
     # Simple pagination: 50 per page
-    rows = db.execute(q.order_by(Complaint.priority_score.desc(), Complaint.created_at.desc()).offset((page - 1) * 50).limit(50)).scalars().all()
+    stmt = q.order_by(Complaint.priority_score.desc(), Complaint.created_at.desc()).offset((page - 1) * 50).limit(50)
+    rows = db.execute(stmt).scalars().all()
     data = [_c(r, db) for r in rows]
 
     await cache.set(ckey, data, ttl_seconds=30)
@@ -984,19 +947,6 @@ async def update_status(
             "new_status": data.status,
             "officer_id": officer.id
         })
-        # ── User-keyed WS broadcast ─────────────────────────────────────────
-        if c.user_id:
-            from app.api.ws import build_status_update_payload, manager as user_ws_manager
-            await user_ws_manager.send(
-                str(c.user_id),
-                build_status_update_payload(
-                    complaint_id=c.complaint_id,
-                    status=c.status,
-                    severity=c.severity or "medium",
-                    damage_type=c.damage_type,
-                    confidence=c.confidence_score or c.ai_confidence,
-                ),
-            )
     except Exception:
         pass
 

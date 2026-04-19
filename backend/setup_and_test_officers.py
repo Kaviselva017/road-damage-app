@@ -1,4 +1,3 @@
-import os
 import sys
 from pathlib import Path
 from datetime import datetime, timezone
@@ -7,7 +6,6 @@ from datetime import datetime, timezone
 backend_dir = Path(__file__).resolve().parent
 sys.path.append(str(backend_dir))
 
-from sqlalchemy.orm import Session
 from passlib.context import CryptContext
 
 from app.database import SessionLocal

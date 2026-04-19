@@ -19,11 +19,10 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from sentry_sdk.integrations.fastapi import FastApiIntegration
 from sentry_sdk.integrations.logging import LoggingIntegration
 from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
-from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
 from app.api import admin, auth, complaints, map, messages, officers
-from app.api.ws import manager as user_ws_manager, websocket_complaints
+from app.api.ws import websocket_complaints
 from app.database import Base, engine
 from app.models.models import Complaint, ComplaintOfficer, FieldOfficer, LoginLog, Message, Notification, User  # noqa
 from app.services.auth_service import decode_token
@@ -102,7 +101,8 @@ def _sentry_before_send(event, hint):
 
 
 Base.metadata.create_all(bind=engine)
-from app.middleware.rate_limit import limiter, custom_rate_limit_handler
+from app.limiter import limiter
+from app.middleware.rate_limit import custom_rate_limit_handler
 
 # Initialize Instrumentator globally so it's available in lifespan
 instrumentator = Instrumentator(
@@ -149,6 +149,8 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="RoadWatch API", version=settings.APP_VERSION, lifespan=lifespan)
+from app.middleware.security import SecurityHeadersMiddleware
+app.add_middleware(SecurityHeadersMiddleware)
 
 instrumentator.instrument(app)
 

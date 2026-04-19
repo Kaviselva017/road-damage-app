@@ -11,10 +11,8 @@ from __future__ import annotations
 
 import importlib
 import json
-import os
 import sys
-import types
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -132,7 +130,6 @@ def test_ensemble_fallback(monkeypatch, tmp_path):
             confidence=0.75,
             bbox=[10, 10, 100, 100],
             severity="high",
-            raw_class_id=3,
         )
     ]
 

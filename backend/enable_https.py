@@ -35,7 +35,6 @@ print("  python enable_https.py --self-signed")
 print()
 
 if '--serve' in sys.argv or '--self-signed' in sys.argv:
-    import ssl
     
     backend_dir = os.path.dirname(os.path.abspath(__file__))
     
@@ -102,7 +101,7 @@ if '--serve' in sys.argv or '--self-signed' in sys.argv:
     
     os.chdir(os.path.join(backend_dir))
     
-    print(f"\n🚀 Starting RoadWatch on https://localhost:8443")
+    print("\n🚀 Starting RoadWatch on https://localhost:8443")
     print("   Open: https://localhost:8443")
     print("   Camera will work! (Allow camera permission when asked)")
     print("\n   Press Ctrl+C to stop\n")

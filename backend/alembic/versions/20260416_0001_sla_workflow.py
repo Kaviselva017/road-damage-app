@@ -7,7 +7,6 @@ Create Date: 2026-04-16 02:05:00.000000
 """
 from alembic import op
 import sqlalchemy as sa
-from datetime import datetime, timedelta
 
 
 # revision identifiers, used by Alembic.

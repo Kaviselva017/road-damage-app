@@ -473,15 +473,15 @@ def main():
     print(f"  Failed: {FAIL}/{total}")
 
     if FAIL > 0:
-        print(f"\n  FAILED TESTS:")
+        print("\n  FAILED TESTS:")
         for tid, desc, passed, detail in results:
             if not passed:
                 print(f"    [FAIL] [{tid}] {desc} -- {detail}")
 
     if FAIL == 0:
-        print(f"\n  ALL TESTS PASSED -- READY FOR DEPLOYMENT!")
+        print("\n  ALL TESTS PASSED -- READY FOR DEPLOYMENT!")
     else:
-        print(f"\n  FIX FAILURES BEFORE DEPLOYMENT")
+        print("\n  FIX FAILURES BEFORE DEPLOYMENT")
     print("=" * 60 + "\n")
 
     return FAIL == 0

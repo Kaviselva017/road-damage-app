@@ -64,7 +64,8 @@ def create_access_token(data: dict, expires_minutes: int | None = None) -> str:
 def decode_token(token: str) -> dict | None:
     try:
         return jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-    except JWTError:
+    except JWTError as e:
+        print(f"DEBUG auth_service.decode_token error: {e}")
         return None
 
 
