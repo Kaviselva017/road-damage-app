@@ -1,4 +1,7 @@
 line-length = 320
 
+[lint]
+ignore = ["E402", "E701", "E722", "F841"]
+
 [lint.flake8-bugbear]
 extend-immutable-calls = ["fastapi.Depends", "fastapi.Query", "fastapi.Path", "fastapi.Body", "fastapi.Security", "fastapi.File"]
