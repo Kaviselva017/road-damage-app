@@ -60,7 +60,14 @@ def cluster_complaints(db: Session, grid_size_meters: int = 500) -> list[Cluster
         return [ClusterPoint(lat=r.lat, lng=r.lng, count=r.count, weight=float(r.total_weight), dominant_damage_type=r.dominant_type or "pothole", max_severity=r.max_sev) for r in results]
     else:
         # Fallback for SQLite/Local Dev
-        complaints = db.execute(select(Complaint).filter(Complaint.status != "completed")).scalars().all()
+        complaints = db.execute(
+            select(
+                Complaint.latitude,
+                Complaint.longitude,
+                Complaint.damage_type,
+                Complaint.severity,
+            ).filter(Complaint.status != "completed")
+        ).all()
         clusters = {}  # (snap_lat, snap_lng) -> data
 
         grid_deg = grid_size_meters / 111000.0
@@ -114,7 +121,16 @@ def get_hotspots(db: Session, min_count: int = 3) -> list[Hotspot]:
         # In a real grid, we'd use the snap logic, but for hotspots we just query
         # the surrounding 250m radius.
         bbox_size = 0.005  # ~500m
-        nearby = db.execute(select(Complaint).filter(Complaint.latitude.between(c.lat - bbox_size, c.lat + bbox_size), Complaint.longitude.between(c.lng - bbox_size, c.lng + bbox_size), Complaint.status != "completed")).scalars().all()
+        nearby = db.execute(
+            select(
+                Complaint.complaint_id,
+                Complaint.damage_type,
+            ).filter(
+                Complaint.latitude.between(c.lat - bbox_size, c.lat + bbox_size),
+                Complaint.longitude.between(c.lng - bbox_size, c.lng + bbox_size),
+                Complaint.status != "completed",
+            )
+        ).all()
 
         ids = [comp.complaint_id for comp in nearby]
 
