@@ -1,5 +1,4 @@
 import io
-import os
 
 import pytest
 import pytest_asyncio
@@ -63,8 +62,10 @@ engine = create_engine(
 
 def register_sqlite_geo_stubs(dbapi_conn, connection_record=None):
     """Register no-op stubs for every PostGIS/GeoAlchemy2 function SQLite lacks."""
-    noop1 = lambda x: x
-    noop2 = lambda x, y: x
+    def noop1(x):
+        return x
+    def noop2(x, y):
+        return x
     for fn_name in (
         "AsBinary", "AsEWKB", "ST_GeomFromEWKT", "ST_GeogFromText",
         "ST_AsText", "ST_AsEWKT", "ST_AsBinary", "ST_AsEWKB",

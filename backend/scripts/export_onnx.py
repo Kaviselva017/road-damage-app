@@ -23,7 +23,7 @@ def main():
         
         pt = Path(args.model)
         model = YOLO(str(pt))
-        result = model.export(
+        model.export(
             format='onnx',
             imgsz=640,
             simplify=True,

@@ -621,7 +621,7 @@ class TestONNXExport:
 class TestMockMode:
     def test_mock_returns_valid_damage_result(self, monkeypatch):
         monkeypatch.setenv("YOLO_MODEL_PATH", "")
-        from app.services.ai_service import analyze_image, _mock as _mock_analyze
+        from app.services.ai_service import _mock as _mock_analyze
         result = _mock_analyze("fake.jpg")
         assert result.is_mock is True
         assert result.class_name in ['pothole','crack','surface_damage','multiple']

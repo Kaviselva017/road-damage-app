@@ -2,9 +2,7 @@
 from unittest.mock import patch
 
 import pytest
-from httpx import ASGITransport, AsyncClient
 
-from app.main import app
 
 
 MOCK_GOOGLE_USER = {

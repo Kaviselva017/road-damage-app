@@ -11,9 +11,7 @@ from __future__ import annotations
 
 import io
 import os
-import tempfile
 from datetime import datetime, timezone
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -189,7 +187,7 @@ def test_task_retry(db):
         # In eager mode with propagates=False, the task catches the exception
         # internally and returns an error dict or re-raises.
         try:
-            result = run_inference(
+            run_inference(
                 complaint_id=cid,
                 fpath_str="/tmp/fake.jpg",
                 img_bytes_hex=img_hex,

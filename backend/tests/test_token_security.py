@@ -43,11 +43,12 @@ def test_token_hash_not_truncated():
     from jose import jwt as _jwt
     import uuid
     padding = "x" * 100
-    make = lambda: _jwt.encode(
-        {"sub": "1", "padding": padding, "jti": str(uuid.uuid4()), "type": "refresh",
-         "exp": datetime.now(timezone.utc) + timedelta(days=7)},
-        "secret", algorithm="HS256",
-    )
+    def make():
+        return _jwt.encode(
+            {"sub": "1", "padding": padding, "jti": str(uuid.uuid4()), "type": "refresh",
+             "exp": datetime.now(timezone.utc) + timedelta(days=7)},
+            "secret", algorithm="HS256",
+        )
     t1, t2 = make(), make()
     assert t1[:72] == t2[:72], f"Precondition: tokens share first 72 bytes. t1={t1[:72]}, t2={t2[:72]}"
     h = hash_token(t1)
@@ -105,12 +106,12 @@ def test_stolen_token_sends_compromise_email(db_session, test_user_with_phone):
 
 def test_concurrent_session_limit(db_session, test_user_with_phone):
     from app.services.token_service import MAX_SESSIONS
-    pairs = [issue_token_pair(test_user_with_phone, db_session)
+    [issue_token_pair(test_user_with_phone, db_session)
              for _ in range(MAX_SESSIONS + 1)]
 
     active = db_session.query(RefreshToken).filter(
         RefreshToken.user_id == test_user_with_phone.id,
-        RefreshToken.revoked == False,
+        not RefreshToken.revoked,
     ).count()
     assert active <= MAX_SESSIONS
 
@@ -189,7 +190,7 @@ def test_revoke_all_endpoint(db_session, test_user_with_phone):
 
     active = db_session.query(RefreshToken).filter(
         RefreshToken.user_id == test_user_with_phone.id,
-        RefreshToken.revoked == False,
+        not RefreshToken.revoked,
     ).count()
     assert active == 0
 

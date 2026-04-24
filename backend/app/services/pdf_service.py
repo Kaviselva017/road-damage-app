@@ -29,7 +29,7 @@ async def _fetch_image(url: str):
 
 def _header_footer(canvas, doc, complaint_id):
     canvas.saveState()
-    styles = getSampleStyleSheet()
+    getSampleStyleSheet()
     
     # Footer
     footer = f"Page {doc.page} | Complaint ID: {complaint_id} | This document is computer-generated and legally valid"

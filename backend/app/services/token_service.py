@@ -100,7 +100,7 @@ def issue_token_pair(
         db.query(RefreshToken)
         .filter(
             RefreshToken.user_id == user.id,
-            RefreshToken.revoked == False,
+            not RefreshToken.revoked,
         )
         .order_by(RefreshToken.created_at.asc())
         .all()

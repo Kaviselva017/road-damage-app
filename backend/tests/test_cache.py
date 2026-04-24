@@ -6,9 +6,8 @@ Does NOT hit real complaint routes — tests the service layer directly.
 """
 
 import pytest
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock
 
-from app.services.cache_service import cache
 from app.utils import cache_keys
 
 

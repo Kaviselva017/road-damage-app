@@ -48,7 +48,7 @@ def migrate(c):
     # We then look for `.all()` or `.first()` from the end and replace with `).scalars().all()` etc.
     # But ONLY for that statement!
     
-    lines = c.split("\n")
+    c.split("\n")
     # Actually just a while loop matching db.query(...)
     
     pass
